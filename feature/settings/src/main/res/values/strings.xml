@@ -1,12 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_screen_title">Settings</string>
-    <string name="settings_screen_about">About</string>
-    <string name="settings_screen_open_source_licenses">Open Source Licenses</string>
-    <string name="settings_screen_view_licenses_description">View licenses of third-party libraries</string>
-    <string name="settings_screen_licenses">Licenses</string>
-    <string name="settings_screen_navigate">Navigate</string>
+    <string name="settings_screen_title">我的</string>
+    <string name="settings_screen_about">关于</string>
+    <string name="settings_screen_open_source_licenses">开源许可</string>
+    <string name="settings_screen_view_licenses_description">查看第三方开源库许可</string>
+    <string name="settings_screen_licenses">许可</string>
+    <string name="settings_screen_navigate">前往</string>
 
-    <string name="about_libraries_screen_title">Open Source Licenses</string>
-    <string name="about_libraries_screen_back">Back</string>
+    <string name="settings_logged_in">已登录 33IQ</string>
+    <string name="settings_not_logged_in">未登录</string>
+    <string name="settings_score">学识：%1$s</string>
+    <string name="settings_login">登录</string>
+    <string name="settings_logout">退出登录</string>
+
+    <string name="settings_theme_title">外观</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+
+    <string name="settings_disclaimer">33IQ Next 是基于公开网页分析实现的非官方第三方客户端，仅用于个人学习与技术研究，与 33IQ 官方无关。题目内容版权归 33IQ 及原作者所有。</string>
+
+    <string name="about_libraries_screen_title">开源许可</string>
+    <string name="about_libraries_screen_back">返回</string>
 </resources>

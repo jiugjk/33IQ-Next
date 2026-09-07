@@ -1,11 +1,13 @@
-rootProject.name = "android-showcase"
+rootProject.name = "33iq-next"
 
 include(
     ":app",
-    ":feature:album",
+    ":feature:feed",
+    ":feature:auth",
     ":feature:settings",
     ":feature:favourite",
     ":feature:base",
+    ":library:network",
     ":library:test-utils",
     ":konsist-test",
 )
@@ -31,6 +33,6 @@ dependencyResolutionManagement {
 }
 
 // Generate type safe accessors when referring to other projects eg.
-// Before: implementation(project(":feature_album"))
-// After: implementation(projects.featureAlbum)
+// Before: implementation(project(":feature:feed"))
+// After: implementation(projects.feature.feed)
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")

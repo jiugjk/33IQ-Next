@@ -1,0 +1,14 @@
+<resources>
+    <string name="feed_title">33IQ 题库</string>
+    <string name="feed_search_content_description">搜索</string>
+    <string name="feed_search_placeholder">搜索题目 / #题号</string>
+    <string name="feed_search_hint">输入关键词搜索题目</string>
+    <string name="feed_search_empty">没有找到相关题目</string>
+    <string name="feed_navigate_back">返回</string>
+    <string name="feed_bookmark_content_description">收藏</string>
+    <string name="feed_choice_no_answer_check">该题正确答案未公开抓取到，本客户端暂无法核对对错</string>
+    <string name="feed_analysis_title">解析</string>
+    <string name="feed_analysis_unavailable">33IQ 官方对该题的解析内容需要登录/消耗学识值查看，本客户端未抓取到解析文本</string>
+    <string name="feed_comments_title">评论（%1$d）</string>
+    <string name="feed_comments_empty">暂无评论，或该功能的数据源尚未确认</string>
+</resources>

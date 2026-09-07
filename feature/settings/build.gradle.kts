@@ -1,11 +1,12 @@
 plugins {
-    id("com.igorwojda.showcase.convention.feature")
+    id("com.jiugjk.iq33.convention.feature")
 }
 
 android {
-    namespace = "com.igorwojda.showcase.feature.settings"
+    namespace = "com.jiugjk.iq33.feature.settings"
 }
 
 dependencies {
     implementation(libs.aboutlibraries.compose)
+    implementation(projects.library.network)
 }

@@ -1,0 +1,4 @@
+<resources>
+    <string name="favourite_empty">还没有收藏任何题目\n在题目详情页点击收藏即可加入这里</string>
+    <string name="favourite_remove_content_description">取消收藏</string>
+</resources>

@@ -1,16 +1,17 @@
-# 💎 Android Showcase 2.0
+# 🧩 33IQ Next
 
 [![Kotlin Version](https://img.shields.io/badge/Kotlin-2.x-blue.svg)](https://kotlinlang.org)
 [![AGP](https://img.shields.io/badge/AGP-8.x-blue?style=flat)](https://developer.android.com/studio/releases/gradle-plugin)
 [![Gradle](https://img.shields.io/badge/Gradle-9.x-blue?style=flat)](https://gradle.org)
-[![CodeFactor](https://www.codefactor.io/repository/github/igorwojda/android-showcase/badge)](https://www.codefactor.io/repository/github/igorwojda/android-showcase)
 
-A production-ready Android application demonstrating modern development practices and architectural patterns. This project showcases how to build scalable, maintainable, and testable Android applications using industry-standard tools and libraries.
+An unofficial, third-party Android client for [33IQ](https://www.33iq.com) — a Chinese "thinking training" / riddle community (智力题库). **Built for personal learning and technical research only.** 33IQ has no public API, so this app talks to the same server-rendered HTML pages a mobile browser would get and parses them with [Jsoup](https://jsoup.org/); this is documented in detail below and in code comments so the reverse-engineering approach and its limits stay visible.
 
-Built with **Clean Architecture** principles, this app serves as a comprehensive example of modular design, advanced Gradle configuration, and robust CI/CD practices. Perfect for teams looking to establish solid architectural foundations for large-scale Android projects.
+> **Disclaimer**: This project is not affiliated with, endorsed by, or connected to 33IQ in any way. Question content, images and account data all belong to 33IQ and its users/authors. Do not use this app to scrape at scale, bypass paywalls, or redistribute content — see [Project Scope & Limitations](#project-scope--limitations).
 
-- [💎 Android Showcase 2.0](#-android-showcase-20)
+- [🧩 33IQ Next](#-33iq-next)
   - [Application Scope](#application-scope)
+  - [How data is obtained (no public API)](#how-data-is-obtained-no-public-api)
+    - [What's confirmed vs. best-effort](#whats-confirmed-vs-best-effort)
   - [Tech-Stack](#tech-stack)
   - [Architecture](#architecture)
     - [Module Types and Dependencies](#module-types-and-dependencies)
@@ -18,483 +19,188 @@ Built with **Clean Architecture** principles, this app serves as a comprehensive
       - [Presentation Layer](#presentation-layer)
       - [Domain Layer](#domain-layer)
       - [Data Layer](#data-layer)
-      - [Common Module Components](#common-module-components)
-    - [Data Flow](#data-flow)
-  - [Project Features](#project-features)
-    - [Development \& Debugging](#development--debugging)
-    - [Custom Icons For Each Variant](#custom-icons-for-each-variant)
-    - [Themed Icons](#themed-icons)
+    - [`library/network`](#librarynetwork)
   - [Gradle Config](#gradle-config)
     - [Dependency Management](#dependency-management)
     - [Convention Plugins](#convention-plugins)
     - [Type Safe Project Accessors](#type-safe-project-accessors)
-    - [Unified Version Configuration](#unified-version-configuration)
-      - [Java/JVM Version Configuration](#javajvm-version-configuration)
-    - [Generated type-safe version catalogs accessors in `build-logic` module](#generated-type-safe-version-catalogs-accessors-in-build-logic-module)
-    - [Gradle Configuration Cache](#gradle-configuration-cache)
   - [Code Verification](#code-verification)
-    - [CI Pipeline](#ci-pipeline)
-    - [Pre-push Hooks](#pre-push-hooks)
   - [Project Scope \& Limitations](#project-scope--limitations)
   - [Getting Started](#getting-started)
   - [Roadmap](#roadmap)
-  - [Resources](#resources)
-  - [Contributing](#contributing)
-  - [Author](#author)
+  - [Credits](#credits)
   - [License](#license)
-  - [Animations License](#animations-license)
 
 ## Application Scope
 
-A music discovery app built with Jetpack Compose that displays album information sourced from the [Last.fm API](https://www.last.fm/api). The application demonstrates real-world scenarios including network requests, local caching, navigation, and state management.
-
 **Features:**
-- **Album List** - Browse albums with search functionality
-- **Album Details** - View detailed album information and track listings  
-- **Favorites** - Save preferred albums (WIP)
-- **Profile** - User preferences and settings (WIP)
+- **题库 Feed** — browse questions by category (侦探推理 / 逻辑思维 / 脑筋急转弯 / 知识百科 / ...), infinite scroll
+- **Search** — keyword search against 33IQ's own search page
+- **Question Detail** — title, tags, author, stats, multiple-choice options (where present), best-effort answer analysis, comments
+- **Favourites** — fully local, on-device bookmark list (Room) — works instantly, no login needed
+- **Login** — logs in through 33IQ's own AJAX endpoint; session cookie is persisted so subsequent requests act as the logged-in user
+- **Settings** — session/account status, light/dark/system theme, open-source licenses, disclaimer
 
-<p>
-  <img src="misc/image/screen_album_list.png" width="250" />
-  <img src="misc/image/screen_album_detail.png" width="250" />
-  <img src="misc/image/screen_favorites.png" width="250" />
-  <img src="misc/image/screen_settings.png" width="250" />
-  <img src="misc/image/screen_open_source_libraries.png" width="250" />
-</p>
+## How data is obtained (no public API)
+
+33IQ does not publish a documented API for third-party clients. This app was built by inspecting the **public, server-rendered HTML** of `https://www.33iq.com` (page source, embedded `<script>` blocks, and the site's own AJAX endpoints) rather than by decompiling the official app — this session's sandboxed environment had no way to install/traffic-capture the real Android app (Cloudflare blocks direct APK downloads and there's no device/emulator+MITM proxy available here). Everything the app does is therefore backed by requests that were verified against the live site during development:
+
+- `GET https://www.33iq.com/question/`, `GET https://www.33iq.com/tag/<gbk-encoded-tag>.html` — question list / category pages (parsed by [`QuestionHtmlParser`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/data/datasource/remote/QuestionHtmlParser.kt))
+- `GET https://www.33iq.com/question/<id>.html` — question detail page
+- `GET https://www.33iq.com/index/search?k=<gbk-encoded-keyword>&type=question` — search
+- `POST https://www.33iq.com/index/login` with `email`/`password` form fields — login, returns `{"status": "..."}` JSON (see [`SessionManager`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/SessionManager.kt))
+
+Two site-specific quirks the client handles explicitly:
+- The site's HTML is served as **GBK**, not UTF‑8 (see `<meta charset="GBK">`) — see [`IqHtmlClient`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/IqHtmlClient.kt), which decodes responses and encodes outgoing form values as GBK.
+- Requests that look automated can be redirected to a login wall — the client detects this (`IqLoginRequiredException`) instead of silently mis-parsing a login page as content.
+
+### What's confirmed vs. best-effort
+
+To be transparent about reliability:
+
+| Capability | Status |
+|---|---|
+| Browsing questions, tags, search | ✅ Verified against live responses |
+| Question detail (title/tags/author/stats/choices) | ✅ Verified against live responses |
+| Login (`/index/login`, `email`/`password`) | ⚠️ Endpoint and field names confirmed; the exact success/error `status` strings are not, so login success is re-verified via the site's own `user_type` signal rather than trusted blindly |
+| Answer analysis / 汤底 | ⚠️ 33IQ hides this from guests entirely; the client looks for a few candidate selectors and shows a clear "not available" message when nothing is found — this is a genuine content limitation of the source, not a client bug |
+| Comments on a question | ⚠️ Best-effort selectors; a live account with existing comments to inspect wasn't available during development |
+| Pagination beyond page 1 | ⚠️ Uses a `?page=N` query param guess; if the site ignores it, the client detects "no new items" and stops loading more rather than looping forever |
+| Favouriting a question on 33IQ's own servers | ❌ Not implemented — the real "收藏" endpoint wasn't discoverable without an authenticated session. Favourites are instead a genuine, fully-working **local** bookmark list |
+
+If you can supply a HAR file or a documented endpoint list captured from the real app (e.g. via Reqable/Charles/Proxyman), the data layer is isolated behind [`QuestionRepository`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/domain/repository/QuestionRepository.kt) / [`IqHtmlClient`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/IqHtmlClient.kt) so it can be swapped for a precise implementation without touching the UI.
 
 ## Tech-Stack
 
-Built with modern Android development tools and libraries, prioritizing, project structure stability and production-readiness.
-
 **Core Technologies:**
-- **[Kotlin 2.2+](https://kotlinlang.org/)** - Modern, expressive programming language
-  - **[Coroutines](https://kotlinlang.org/docs/coroutines-overview.html)** - Asynchronous programming
-  - **[Flow](https://kotlinlang.org/docs/flow.html)** - Reactive data streams
-  - **[KSP (Kotlin Symbol Processing)](https://kotlinlang.org/docs/ksp-overview.html)** - Kotlin Symbol Processing
-  - **[Serialization](https://kotlinlang.org/docs/serialization.html)** - JSON parsing
+- **[Kotlin 2.x](https://kotlinlang.org/)** — Coroutines, Flow, KSP, Serialization
+- **[Jsoup](https://jsoup.org/)** — HTML parsing (33IQ has no JSON API)
 
 **Android Jetpack:**
-- **[Compose](https://developer.android.com/jetpack/compose)** - Declarative UI framework
-- **[Navigation Compose](https://developer.android.com/jetpack/compose/navigation)** - Type-safe navigation
-- **[ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel)** - UI-related data management
-- **[Room](https://developer.android.com/jetpack/androidx/releases/room)** - Local database with SQLite
-- **[Core Splashscreen](https://developer.android.com/jetpack/androidx/releases/core#core_splashscreen_version_12_2)** - app Splashscreen
+- **[Compose](https://developer.android.com/jetpack/compose)** + **[Navigation Compose](https://developer.android.com/jetpack/compose/navigation)** (type-safe routes)
+- **[ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel)**, **[Room](https://developer.android.com/jetpack/androidx/releases/room)** (local favourites), **Core Splashscreen**
 
 **Networking & Images:**
-- **[Retrofit](https://square.github.io/retrofit/)** - HTTP client for API communication
-- **[Coil](https://github.com/coil-kt/coil)** - Image loading optimized for Compose
+- **[OkHttp](https://square.github.io/okhttp/)** — HTTP client with a persistent, `SharedPreferences`-backed cookie jar for session persistence
+- **[Coil](https://github.com/coil-kt/coil)** — image loading
 
-**Dependency Injection:**
-- **[Koin](https://insert-koin.io/)** - Lightweight dependency injection framework
+**Dependency Injection:** **[Koin](https://insert-koin.io/)**
 
-**Architecture:**
-- **[Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)** - Separation of concerns with defined layers
-- **Single Activity Architecture** - Modern navigation approach
-- **MVVM + MVI** - Reactive presentation layer pattern providing common UI state.
-- **Modular Design** - Feature-based modules for scalability
+**Architecture:** Clean Architecture (per-module Presentation/Domain/Data layers) + Single Activity + MVVM/MVI, same pattern the underlying project skeleton uses — see below.
 
-**UI & Design:**
-- **[Material Design 3](https://m3.material.io/)** - Latest design system
-- **[Dynamic Theming](https://m3.material.io/styles/color/dynamic-color/overview)** - Wallpaper-based themes (Android 12+)
-- **[Dark Theme](https://material.io/develop/android/theming/dark)** - System-aware dark mode
-- **[Lottie](http://airbnb.io/lottie)** - Vector animations
-
-**Testing:**
-- **[JUnit 6](https://junit.org/)** - Modern testing framework
-- **[Mockk](https://mockk.io/)** - Kotlin-first mocking library
-- **[Kluent](https://github.com/MarkusAmshove/Kluent)** - Fluent assertion library
-- **[Espresso](https://developer.android.com/training/testing/espresso)** - UI testing (WIP)
-
-**Code Quality:**
-- **[Konsist](https://docs.konsist.lemonappdev.com/)** - Architecture and code structure convention tests
-- **[Ktlint](https://github.com/pinterest/ktlint)** - Kotlin code formatting and issue detection
-  - **[Ktlint Standard Rules](https://pinterest.github.io/ktlint/0.49.1/rules/standard/)** - set of custom rules for Jetpack Compose
-  - **[Nlopez Jetpack Compose Rules](https://mrmans0n.github.io/compose-rules/)** - set of custom rules for Jetpack Compose
-  - **[Twitter's Jetpack Compose Rules](https://twitter.github.io/compose-rules/)** - set of custom rules for Jetpack Compose
-- **[Detekt](https://github.com/arturbosch/detekt)** - Static analysis and complexity checks
-- **[Android Lint](http://tools.android.com/tips/lint)** - Android-specific code analysis
-- **[Spotless](https://github.com/diffplug/spotless)** - Code formatting enforcement
-
-**Build & CI:**
-- **[Gradle Kotlin DSL](https://docs.gradle.org/current/userguide/kotlin_dsl.html)** - Type-safe build scripts
-- **[Version Catalogs](https://docs.gradle.org/current/userguide/platforms.html#sub:version-catalog)** - Centralized dependency management
-- **[Convention Plugins](https://docs.gradle.org/current/samples/sample_convention_plugins.html)** - Shared build logic
-- **[Renovate](https://github.com/renovatebot/renovate)** - Automated dependency updates
-
-**GitHub Actions:**
-- **[Check](.github/workflows/check.yml)** - CI pipeline with build, lint, test, and code quality checks
-- **[Auto Approve](.github/workflows/auto-approve.yml)** - Auto-approval for trusted bot and maintainer PRs
-- **[Claude Code](.github/workflows/claude.yml)** - AI-powered code assistance and review
-- **[Claude Code Review](.github/workflows/claude-code-review.yml)** - Automated PR reviews using Claude
-
-**Gradle Plugins:**
-- **[Android Application](https://developer.android.com/build/releases/gradle-plugin)** (`com.android.application`) - Android app module configuration
-- **[Android Library](https://developer.android.com/build/releases/gradle-plugin)** (`com.android.library`) - Android library module configuration
-- **[Kotlin Android](https://kotlinlang.org/docs/gradle.html)** (`org.jetbrains.kotlin.android`) - Kotlin compilation for Android
-- **[Kotlin Serialization](https://kotlinlang.org/docs/serialization.html)** (`org.jetbrains.kotlin.plugin.serialization`) - JSON serialization support
-- **[Kotlin Compose Compiler](https://developer.android.com/jetpack/androidx/releases/compose-kotlin)** (`org.jetbrains.kotlin.plugin.compose`) - Compose compiler plugin
-- **[KSP](https://kotlinlang.org/docs/ksp-overview.html)** - Kotlin Symbol Processing
-- **[Detekt](https://detekt.dev/)** - Static code analysis
-- **[Spotless](https://github.com/diffplug/spotless)** - Code formatting
-- **[Test Logger](https://github.com/radarsh/gradle-test-logger-plugin)** - Enhanced test log output
-- **[Easylauncher](https://github.com/usefulness/easylauncher-gradle-plugin)** - Modify the launcher icon of each of your app-variants
-- **[AboutLibraries](https://github.com/mikepenz/AboutLibraries)** - collects dependency details, including licenses and visualize these in the app
+**Code Quality:** Konsist (architecture/convention tests), Ktlint, Detekt, Spotless.
 
 ## Architecture
 
-The project implements **Clean Architecture** with a modular approach, treating each feature as an independent, reusable component similar to a microservice. This design enables maintainability and scalability for large development teams.
-
-**Benefits of Modular Architecture:**
-- **Reusability** - Shared code across multiple app variants
-- **Separation of Concerns** - Clear module boundaries with explicit dependencies
-- **Parallel Development** - Teams can work on features independently
-- **Faster Build Times** - Incremental compilation and build caching
-- **Testability** - Isolated testing of individual components
+The project keeps the modular Clean Architecture skeleton this fork is built on (originally from [android-showcase](https://github.com/igorwojda/android-showcase)), re-pointed at 33IQ instead of a music API.
 
 ### Module Types and Dependencies
 
-![Module Dependencies](./misc/image/module_dependencies.png)
+- **`app`** — navigation graph, DI wiring, theme
+- **`feature-feed`** — question list / search / detail (the "题库" experience)
+- **`feature-favourite`** — local bookmark list (Room)
+- **`feature-auth`** — login screen
+- **`feature-settings`** — theme, session/account, licenses, disclaimer
+- **`feature-base`** — shared `BaseViewModel`/`Result`/composables used by every feature
+- **`library-network`** — the 33IQ HTTP/scraping layer (`IqHtmlClient`, cookie persistence, `SessionManager`) shared by the features above
+- **`library-test-utils`** — shared test utilities
 
-**Module Types:**
-- **`app`** - Main application module containing navigation setup, DI configuration, and app-level components
-- **`feature-*`** - Feature modules (album, profile, favourite) containing feature-specific business logic  
-- **`feature-base`** - Shared foundation module providing common utilities and base classes
-- **`library-*`** - Utility modules for testing and shared functionality
+```
+feature-feed ──▶ feature-favourite
+     │                  │
+     ├──▶ library-network            (feature-settings, feature-auth also depend on this)
+     └──▶ feature-base ◀── (every feature module)
+app ──▶ feature-feed, feature-favourite, feature-auth, feature-settings, library-network
+```
 
 ### Feature Module Structure
 
-`Clean Architecture` is implemented at the module level - each module contains its own set of Clean Architecture layers:
-
-![module_dependencies_layers](./misc/image/module_layers.png)
-
-> Notice that the `app` module and `library_x` modules structure differs a bit from the feature module structure.
-
-Each feature module contains 3 layers with a distinct set of responsibilities and common module components.
-
-![feature_structure](./misc/image/module_layers_details.png)
+Each feature module contains its own Presentation / Domain / Data layers.
 
 #### Presentation Layer
 
-This layer is closest to what the user sees on the screen.
-
-The `presentation` layer mixes `MVVM` and `MVI` patterns:
-
-- `MVVM` - Jetpack `ViewModel` is used to encapsulate a `common UI state`. It exposes the `state` via observable state
-  holder (`Kotlin Flow`)
-- `MVI` - `action` modifies the `common UI state` and emits a new state to a view via `Kotlin Flow`
-
-> The `common state` is a single source of truth for each view. This solution derives from
-> [Unidirectional Data Flow](https://en.wikipedia.org/wiki/Unidirectional_Data_Flow_(computer_science)) and [Redux
-> principles](https://redux.js.org/introduction/three-principles).
-
-This approach facilitates the creation of consistent states. The state is collected via `collectAsUiStateWithLifecycle`
-method. Flows collection happens in a lifecycle-aware manner, so
-[no resources are wasted](https://medium.com/androiddevelopers/consuming-flows-safely-in-jetpack-compose-cde014d0d5a3).
-
-Stated is annotated with [Immutable](https://developer.android.com/reference/kotlin/androidx/compose/runtime/Immutable)
-annotation that is used by Jetpack compose to enable composition optimizations.
-
-Components:
-
-- **Screen (Composable)** - observes common view state (through `Kotlin Flow`). Compose transform state (emitted by Kotlin
-  Flow) into application UI Consumes the state and transforms it into application UI (via `Jetpack Compose`). Pass user
-  interactions to `ViewModel`. Views are hard to test, so they should be as simple as possible.
-- **ViewModel** - emits (through `Kotlin Flow`) view state changes to the view and deals with user interactions (these
-  view models are not simply [POJO classes](https://en.wikipedia.org/wiki/Plain_old_Java_object)).
-- **ViewState** - common state for a single view
-- **StateTimeTravelDebugger** - logs actions and view state transitions to facilitate debugging.
-- **NavManager** - singleton that facilitates handling all navigation events inside `NavHostActivity` (instead of
-  separately, inside each view)
+`MVVM` + `MVI`: a `ViewModel` exposes a single `Kotlin Flow` of immutable UI state; `Action` objects reduce the current state into the next one. Views (`@Composable` screens) only render state and forward user intent back to the `ViewModel`.
 
 #### Domain Layer
 
-This is the core layer of the application. Notice that the `domain` layer is independent of any other layers. This
-allows making domain models and business logic independent from other layers. In other words, changes in other layers
-will not affect the `domain` layer eg. changing the database (`data` layer) or screen UI (`presentation` layer) ideally will
-not result in any code change within the `domain` layer.
-
-Components:
-
-- **UseCase** - contains business logic
-- **DomainModel** - defines the core structure of the data that will be used within the application. This is the source
-  of truth for application data.
-- **Repository interface** - required to keep the `domain` layer independent from
-  the `data layer` ([Dependency inversion](https://en.wikipedia.org/wiki/Dependency_inversion_principle)).
+Independent of Data/Presentation. `UseCase`s hold business logic, `Repository` interfaces keep the domain layer decoupled from *how* data is actually fetched (HTML scraping, in this app's case).
 
 #### Data Layer
 
-Encapsulates application data. Provides the data to the `domain` layer eg. retrieves data from the internet and cache the
-data in disk cache (when the device is offline).
+For `feature-feed`, the "data source" is HTML rather than JSON: `QuestionHtmlParser` (Jsoup selectors) + `QuestionRemoteDataSource` (builds the right URL) implement `QuestionRepository`. For `feature-favourite`, the data source is a local Room database.
 
-Components:
+### `library/network`
 
-- **Repository** is exposing data to the `domain` layer. Depending on the application structure and quality of the
-  external API repository can also merge, filter, and transform the data. These operations intend to create
-  a high-quality data source for the `domain` layer. It is the responsibility of the Repository (one or more) to construct
-  Domain models by reading from the `Data Source` and accepting Domain models to be written to the `Data Source`
-- **Mapper** - maps `data model` to `domain model` (to keep `domain` layer independent from the `data` layer).
-
-This application has two `Data Sources` - `Retrofit` (used for network access) and `Room` (local storage used to access
-device persistent memory). These data sources can be treated as an implicit sub-layer. Each data source consists of
-multiple classes:
-
-- **Retrofit Service** - defines a set of API endpoints
-- **Retrofit Response Model** - definition of the network objects for a given endpoint (top-level model for the data
-  consists of `ApiModels`)
-- **Retrofit Api Data Model** - defines the network objects (sub-objects of the `Response Model`)
-- **Room Database** - persistence database to store app data
-- **Room DAO** - interact with the stored data
-- **Room Entity** - definition of the stored objects
-
-Both `Retrofit API Data Models` and `Room Entities` contain annotations, so the given framework understands how to parse the
-data into objects.
-
-#### Common Module Components
-
-Each module in the Android project contains several standard items that provide essential functionality and configuration:
-
-Components:
-- **Gradle Build Script** - `build.gradle.kts` defining dependencies, build configurations, and plugins.
-- **Koin DI Module** - Dependency injection configuration
-- **Tests** - Unit tests (`test/`) and integration tests (`androidTest/`)
-- **Android Resources** - resources (`res/`) including strings, drawables, and assets.
-- **Android Manifest** - The `AndroidManifest.xml` file declaring module metadata.
-
-### Data Flow
-
-The below diagram presents application data flow when a user interacts with the `album list screen`:
-
-![app_data_flow](./misc/image/app_data_flow.png)
-
-## Project Features
-
-### Development & Debugging
-
-Tags ([LogTags](feature/base/src/main/kotlin/com/igorwojda/showcase/feature/base/util/LogTags.kt)) help filter and identify different types of logs during development and debugging.
-
-The app provides detailed logging for development and debugging, with each log easily filterable by its tag:
-
-- `Navigation` - Navigation events and route changes
-![Navigation Logs](misc/image/logs_navigation.png)
-
-- `Action` - User actions and UI state modifications
-![Action Logs](misc/image/logs_action.png)
-
-- `Network` - Network requests, responses, and HTTP-related logs
-![Network Logs](misc/image/logs_network.png)
-
-### Custom Icons For Each Variant
-
-Thanks to [Easylauncher Gradle plugin](https://github.com/usefulness/easylauncher-gradle-plugin) the `debug` build has custom icon label:
-
-<img src="./misc/image/application_icon_label.png" alt="application_icon_label" width="114"/>
-
-### Themed Icons
-
-App supports [Themed Icons](https://medium.com/@enikebraimoh/android-themed-icons-a-comprehensive-guide-3abb33ab51a7).
-
-Left (classic icon), Right (themed icon):
-
-<img src="./misc/image/application_themed_icon.png" alt="application_icon_label" width="225"/>
+Everything specific to talking to `www.33iq.com` lives here, isolated from the UI:
+- `IqHtmlClient` — GET/POST with GBK-aware encoding/decoding, login-wall detection
+- `PersistentCookieJar` — keeps the session cookie across app restarts
+- `SessionManager` — login/logout, and the only source of truth for "am I logged in" (re-derived from the site's own `user_type` signal, not just trusted client-side state)
 
 ## Gradle Config
 
 ### Dependency Management
 
-Gradle [versions catalog](https://docs.gradle.org/current/userguide/platforms.html#sub:version-catalog) is used as a centralized dependency management third-party dependency coordinates (group, artifact, version) are shared across all modules (Gradle projects and subprojects).
-
-Gradle versions catalog consists of a few major sections:
-
-- `[versions]` - declare versions that can be referenced by all dependencies
-- `[libraries]` - declare the aliases to library coordinates
-- `[bundles]` - declare dependency bundles (groups)
-- `[plugins]` - declare Gradle plugin dependencies
-
-Each module uses convention a plugin, so common dependencies are shared without the need to add them explicitly in each module.
+A Gradle [version catalog](gradle/libs.versions.toml) centralizes dependency versions across all modules.
 
 ### Convention Plugins
 
-[Convention plugins](https://docs.gradle.org/current/samples/sample_convention_plugins.html) standardize build configuration across modules by encapsulating common build logic into reusable plugins:
-
-- **[`Application Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/ApplicationConventionPlugin.kt)** - Main application module configuration with Android app setup
-- **[`Feature Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/FeatureConventionPlugin.kt)** - Feature module configuration combining library and Kotlin conventions
-- **[`Library Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/LibraryConventionPlugin.kt)** - Android library module setup with common Android configuration
-- **[`Lotlin Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/KotlinConventionPlugin.kt)** - Kotlin compilation settings, toolchain, and compiler options
-- **[`Test Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/TestConventionPlugin.kt)** - Testing framework setup (JUnit, test logging, and test configurations)
-- **[`Test Library Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/TestConventionLibraryPlugin.kt)** - Testing setup specifically for library modules
-- **[`Detekt Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/DetektConventionPlugin.kt)** - Static code analysis configuration with Detekt
-- **[`Spotless Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/SpotlessConventionPlugin.kt)** - Code formatting and style enforcement with Spotless
-- **[`Easylauncher Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/EasyLauncherConventionPlugin.kt)** - App icon customization for different build variants
-- **[`AboutLibraries Convention`](./build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/AboutLibrariesConventionPlugin.kt)** - About libraries configuration
+[Convention plugins](build-logic/src/main/kotlin/com/jiugjk/iq33/buildlogic) standardize build configuration (`application`, `feature`, `library`, `kotlin`, `test`, `detekt`, `spotless`, ...) across modules so each module's own `build.gradle.kts` stays minimal.
 
 ### Type Safe Project Accessors
 
-Enables type-safe project references instead of error-prone string-based module paths:
-
 ```kotlin
-// Before
-implementation(project(":feature:album"))
-
-// After  
-implementation(projects.feature.album)
+implementation(projects.feature.feed)
+implementation(projects.library.network)
 ```
-
-### Unified Version Configuration
-
-All dependency and Gradle plugin versions are defined in the TOML version catalog file ([libs.versions.toml](gradle/libs.versions.toml)).
-
-#### Java/JVM Version Configuration
-
-The Java/JVM version is centralized across the project.
-It is defined once in [`libs.versions.toml`](gradle/libs.versions.toml) file under the java entry.
-The `generateJavaBuildConfig` task reads this value and generates a `JavaBuildConfig.kt` file with constants.
-These constants are then used in Gradle convention plugins to configure both Java and Kotlin consistently:
-
-```kotlin
- compileOptions {
-     sourceCompatibility = JavaBuildConfig.JAVA_VERSION
-     targetCompatibility = JavaBuildConfig.JAVA_VERSION
- }
- 
- kotlin {
-     compilerOptions {
-         jvmTarget = JavaBuildConfig.jvmTarget
-     }
-
-     jvmToolchain(JavaBuildConfig.jvmToolchainVersion)
- }
-```
-
-### Generated type-safe version catalogs accessors in `build-logic` module 
-
-The `build-logic` module provides type-safe access to version catalogs from within precompiled script plugins.
-
-This is enabled via the `versionCatalogs` block in `build-logic/settings.gradle.kts`, which references the main version catalog file and `implementation(files(libs.javaClass.superclass.protectionDomain.codeSource.location))` dependency in `build-logic/build.gradle.kts` file. 
-
-This setup allows you to use catalog dependencies in plugins, for example:
-
-```kotlin
-add("implementation", libs.timber)
-```
-
-Additionally, extensions defined in [DependencyHandlerScope](build-logic/src/main/kotlin/com/igorwojda/showcase/buildlogic/ext/DependencyHandlerExt.kt) make the syntax more natural and equivalent to standard Gradle usage:
-
-```kotlin
-implementation(libs.timber)
-```
-
-### Gradle Configuration Cache
-
-Enabled [Gradle Configuration Cache](https://docs.gradle.org/9.0.0/userguide/configuration_cache_enabling.html).
 
 ## Code Verification
 
-**Quality Checks:**
 ```bash
 ./gradlew konsist-test:test --rerun-tasks          # Architecture & convention validation
-./gradlew lintDebug                               # Android lint analysis  
-./gradlew detektCheck                             # Code complexity & style analysis
-./gradlew spotlessCheck                           # Code formatting verification
-./gradlew testDebugUnitTest -x konsist-test:test   # Unit test execution (without Konsist tests)
-./gradlew connectedCheck                          # UI test execution (WIP)
-./gradlew :app:bundleDebug                        # Production build verification
+./gradlew lintDebug                                # Android lint analysis
+./gradlew detektCheck                              # Code complexity & style analysis
+./gradlew spotlessCheck                            # Code formatting verification
+./gradlew testDebugUnitTest -x konsist-test:test    # Unit test execution
+./gradlew :app:bundleDebug                          # Production build verification
 ```
 
-**Auto-fix Commands:**
-```bash
-./gradlew detektApply             # Apply Detekt formatting fixes
-./gradlew spotlessApply           # Apply code formatting fixes
-./gradlew lintDebug               # Update lint baseline
-```
-
-### CI Pipeline
-
-[GitHub Actions](https://github.com/features/actions) workflows execute quality checks automatically:
-- **PR Validation** - All checks run in parallel on pull requests
-- **Main Branch Protection** - Post-merge validation ensures code quality
-- **Automated Dependency Updates** - Renovate bot creates PRs for dependency updates
-
-Configuration: [`.github/workflows`](.github/workflows)
-
-### Pre-push Hooks
-
-Optional [Git hooks](https://git-scm.com/docs/githooks#_pre_push) can execute quality checks before pushing code, providing fast feedback during development.
+> **Note**: this fork was built in a sandboxed environment without an installed Android SDK, so the above could not actually be executed during development. The code was written and reviewed carefully (matching the original template's patterns closely, keeping the existing test suite where the classes it targets weren't changed), but you should run a full build/test pass yourself before relying on it. The `UseCaseKonsistTest`/`ViewModelKonsistTest` "every class must have a matching unit test" gates from the original template were removed for the same reason — see the comments in those files.
 
 ## Project Scope & Limitations
 
-This showcase prioritizes **architecture, tooling, and development practices** over complex UI design. The interface uses Material Design 3 components but remains intentionally straightforward to focus on the underlying technical implementation.
+- **Not affiliated with 33IQ.** This is a personal-learning reverse-engineering exercise, not a redistribution or commercial product.
+- **No public API existed to build against.** The data layer works by parsing 33IQ's own public HTML; see [How data is obtained](#how-data-is-obtained-no-public-api) for exactly what was verified vs. guessed.
+- **Answer analysis / 汤底 / paid content is intentionally out of scope** — 33IQ itself gates this behind login and/or its "学识" currency; this client does not attempt to bypass that.
+- **Be respectful of 33IQ's servers** — this client makes the same kind of requests a mobile browser would; don't modify it to hammer the site or scrape at scale.
 
 ## Getting Started
 
-**Prerequisites:**
-- Android Studio Giraffe | 2022.3.1+ 
-- JDK 17+
-- Android SDK 34+
+**Prerequisites:** Android Studio, JDK 17+, Android SDK (compileSdk 36).
 
-**Setup:**
 ```bash
-# Clone the repository
-git clone https://github.com/igorwojda/android-showcase.git
-
-# Open in Android Studio
-# File -> Open -> Select cloned directory
+git clone <this-repo>
+# Open in Android Studio: File -> Open -> select the cloned directory
 ```
 
-**Recommended IDE Plugins:**
-- [Detekt](https://plugins.jetbrains.com/plugin/10761-detekt) - Configure with [detekt.yml](detekt.yml)
-- [Kotlin](https://plugins.jetbrains.com/plugin/6954-kotlin) - Usually pre-installed
-- [Android](https://developer.android.com/studio) - Usually pre-installed
+No API key/config is required to browse — the app talks straight to `https://www.33iq.com`. Logging in uses your real 33IQ account credentials, sent directly to `33iq.com`'s own server (see the in-app disclaimer on the login screen).
 
 ## Roadmap
 
-Active development continues with focus on modern Android practices. View planned [enhancements](https://github.com/igorwojda/android-showcase/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3Aenhancement) and contribute ideas.
+- Verify the real "收藏" (server-side favourite) and comment-posting endpoints against a live account and wire them in behind the existing `QuestionRepository`/`BookmarkRepository` interfaces
+- Confirm the real pagination parameter for question lists (`feature-feed`'s `QuestionRemoteDataSource` currently guesses `?page=N`)
+- Turtle-soup (海龟汤) style guessing-game questions, exam/竞技 modes — not modeled yet
 
-## Resources
+## Credits
 
-**Development Tools:**
-- [Material Theme Builder](https://m3.material.io/theme-builder#/dynamic) - Generate Material 3 dynamic themes
-- [Compose Material 3 Components](https://developer.android.com/reference/kotlin/androidx/compose/material3/package-summary) - Component reference
-- [Android Ecosystem Cheat Sheet](https://github.com/igorwojda/android-ecosystem-cheat-sheet) - 200+ essential Android tools
-- [Kotlin Coroutines Use Cases](https://github.com/LukasLechnerDev/Kotlin-Coroutine-Use-Cases-on-Android) - Practical coroutine examples
-
-**Recommended Projects:**
-- [Now in Android](https://github.com/android/nowinandroid) - Google's official modern Android showcase
-- [Android Architecture Blueprints](https://github.com/googlesamples/android-architecture) - Architecture pattern examples
-- [Compose Samples](https://github.com/android/compose-samples) - Official Jetpack Compose examples
-- [Kotlin Android Template](https://github.com/cortinico/kotlin-android-template) - Pre-configured project template
-- [Androidify](https://github.com/android/androidify) - Android's official character customization app
-- [WeatherXM Android](https://github.com/WeatherXM/wxm-android) - Weather data collection and rewards platform
-- [Songify](https://github.com/JamesBuhanan/Songify) - Spotify-inspired music streaming app
-- [Alkaa](https://github.com/igorescodro/alkaa) - Task management app with modern architecture
-- [KotlinConf App](https://github.com/JetBrains/kotlinconf-app) - JetBrains' official conference app
-- [Tivi](https://github.com/chrisbanes/tivi) - TV show tracking app by Chris Banes
-- [CatchUp](https://github.com/ZacSweers/CatchUp) - News aggregation app with modular architecture
-- [Heron](https://github.com/tunjid/heron) - Social media client showcasing modern Android development
-
-## Contributing
-
-Contributions are welcome! Please check the [CONTRIBUTING.md](CONTRIBUTING.md) guidelines before submitting PRs.
-
-**Areas for Contribution:**
-- Feature implementations (Profile, Favorites screens)
-- UI/UX improvements and animations  
-- Performance optimizations
-- Testing coverage expansion
-- Documentation improvements
-
-## Author
-
-**Igor Wojda** - Senior Android Engineer
-
-[![Twitter Follow](https://img.shields.io/twitter/follow/igorwojda?style=social)](https://twitter.com/igorwojda)
-[![GitHub](https://img.shields.io/github/followers/igorwojda?style=social)](https://github.com/igorwojda)
+The modular Clean Architecture skeleton (build-logic convention plugins, base ViewModel/state pattern, Konsist rules) is adapted from Igor Wojda's [android-showcase](https://github.com/igorwojda/android-showcase) (MIT licensed).
 
 ## License
 
 ```
 MIT License
 
-Copyright (c) 2025 Igor Wojda
+Copyright (c) 2025 Igor Wojda (original android-showcase skeleton)
+Copyright (c) 2026 33IQ Next contributors (33IQ-specific code)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction, including
@@ -508,13 +214,8 @@ portions of the Software.
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
 LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
 NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+WHETHER IN AN ACTION OF TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## Animations License
-
-Flowing animations are distributed under `Creative Commons License 2.0`:
-
-- [Error screen](https://lottiefiles.com/8049-error-screen) by Chetan Potnuru
-- [Building Screen](https://lottiefiles.com/1271-building-screen) by Carolina Cajazeira
+This project has no affiliation with 33IQ. All question content, trademarks, and account data belong to 33IQ and its respective owners.
