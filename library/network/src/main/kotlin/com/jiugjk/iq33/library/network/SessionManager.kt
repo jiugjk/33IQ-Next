@@ -52,7 +52,7 @@ class SessionManager(
                 return LoginResult.Failure("网络请求失败，请检查网络连接")
             }
 
-        val status = Regex("\"status\"\\s*:\\s*\"([^\"]*)\"").find(rawResponse)?.groupValues?.get(1)
+        val status = Regex(""""status"\s*:\s*"([^"]*)${'"'}""").find(rawResponse)?.groupValues?.get(1)
 
         // The exact set of success/error status strings returned by 33IQ's login endpoint isn't fully
         // confirmed (this client has no way to log in with a real, verified account during development).
@@ -84,9 +84,9 @@ class SessionManager(
                         .firstOrNull { it.contains("user_type") } ?: ""
 
                 val userType =
-                    Regex("var\\s+user_type\\s*=\\s*\"(-?\\d+)\"").find(script)?.groupValues?.get(1)
+                    Regex("""var\s+user_type\s*=\s*"(-?\d+)${'"'}""").find(script)?.groupValues?.get(1)
                 val score =
-                    Regex("var\\s+userScore\\s*=\\s*\"([^\"]*)\"").find(script)?.groupValues?.get(1)
+                    Regex("""var\s+userScore\s*=\s*"([^"]*)${'"'}""").find(script)?.groupValues?.get(1)
 
                 IqSession(
                     isLoggedIn = userType != null && userType != GUEST_USER_TYPE,

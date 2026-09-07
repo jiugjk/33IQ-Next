@@ -20,7 +20,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -29,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -79,7 +79,7 @@ fun FeedListScreen(
             is FeedListUiState.Content ->
                 FeedListContent(
                     uiState = currentUiState,
-                    onCategorySelected = viewModel::selectCategory,
+                    onCategorySelect = viewModel::selectCategory,
                     onRefresh = viewModel::onRefresh,
                     onLoadMore = viewModel::loadMore,
                     onQuestionClick = onNavigateToQuestionDetail,
@@ -92,7 +92,7 @@ fun FeedListScreen(
 @Composable
 private fun FeedListContent(
     uiState: FeedListUiState.Content,
-    onCategorySelected: (Category) -> Unit,
+    onCategorySelect: (Category) -> Unit,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     onQuestionClick: (Long) -> Unit,
@@ -101,7 +101,7 @@ private fun FeedListContent(
         CategoryChipRow(
             categories = uiState.categories,
             selectedCategory = uiState.selectedCategory,
-            onCategorySelected = onCategorySelected,
+            onCategorySelect = onCategorySelect,
         )
 
         PullToRefreshBox(
@@ -123,7 +123,7 @@ private fun FeedListContent(
 private fun CategoryChipRow(
     categories: List<Category>,
     selectedCategory: Category,
-    onCategorySelected: (Category) -> Unit,
+    onCategorySelect: (Category) -> Unit,
 ) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = Dimen.spaceM, vertical = Dimen.spaceS),
@@ -132,7 +132,7 @@ private fun CategoryChipRow(
         items(items = categories, key = { it.tagName }) { category ->
             FilterChip(
                 selected = category == selectedCategory,
-                onClick = { onCategorySelected(category) },
+                onClick = { onCategorySelect(category) },
                 label = { Text(category.displayName) },
                 colors = FilterChipDefaults.filterChipColors(),
             )
@@ -152,14 +152,18 @@ private fun QuestionList(
     val shouldLoadMore by
         remember {
             derivedStateOf {
-                val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                val lastVisibleIndex =
+                    listState.layoutInfo.visibleItemsInfo
+                        .lastOrNull()
+                        ?.index ?: 0
                 lastVisibleIndex >= questions.size - LOAD_MORE_THRESHOLD
             }
         }
+    val currentOnLoadMore by rememberUpdatedState(onLoadMore)
 
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore && questions.isNotEmpty()) {
-            onLoadMore()
+            currentOnLoadMore()
         }
     }
 
@@ -191,6 +195,6 @@ private fun CategoryChipRowPreview() {
     CategoryChipRow(
         categories = Category.DEFAULT_CATEGORIES,
         selectedCategory = Category.ALL,
-        onCategorySelected = { },
+        onCategorySelect = { },
     )
 }

@@ -26,7 +26,12 @@ class IqHtmlClient(
 ) {
     suspend fun get(url: String): Document =
         withContext(Dispatchers.IO) {
-            val request = Request.Builder().url(url).get().build()
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .get()
+                    .build()
 
             execute(request)
         }
@@ -38,7 +43,12 @@ class IqHtmlClient(
         withContext(Dispatchers.IO) {
             val encodedBody = params.entries.joinToString("&") { (key, value) -> "$key=${encodeGbk(value)}" }
             val body = encodedBody.toRequestBody(FORM_MEDIA_TYPE)
-            val request = Request.Builder().url(url).post(body).build()
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .post(body)
+                    .build()
 
             execute(request)
         }
@@ -51,12 +61,17 @@ class IqHtmlClient(
         withContext(Dispatchers.IO) {
             val encodedBody = params.entries.joinToString("&") { (key, value) -> "$key=${encodeGbk(value)}" }
             val body = encodedBody.toRequestBody(FORM_MEDIA_TYPE)
-            val request = Request.Builder().url(url).post(body).build()
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .post(body)
+                    .build()
 
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
 
-                decodeGbk(response.body?.bytes() ?: ByteArray(0))
+                decodeGbk(response.body.bytes())
             }
         }
 
@@ -64,7 +79,7 @@ class IqHtmlClient(
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
 
-            val html = decodeGbk(response.body?.bytes() ?: ByteArray(0))
+            val html = decodeGbk(response.body.bytes())
             val document = Jsoup.parse(html, response.request.url.toString())
 
             if (isLoginWall(document)) throw IqLoginRequiredException()
@@ -73,8 +88,7 @@ class IqHtmlClient(
         }
     }
 
-    private fun isLoginWall(document: Document): Boolean =
-        document.title().contains("用户登录") || document.selectFirst(".login-card") != null
+    private fun isLoginWall(document: Document): Boolean = document.title().contains("用户登录") || document.selectFirst(".login-card") != null
 
     private fun decodeGbk(bytes: ByteArray): String = String(bytes, charset(IqConstants.PAGE_CHARSET))
 

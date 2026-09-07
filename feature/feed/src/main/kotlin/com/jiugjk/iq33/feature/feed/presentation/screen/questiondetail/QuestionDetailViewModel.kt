@@ -24,7 +24,9 @@ internal class QuestionDetailViewModel(
                     val isBookmarked = isBookmarkedUseCase(id)
                     sendAction(QuestionDetailAction.LoadSuccess(result.value, isBookmarked))
                 }
-                is Result.Failure -> sendAction(QuestionDetailAction.LoadFailure)
+                is Result.Failure -> {
+                    sendAction(QuestionDetailAction.LoadFailure)
+                }
             }
         }
     }

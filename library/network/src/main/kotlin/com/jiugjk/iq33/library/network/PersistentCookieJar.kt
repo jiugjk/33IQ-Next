@@ -39,8 +39,7 @@ class PersistentCookieJar(
         persist()
     }
 
-    override fun loadForRequest(url: HttpUrl): List<Cookie> =
-        cookiesByName.values.filter { it.expiresAt > System.currentTimeMillis() }
+    override fun loadForRequest(url: HttpUrl): List<Cookie> = cookiesByName.values.filter { it.expiresAt > System.currentTimeMillis() }
 
     fun hasCookies(): Boolean = cookiesByName.isNotEmpty()
 
@@ -48,10 +47,9 @@ class PersistentCookieJar(
     fun setCookiesFromRawHeader(rawCookieHeader: String) {
         rawCookieHeader
             .split(";")
-            .mapNotNull { pair ->
-                val parts = pair.trim().split("=", limit = 2)
-                if (parts.size != 2 || parts[0].isBlank()) return@mapNotNull null
-
+            .map { pair -> pair.trim().split("=", limit = 2) }
+            .filter { parts -> parts.size == 2 && parts[0].isNotBlank() }
+            .map { parts ->
                 Cookie
                     .Builder()
                     .name(parts[0])
@@ -80,7 +78,12 @@ class PersistentCookieJar(
 
     private fun restore() {
         val serialized = preferences.getString(PREF_KEY_COOKIES, null) ?: return
-        val url = HttpUrl.Builder().scheme("https").host(HOST).build()
+        val url =
+            HttpUrl
+                .Builder()
+                .scheme("https")
+                .host(HOST)
+                .build()
 
         serialized
             .split(COOKIE_SEPARATOR)

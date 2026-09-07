@@ -60,7 +60,7 @@ fun SettingsScreen(
                     uiState = currentUiState,
                     onNavigateToAboutLibraries = onNavigateToAboutLibraries,
                     onNavigateToLogin = onNavigateToLogin,
-                    onThemeModeSelected = viewModel::onThemeModeSelected,
+                    onThemeModeSelect = viewModel::onThemeModeSelected,
                     onLogoutClick = viewModel::onLogoutClick,
                 )
         }
@@ -72,7 +72,7 @@ private fun SettingsContent(
     uiState: SettingsUiState.Content,
     onNavigateToAboutLibraries: () -> Unit,
     onNavigateToLogin: () -> Unit,
-    onThemeModeSelected: (ThemeMode) -> Unit,
+    onThemeModeSelect: (ThemeMode) -> Unit,
     onLogoutClick: () -> Unit,
 ) {
     Column(
@@ -80,7 +80,7 @@ private fun SettingsContent(
     ) {
         AccountCard(session = uiState.session, onNavigateToLogin = onNavigateToLogin, onLogoutClick = onLogoutClick)
 
-        ThemeCard(themeMode = uiState.themeMode, onThemeModeSelected = onThemeModeSelected)
+        ThemeCard(themeMode = uiState.themeMode, onThemeModeSelect = onThemeModeSelect)
 
         Card(
             modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
@@ -133,9 +133,10 @@ private fun AccountCard(
             Column(modifier = Modifier.weight(1f)) {
                 if (session.isLoggedIn) {
                     Text(stringResource(R.string.settings_logged_in), style = MaterialTheme.typography.bodyLarge)
-                    if (session.score != null) {
+                    val score = session.score
+                    if (score != null) {
                         Text(
-                            text = stringResource(R.string.settings_score, session.score),
+                            text = stringResource(R.string.settings_score, score),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -162,7 +163,7 @@ private fun AccountCard(
 @Composable
 private fun ThemeCard(
     themeMode: ThemeMode,
-    onThemeModeSelected: (ThemeMode) -> Unit,
+    onThemeModeSelect: (ThemeMode) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
@@ -182,7 +183,7 @@ private fun ThemeCard(
                 options.forEachIndexed { index, (mode, label) ->
                     SegmentedButton(
                         shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                        onClick = { onThemeModeSelected(mode) },
+                        onClick = { onThemeModeSelect(mode) },
                         selected = themeMode == mode,
                     ) {
                         Text(label)
@@ -245,7 +246,7 @@ private fun SettingsScreenPreview() {
         uiState = SettingsUiState.Content(),
         onNavigateToAboutLibraries = { },
         onNavigateToLogin = { },
-        onThemeModeSelected = { },
+        onThemeModeSelect = { },
         onLogoutClick = { },
     )
 }

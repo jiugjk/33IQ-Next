@@ -28,7 +28,12 @@ internal class QuestionHtmlParser {
         val id = questionIdFromHref(link.attr("href")) ?: return null
         val title = link.text()
 
-        val statsText = element.select(".info span").firstOrNull()?.text().orEmpty()
+        val statsText =
+            element
+                .select(".info span")
+                .firstOrNull()
+                ?.text()
+                .orEmpty()
         val upvoteCount = extractCount(statsText, "点赞")
         val commentCount = extractCount(statsText, "评论")
 
@@ -114,12 +119,21 @@ internal class QuestionHtmlParser {
     }
 
     private fun questionIdFromHref(href: String): Long? =
-        Regex("""/question/(\d+)\.html""").find(href)?.groupValues?.get(1)?.toLongOrNull()
+        Regex("""/question/(\d+)\.html""")
+            .find(href)
+            ?.groupValues
+            ?.get(1)
+            ?.toLongOrNull()
 
     private fun extractCount(
         text: String,
         label: String,
-    ): Int = Regex("""(\d+)\s*$label""").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    ): Int =
+        Regex("""(\d+)\s*$label""")
+            .find(text)
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull() ?: 0
 
     private companion object {
         // Best-effort: 33IQ hides the answer analysis behind login/paid "学识" for most questions, and

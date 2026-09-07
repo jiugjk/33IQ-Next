@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -39,11 +40,13 @@ fun SearchBar(
 
     var textFieldValue by remember(query) { mutableStateOf(TextFieldValue(query)) }
     val focusRequester = remember { FocusRequester() }
+    val currentOnQueryChange by rememberUpdatedState(onQueryChange)
+    val currentOnSearch by rememberUpdatedState(onSearch)
 
     LaunchedEffect(textFieldValue.text) {
         delay(delayBeforeSubmittingQuery)
-        onQueryChange(textFieldValue.text)
-        onSearch(textFieldValue.text)
+        currentOnQueryChange(textFieldValue.text)
+        currentOnSearch(textFieldValue.text)
     }
 
     LaunchedEffect(autoFocus) {

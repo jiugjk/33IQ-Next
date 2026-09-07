@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +43,7 @@ import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import org.koin.androidx.compose.koinViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuestionDetailScreen(
     questionId: Long,
@@ -85,7 +87,7 @@ fun QuestionDetailScreen(
             is QuestionDetailUiState.Content ->
                 QuestionDetailContent(
                     uiState = currentUiState,
-                    onChoiceSelected = viewModel::onChoiceSelected,
+                    onChoiceSelect = viewModel::onChoiceSelected,
                 )
         }
     }
@@ -94,7 +96,7 @@ fun QuestionDetailScreen(
 @Composable
 private fun QuestionDetailContent(
     uiState: QuestionDetailUiState.Content,
-    onChoiceSelected: (String) -> Unit,
+    onChoiceSelect: (String) -> Unit,
 ) {
     val detail = uiState.detail
 
@@ -131,7 +133,7 @@ private fun QuestionDetailContent(
             ChoiceSection(
                 choices = detail.choices,
                 selectedChoiceId = uiState.selectedChoiceId,
-                onChoiceSelected = onChoiceSelected,
+                onChoiceSelect = onChoiceSelect,
             )
         }
 
@@ -190,14 +192,14 @@ private fun StatsRow(detail: QuestionDetail) {
 private fun ChoiceSection(
     choices: List<Choice>,
     selectedChoiceId: String?,
-    onChoiceSelected: (String) -> Unit,
+    onChoiceSelect: (String) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
         choices.forEach { choice ->
             val isSelected = choice.id == selectedChoiceId
 
             OutlinedButton(
-                onClick = { onChoiceSelected(choice.id) },
+                onClick = { onChoiceSelect(choice.id) },
                 modifier =
                     Modifier
                         .fillMaxWidth()

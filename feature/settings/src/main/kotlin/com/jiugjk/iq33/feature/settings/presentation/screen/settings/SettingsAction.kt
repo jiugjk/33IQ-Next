@@ -8,14 +8,12 @@ internal sealed interface SettingsAction : BaseAction<SettingsUiState> {
     class SessionChanged(
         private val session: IqSession,
     ) : SettingsAction {
-        override fun reduce(state: SettingsUiState): SettingsUiState =
-            (state as SettingsUiState.Content).copy(session = session)
+        override fun reduce(state: SettingsUiState): SettingsUiState = (state as SettingsUiState.Content).copy(session = session)
     }
 
     class ThemeModeChanged(
         private val themeMode: ThemeMode,
     ) : SettingsAction {
-        override fun reduce(state: SettingsUiState): SettingsUiState =
-            (state as SettingsUiState.Content).copy(themeMode = themeMode)
+        override fun reduce(state: SettingsUiState): SettingsUiState = (state as SettingsUiState.Content).copy(themeMode = themeMode)
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination
+import androidx.navigation.NavGraph
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -35,73 +36,71 @@ fun MainScreen(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxSize(),
         bottomBar = { BottomNavigationBar(navController) },
     ) { innerPadding ->
-
-        val graph =
-            navController.createGraph(startDestination = NavigationRoute.FeedList) {
-                composable<NavigationRoute.FeedList> {
-                    FeedListScreen(
-                        onNavigateToQuestionDetail = { questionId ->
-                            navController.navigate(NavigationRoute.QuestionDetail(questionId))
-                        },
-                        onNavigateToSearch = {
-                            navController.navigate(NavigationRoute.Search)
-                        },
-                    )
-                }
-                composable<NavigationRoute.QuestionDetail> { backStackEntry ->
-                    val args = backStackEntry.toRoute<NavigationRoute.QuestionDetail>()
-
-                    QuestionDetailScreen(
-                        questionId = args.questionId,
-                        onBackClick = { navController.popBackStack() },
-                    )
-                }
-                composable<NavigationRoute.Search> {
-                    SearchScreen(
-                        onBackClick = { navController.popBackStack() },
-                        onNavigateToQuestionDetail = { questionId ->
-                            navController.navigate(NavigationRoute.QuestionDetail(questionId))
-                        },
-                    )
-                }
-                composable<NavigationRoute.Favourites> {
-                    FavouriteScreen(
-                        onQuestionClick = { questionId ->
-                            navController.navigate(NavigationRoute.QuestionDetail(questionId))
-                        },
-                    )
-                }
-                composable<NavigationRoute.Settings> {
-                    SettingsScreen(
-                        onNavigateToAboutLibraries = {
-                            navController.navigate(NavigationRoute.AboutLibraries)
-                        },
-                        onNavigateToLogin = {
-                            navController.navigate(NavigationRoute.Login)
-                        },
-                    )
-                }
-                composable<NavigationRoute.Login> {
-                    LoginScreen(
-                        onBackClick = { navController.popBackStack() },
-                        onLoginSuccess = { navController.popBackStack() },
-                    )
-                }
-                composable<NavigationRoute.AboutLibraries> {
-                    AboutLibrariesScreen(
-                        onBackClick = {
-                            navController.popBackStack()
-                        },
-                    )
-                }
-            }
         NavHost(
             navController = navController,
-            graph = graph,
+            graph = navController.buildAppNavGraph(),
             modifier = Modifier.padding(innerPadding),
         )
     }
 }
+
+private fun NavController.buildAppNavGraph(): NavGraph =
+    createGraph(startDestination = NavigationRoute.FeedList) {
+        composable<NavigationRoute.FeedList> {
+            FeedListScreen(
+                onNavigateToQuestionDetail = { questionId ->
+                    navigate(NavigationRoute.QuestionDetail(questionId))
+                },
+                onNavigateToSearch = {
+                    navigate(NavigationRoute.Search)
+                },
+            )
+        }
+        composable<NavigationRoute.QuestionDetail> { backStackEntry ->
+            val args = backStackEntry.toRoute<NavigationRoute.QuestionDetail>()
+
+            QuestionDetailScreen(
+                questionId = args.questionId,
+                onBackClick = { popBackStack() },
+            )
+        }
+        composable<NavigationRoute.Search> {
+            SearchScreen(
+                onBackClick = { popBackStack() },
+                onNavigateToQuestionDetail = { questionId ->
+                    navigate(NavigationRoute.QuestionDetail(questionId))
+                },
+            )
+        }
+        composable<NavigationRoute.Favourites> {
+            FavouriteScreen(
+                onQuestionClick = { questionId ->
+                    navigate(NavigationRoute.QuestionDetail(questionId))
+                },
+            )
+        }
+        composable<NavigationRoute.Settings> {
+            SettingsScreen(
+                onNavigateToAboutLibraries = {
+                    navigate(NavigationRoute.AboutLibraries)
+                },
+                onNavigateToLogin = {
+                    navigate(NavigationRoute.Login)
+                },
+            )
+        }
+        composable<NavigationRoute.Login> {
+            LoginScreen(
+                onBackClick = { popBackStack() },
+                onLoginSuccess = { popBackStack() },
+            )
+        }
+        composable<NavigationRoute.AboutLibraries> {
+            AboutLibrariesScreen(
+                onBackClick = { popBackStack() },
+            )
+        }
+    }
 
 private fun addOnDestinationChangedListener(navController: NavController) {
     navController.addOnDestinationChangedListener(

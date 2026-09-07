@@ -19,7 +19,7 @@ internal class QuestionRepositoryImpl(
             .fold(
                 onSuccess = { Result.Success(it) },
                 onFailure = { throwable ->
-                    Timber.tag("Network").w(throwable, "Failed to load question list")
+                    Timber.tag(NETWORK_LOG_TAG).w(throwable, "Failed to load question list")
                     Result.Failure(throwable)
                 },
             )
@@ -32,7 +32,7 @@ internal class QuestionRepositoryImpl(
             .fold(
                 onSuccess = { Result.Success(it) },
                 onFailure = { throwable ->
-                    Timber.tag("Network").w(throwable, "Search failed")
+                    Timber.tag(NETWORK_LOG_TAG).w(throwable, "Search failed")
                     Result.Failure(throwable)
                 },
             )
@@ -42,8 +42,12 @@ internal class QuestionRepositoryImpl(
             .fold(
                 onSuccess = { Result.Success(it) },
                 onFailure = { throwable ->
-                    Timber.tag("Network").w(throwable, "Failed to load question $id")
+                    Timber.tag(NETWORK_LOG_TAG).w(throwable, "Failed to load question $id")
                     Result.Failure(throwable)
                 },
             )
+
+    private companion object {
+        const val NETWORK_LOG_TAG = "Network"
+    }
 }
