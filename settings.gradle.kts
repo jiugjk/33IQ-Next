@@ -1,4 +1,4 @@
-rootProject.name = "33iq-next"
+rootProject.name = "iq33-next"
 
 include(
     ":app",
