@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Showcase</string>
+
+    <string name="bottom_navigation_albums">Albums</string>
+    <string name="bottom_navigation_favorites">Favorites</string>
+    <string name="bottom_navigation_settings">Settings</string>
+</resources>

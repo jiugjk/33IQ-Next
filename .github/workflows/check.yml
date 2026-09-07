@@ -1,0 +1,202 @@
+name: Check
+
+on:
+  push:
+    branches: [ main ] # Just in case main was not up to date while merging PR
+  pull_request:
+    types: [ opened, synchronize ]
+
+# Cancel previous runs on new push
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Build App
+        run: ./gradlew :app:assembleDebug --no-build-cache
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+  android-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: lintDebug
+        run: ./gradlew lint
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: android-lint-report
+          path: |
+            app/build/reports/lint-results*.html
+            feature/*/build/reports/lint-results*.html
+            library/*/build/reports/lint-results*.html
+
+  detekt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: detekt
+        run: ./gradlew detektCheck
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: detekt-report
+          path: |
+            build/reports/detekt/detekt.*
+            app/build/reports/detekt/detekt.*
+            feature/*/build/reports/detekt/detekt.*
+            library/*/build/reports/detekt/detekt.*
+            konsist-test/build/reports/detekt/detekt.*
+
+  konsist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: konsist
+        run: ./gradlew konsist-test:test --rerun-tasks
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: konsist-report
+          path: ./konsist-test/build/reports/*
+
+  spotless:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: spotlessCheck
+        run: ./gradlew spotlessCheck
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: spotless-report
+          path: |
+            build/reports/spotless/*
+            app/build/reports/spotless/*
+            feature/*/build/reports/spotless/*
+            library/*/build/reports/spotless/*
+            konsist-test/build/reports/spotless/*
+
+  #  ui-test:
+  #    runs-on: macos-latest
+  #    steps:
+  #      - name: checkout
+  #        uses: actions/checkout@v4
+  #
+  #      - name: Set up JDK
+  #        uses: actions/setup-java@v4
+  #        with:
+  #          java-version: 17
+  #          distribution: 'zulu'
+  #
+  #      - name: Setup Gradle
+  #        uses: gradle/actions/setup-gradle@v4
+  #
+  #      - name: run ui tests
+  #        uses: reactivecircus/android-emulator-runner@v2
+  #        with:
+  #          api-level: 29
+  #          target: default
+  #          arch: x86
+  #          profile: Nexus 6
+  #          disable-animations: true
+  #          script: ./gradlew connectedCheck
+  #
+  #      - uses: actions/upload-artifact@v4
+  #        with:
+  #          name: ui-test-report
+  #          path: ./**/build/reports/androidTests/
+
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: unitTest
+        run: ./gradlew test -x konsist-test:test
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: unit-test-report
+          path: |
+            app/build/reports/tests/
+            feature/*/build/reports/tests/
+            library/*/build/reports/tests/
