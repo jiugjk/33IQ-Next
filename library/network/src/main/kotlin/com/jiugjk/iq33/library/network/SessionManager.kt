@@ -59,9 +59,10 @@ class SessionManager(
 
         val status = Regex(""""status"\s*:\s*"([^"]*)${'"'}""").find(rawResponse)?.groupValues?.get(1)
 
-        // The exact set of success/error status strings returned by 33IQ's login endpoint isn't fully
-        // confirmed (this client has no way to log in with a real, verified account during development).
-        // Rather than trust a guessed "success" string, re-check the real, verified guest-probe signal.
+        // A real successful login is confirmed to reply {"status":"1","uid":"<id>"}, but the failure
+        // status strings still aren't (no failed login was ever captured). Rather than special-case
+        // just the one confirmed value, success/failure is still decided from the real, verified
+        // guest-probe signal below - status is only used to build a human-readable error message.
         val session = refreshFromServer()
 
         return if (session.isLoggedIn) {

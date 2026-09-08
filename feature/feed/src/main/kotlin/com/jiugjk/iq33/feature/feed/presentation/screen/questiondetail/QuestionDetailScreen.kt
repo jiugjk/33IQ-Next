@@ -89,15 +89,30 @@ fun QuestionDetailScreen(
                 QuestionDetailContent(
                     uiState = currentUiState,
                     onChoiceSelect = viewModel::onChoiceSelected,
+                    onSubmitAnswerClick = { viewModel.onSubmitAnswerClick(questionId, it) },
+                    onRevealAnswerClick = { viewModel.onRevealAnswerClick(questionId) },
+                    onConfirmRevealAnswer = { viewModel.onConfirmRevealAnswer(questionId) },
+                    onDismissAnswerFlow = viewModel::onDismissAnswerFlow,
+                    onRevealHintClick = { viewModel.onRevealHintClick(questionId) },
+                    onConfirmRevealHint = { viewModel.onConfirmRevealHint(questionId) },
+                    onDismissHintFlow = viewModel::onDismissHintFlow,
                 )
         }
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 private fun QuestionDetailContent(
     uiState: QuestionDetailUiState.Content,
     onChoiceSelect: (String) -> Unit,
+    onSubmitAnswerClick: (String) -> Unit,
+    onRevealAnswerClick: () -> Unit,
+    onConfirmRevealAnswer: () -> Unit,
+    onDismissAnswerFlow: () -> Unit,
+    onRevealHintClick: () -> Unit,
+    onConfirmRevealHint: () -> Unit,
+    onDismissHintFlow: () -> Unit,
 ) {
     val detail = uiState.detail
 
@@ -131,14 +146,39 @@ private fun QuestionDetailContent(
         StatsRow(detail)
 
         if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
+            // Once the answer has been revealed or already submitted, 33IQ no longer accepts a
+            // scored resubmission - the choice buttons and submit action are disabled to match.
+            val canInteract = uiState.canSubmit && uiState.submission !is SubmissionState.Done
+
             ChoiceSection(
                 choices = detail.choices,
                 selectedChoiceId = uiState.selectedChoiceId,
+                enabled = canInteract,
                 onChoiceSelect = onChoiceSelect,
+            )
+
+            SubmitAnswerSection(
+                selectedChoiceId = uiState.selectedChoiceId,
+                submission = uiState.submission,
+                enabled = canInteract,
+                onSubmitAnswerClick = onSubmitAnswerClick,
             )
         }
 
-        AnalysisSection(analysis = detail.analysis)
+        HintSection(
+            hintReveal = uiState.hintReveal,
+            onRevealHintClick = onRevealHintClick,
+            onConfirmRevealHint = onConfirmRevealHint,
+            onDismissHintFlow = onDismissHintFlow,
+        )
+
+        AnswerSection(
+            fallbackAnalysis = detail.analysis,
+            answerReveal = uiState.answerReveal,
+            onRevealAnswerClick = onRevealAnswerClick,
+            onConfirmRevealAnswer = onConfirmRevealAnswer,
+            onDismissAnswerFlow = onDismissAnswerFlow,
+        )
 
         CommentSection(comments = detail.comments, commentCount = detail.commentCount)
     }
@@ -210,6 +250,7 @@ private fun StatsRow(detail: QuestionDetail) {
 private fun ChoiceSection(
     choices: List<Choice>,
     selectedChoiceId: String?,
+    enabled: Boolean,
     onChoiceSelect: (String) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
@@ -218,6 +259,7 @@ private fun ChoiceSection(
 
             OutlinedButton(
                 onClick = { onChoiceSelect(choice.id) },
+                enabled = enabled,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -238,7 +280,7 @@ private fun ChoiceSection(
 }
 
 @Composable
-private fun AnalysisSection(analysis: String?) {
+internal fun AnalysisSection(analysis: String?) {
     Card(
         modifier = Modifier.padding(top = Dimen.spaceL).fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),

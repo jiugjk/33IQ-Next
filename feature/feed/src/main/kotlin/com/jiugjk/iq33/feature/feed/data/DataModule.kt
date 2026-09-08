@@ -1,9 +1,12 @@
 package com.jiugjk.iq33.feature.feed.data
 
+import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionHtmlParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionJsonParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionRemoteDataSource
+import com.jiugjk.iq33.feature.feed.data.repository.AnswerRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.QuestionRepositoryImpl
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionRepository
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
@@ -15,4 +18,6 @@ internal val dataModule =
         singleOf(::QuestionRemoteDataSource)
         singleOf(::QuestionHtmlParser)
         singleOf(::QuestionJsonParser)
+        singleOf(::AnswerRepositoryImpl) { bind<AnswerRepository>() }
+        singleOf(::AnswerRemoteDataSource)
     }

@@ -12,4 +12,25 @@
     <string name="feed_comments_title">评论（%1$d）</string>
     <string name="feed_comments_empty">暂无评论，或该功能的数据源尚未确认</string>
     <string name="feed_right_ratio">正确率 %1$d%%</string>
+
+    <string name="feed_submit_answer">提交答案</string>
+    <string name="feed_submission_correct">回答正确！学识 +%1$d（当前 %2$d）</string>
+    <string name="feed_submission_wrong">回答错误。学识 %1$d（当前 %2$d）</string>
+    <string name="feed_submission_already_answered">您已经回答过该题，无法重复提交</string>
+    <string name="feed_submission_limit_reached">已达到今日答题上限</string>
+    <string name="feed_submission_failed">提交失败，请检查网络或登录状态后重试</string>
+
+    <string name="feed_reveal_answer_button">查看正确答案（消耗学识）</string>
+    <string name="feed_reveal_answer_confirm_title">查看答案</string>
+    <string name="feed_reveal_answer_confirm_message_cost">花费 %1$d 学识查看本题正确答案，查看后将无法再提交作答。是否继续？</string>
+    <string name="feed_reveal_answer_confirm_message_free">您已购买过本题答案，可免费查看。查看后将无法再提交作答。是否继续？</string>
+    <string name="feed_reveal_answer_result_title">正确答案：%1$s</string>
+
+    <string name="feed_reveal_hint_button">获取提示（消耗学识）</string>
+    <string name="feed_reveal_hint_confirm_title">获取提示</string>
+    <string name="feed_reveal_hint_confirm_message">普通用户 %1$d 学识 / 会员 %2$d 学识 / 终身会员 %3$d 学识，本次将花费 %4$d 学识，是否继续？</string>
+
+    <string name="feed_dialog_confirm">确认</string>
+    <string name="feed_dialog_cancel">取消</string>
+    <string name="feed_flow_failed">请求失败，请检查网络或登录状态后重试</string>
 </resources>

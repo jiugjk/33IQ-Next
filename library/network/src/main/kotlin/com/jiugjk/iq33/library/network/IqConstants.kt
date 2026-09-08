@@ -35,6 +35,27 @@ object IqConstants {
     // and (presumably) real task data otherwise - confirmed live for the guest case.
     const val GUEST_PROBE_URL = "$BASE_URL/app/taskall"
 
+    // Answer-submission / paid-reveal endpoints, confirmed from a follow-up HAR capture of a real
+    // logged-in Android app session actually submitting answers, buying hints and viewing answers.
+    // All take a single `q_id` (or, for submission, `id`) form field. See AnswerRemoteDataSource.
+
+    // Submits an answer. Despite the name/shape (it is 33IQ's generic "post a comment" endpoint,
+    // reused for answers via isanswer=1), this is confirmed to score the account and reject a
+    // second submission for the same question with {"status":"repeat"}.
+    const val SUBMIT_ANSWER_URL = "$BASE_URL/index/commentdeal"
+
+    // The three calls 33IQ's own app makes, in this order, to reveal a question's real answer and
+    // explanation. Confirmed live; the interaction between the three (which one actually spends
+    // 学识) is not fully understood, so this client mirrors the same sequence rather than guessing.
+    const val SHOW_ANSWER_TRUE_URL = "$BASE_URL/index/showanswertrue"
+    const val PAY_FOR_SHOW_ANSWER_URL = "$BASE_URL/index/payforshowanswer"
+    const val SHOW_ANSWER_NEW_URL = "$BASE_URL/index/showanswernew"
+
+    // Paid-hint flow: showtipsbuy returns a price quote (with separate normal/member/life-member
+    // 学识 costs), showtips returns the actual hint text.
+    const val SHOW_TIPS_URL = "$BASE_URL/index/showtips"
+    const val SHOW_TIPS_BUY_URL = "$BASE_URL/index/showtipsbuy"
+
     const val USER_AGENT =
         "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) " +
             "Chrome/126.0.0.0 Mobile Safari/537.36 33iqNext/1.0"
