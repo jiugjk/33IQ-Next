@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
@@ -69,15 +70,41 @@ class IqHtmlClient(
                     .build()
 
             okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                response.checkSuccessful()
 
                 decodeGbk(response.body.bytes())
             }
         }
 
+    /**
+     * Raw text response for 33IQ's app-facing JSON endpoints (e.g. `/question/<id>.html?p=3`,
+     * `/app/taskall`). These are the *same* URLs the public website serves as HTML, but adding the
+     * right `p` query parameter (confirmed from a real captured app session, value differs per
+     * endpoint) flips the response to plain JSON.
+     */
+    suspend fun getText(url: String): String =
+        withContext(Dispatchers.IO) {
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .get()
+                    .build()
+
+            okHttpClient.newCall(request).execute().use { response ->
+                response.checkSuccessful()
+
+                val text = decodeGbk(response.body.bytes())
+
+                if (isLoginWallText(text)) throw IqLoginRequiredException()
+
+                text
+            }
+        }
+
     private fun execute(request: Request): Document {
         okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            response.checkSuccessful()
 
             val html = decodeGbk(response.body.bytes())
             val document = Jsoup.parse(html, response.request.url.toString())
@@ -90,9 +117,15 @@ class IqHtmlClient(
 
     private fun isLoginWall(document: Document): Boolean = document.title().contains("用户登录") || document.selectFirst(".login-card") != null
 
+    private fun isLoginWallText(text: String): Boolean = text.contains("用户登录") || text.contains("login-card")
+
     private fun decodeGbk(bytes: ByteArray): String = String(bytes, charset(IqConstants.PAGE_CHARSET))
 
     private fun encodeGbk(value: String): String = URLEncoder.encode(value, IqConstants.PAGE_CHARSET)
+
+    private fun Response.checkSuccessful() {
+        if (!isSuccessful) throw IOException("HTTP $code")
+    }
 
     private companion object {
         val FORM_MEDIA_TYPE = "application/x-www-form-urlencoded".toMediaType()
