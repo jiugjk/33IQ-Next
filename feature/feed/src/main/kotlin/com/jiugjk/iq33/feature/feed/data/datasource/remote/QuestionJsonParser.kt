@@ -53,6 +53,7 @@ internal class QuestionJsonParser {
             author = question.stringOrNull("username"),
             publishedDate = question.stringOrNull("ctime")?.substringBefore(" "),
             upvoteCount = question.intOrZero("praise"),
+            isUpvoted = question.stringOrNull("isPraise") == "1",
             commentCount = question.intOrZero("o_commentnum"),
             collectCount = question.intOrZero("o_collectnum"),
             rightRatio = question.stringOrNull("right_ratio")?.toIntOrNull(),

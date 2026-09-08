@@ -7,4 +7,5 @@ internal data class QuestionAnswerUseCases(
     val revealAnswer: RevealAnswerUseCase,
     val quoteHint: QuoteHintUseCase,
     val revealHint: RevealHintUseCase,
+    val praiseQuestion: PraiseQuestionUseCase,
 )

@@ -6,6 +6,8 @@
     <string name="feed_search_empty">没有找到相关题目</string>
     <string name="feed_navigate_back">返回</string>
     <string name="feed_bookmark_content_description">收藏</string>
+    <string name="feed_share_content_description">分享</string>
+    <string name="feed_praise_content_description">点赞</string>
     <string name="feed_analysis_title">解析</string>
     <string name="feed_comments_title">评论（%1$d）</string>
     <string name="feed_comments_empty">暂无评论，或该功能的数据源尚未确认</string>

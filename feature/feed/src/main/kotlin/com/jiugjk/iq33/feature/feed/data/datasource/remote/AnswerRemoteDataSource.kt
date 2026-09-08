@@ -112,13 +112,25 @@ internal class AnswerRemoteDataSource(
         return HintReveal(tips = json.stringOrNull("tips").orEmpty())
     }
 
+    /** Praises ("点赞") a question, returning the new upvote count. */
+    suspend fun praiseQuestion(questionId: Long): Int {
+        val json =
+            postForJson(
+                IqConstants.PRAISE_URL,
+                mapOf("q_id" to questionId.toString(), "type" to "question"),
+            )
+
+        return json.intOrZero("num")
+    }
+
     private fun questionIdParams(questionId: Long) = mapOf("q_id" to questionId.toString())
 
+    /** Every one of this class's endpoints requires [IqConstants.ACTION_QUERY_SUFFIX] - see its doc. */
     private suspend fun postForJson(
         url: String,
         params: Map<String, String>,
     ): JsonObject {
-        val rawJson = htmlClient.postFormForText(url, params)
+        val rawJson = htmlClient.postFormForText(url + IqConstants.ACTION_QUERY_SUFFIX, params)
 
         return Json.parseToJsonElement(rawJson) as? JsonObject
             ?: throw IOException("Unexpected non-object JSON response from $url")
