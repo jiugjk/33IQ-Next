@@ -1,20 +1,15 @@
-import com.igorwojda.showcase.buildlogic.ext.buildConfigFieldFromGradleProperty
-
 plugins {
-    id("com.igorwojda.showcase.convention.application")
+    id("com.jiugjk.iq33.convention.application")
 }
 
 android {
-    namespace = "com.igorwojda.showcase.app"
+    namespace = "com.jiugjk.iq33.app"
 
     defaultConfig {
-        applicationId = "com.igorwojda.showcase"
+        applicationId = "com.jiugjk.iq33"
 
         versionCode = 1
         versionName = "0.0.1" // SemVer (Major.Minor.Patch)
-
-        buildConfigFieldFromGradleProperty(project, "apiBaseUrl")
-        buildConfigFieldFromGradleProperty(project, "apiToken")
     }
 
     buildTypes {
@@ -28,7 +23,9 @@ android {
 dependencies {
     // "projects." Syntax utilizes Gradle TYPESAFE_PROJECT_ACCESSORS feature
     implementation(projects.feature.base)
-    implementation(projects.feature.album)
+    implementation(projects.feature.feed)
+    implementation(projects.feature.auth)
     implementation(projects.feature.settings)
     implementation(projects.feature.favourite)
+    implementation(projects.library.network)
 }

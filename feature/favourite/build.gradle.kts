@@ -1,7 +1,7 @@
 plugins {
-    id("com.igorwojda.showcase.convention.feature")
+    id("com.jiugjk.iq33.convention.feature")
 }
 
 android {
-    namespace = "com.igorwojda.showcase.feature.favourite"
+    namespace = "com.jiugjk.iq33.feature.favourite"
 }

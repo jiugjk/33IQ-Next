@@ -1,0 +1,57 @@
+package com.jiugjk.iq33.app.presentation
+
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.jiugjk.iq33.feature.settings.domain.model.ThemeMode
+import com.jiugjk.iq33.feature.settings.domain.usecase.ObserveThemeModeUseCase
+import org.koin.compose.koinInject
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
+
+        super.onCreate(savedInstanceState)
+
+        setContent {
+            MaterialTheme(colorScheme = getColorScheme()) {
+                MainScreen()
+            }
+        }
+    }
+
+    @Composable
+    private fun getColorScheme(): ColorScheme {
+        val observeThemeModeUseCase: ObserveThemeModeUseCase = koinInject()
+        val themeMode by observeThemeModeUseCase().collectAsStateWithLifecycle()
+
+        val systemDarkTheme = isSystemInDarkTheme()
+        val darkTheme =
+            when (themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> systemDarkTheme
+            }
+        val dynamicColor: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+        val context = LocalContext.current
+        return when {
+            dynamicColor -> if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            darkTheme -> darkColorScheme()
+            else -> lightColorScheme()
+        }
+    }
+}

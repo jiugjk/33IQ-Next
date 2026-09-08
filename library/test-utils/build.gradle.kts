@@ -1,9 +1,9 @@
 plugins {
-    id("com.igorwojda.showcase.convention.library")
+    id("com.jiugjk.iq33.convention.library")
 }
 
 android {
-    namespace = "com.igorwojda.showcase.library.testutils"
+    namespace = "com.jiugjk.iq33.library.testutils"
 }
 
 dependencies {

@@ -38,6 +38,8 @@ detekt = "1.23.8"
 android-gradle-plugin = "8.13.2"
 easylauncher = "6.4.1"
 about-libraries = "13.2.1"
+jsoup = "1.18.3"
+datastore-preferences = "1.1.7"
 
 # ktlint-rules
 ktlint-ruleset-standard = "1.7.1"
@@ -110,6 +112,8 @@ room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore-preferences" }
 
 # Ktlint Rules
 ktlint-ruleset-standard = { module = "com.pinterest.ktlint:ktlint-ruleset-standard", version.ref = "ktlint-ruleset-standard" }

@@ -1,0 +1,7 @@
+<resources>
+    <string name="login_title">登录 33IQ</string>
+    <string name="login_disclaimer">本客户端为非官方逆向学习项目，登录请求会直接发送到 33iq.com 官方服务器，账号密码不会经过第三方。登录接口通过分析公开网页得到，未经官方确认，如遇登录异常请改用官网/官方 App。</string>
+    <string name="login_account_label">手机号 / 邮箱 / 昵称</string>
+    <string name="login_password_label">密码</string>
+    <string name="login_submit">登录</string>
+</resources>
