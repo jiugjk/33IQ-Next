@@ -126,4 +126,15 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
             if (state is QuestionDetailUiState.Content) state.copy(hintReveal = RevealState.Idle) else state
     }
+
+    class Praised(
+        private val newCount: Int,
+    ) : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
+            if (state is QuestionDetailUiState.Content) {
+                state.copy(detail = state.detail.copy(upvoteCount = newCount, isUpvoted = true))
+            } else {
+                state
+            }
+    }
 }

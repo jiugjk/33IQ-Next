@@ -21,6 +21,8 @@ internal sealed interface RevealState<out Quote, out Reveal> {
     data object Failed : RevealState<Nothing, Nothing>
 }
 
+internal enum class RevealKind { ANSWER, HINT }
+
 internal sealed interface SubmissionState {
     data object Idle : SubmissionState
 

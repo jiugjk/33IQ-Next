@@ -66,6 +66,16 @@ internal class AnswerRepositoryImpl(
                 },
             )
 
+    override suspend fun praiseQuestion(questionId: Long): Result<Int> =
+        runCatching { remoteDataSource.praiseQuestion(questionId) }
+            .fold(
+                onSuccess = { Result.Success(it) },
+                onFailure = { throwable ->
+                    Timber.tag(NETWORK_LOG_TAG).w(throwable, "Failed to praise question $questionId")
+                    Result.Failure(throwable)
+                },
+            )
+
     private companion object {
         const val NETWORK_LOG_TAG = "Network"
     }

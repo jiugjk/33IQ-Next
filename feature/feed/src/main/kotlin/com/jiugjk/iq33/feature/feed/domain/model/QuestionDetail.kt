@@ -24,6 +24,7 @@ data class QuestionDetail(
     val author: String?,
     val publishedDate: String?,
     val upvoteCount: Int,
+    val isUpvoted: Boolean,
     val commentCount: Int,
     /** Number of users who have 收藏'd (bookmarked on 33IQ's own servers) this question. */
     val collectCount: Int,

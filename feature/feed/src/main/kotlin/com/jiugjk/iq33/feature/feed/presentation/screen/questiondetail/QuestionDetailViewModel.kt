@@ -90,10 +90,6 @@ internal class QuestionDetailViewModel(
         }
     }
 
-    fun onDismissAnswerFlow() {
-        sendAction(QuestionDetailAction.AnswerFlowDismissed)
-    }
-
     /** Fetches 33IQ's own price quote for a hint - it reports the account's actual member-discounted price. */
     fun onRevealHintClick(questionId: Long) {
         sendAction(QuestionDetailAction.HintQuoteStarted)
@@ -117,7 +113,19 @@ internal class QuestionDetailViewModel(
         }
     }
 
-    fun onDismissHintFlow() {
-        sendAction(QuestionDetailAction.HintFlowDismissed)
+    fun onDismissRevealFlow(kind: RevealKind) {
+        when (kind) {
+            RevealKind.ANSWER -> sendAction(QuestionDetailAction.AnswerFlowDismissed)
+            RevealKind.HINT -> sendAction(QuestionDetailAction.HintFlowDismissed)
+        }
+    }
+
+    fun onPraiseClick(questionId: Long) {
+        viewModelScope.launch {
+            when (val result = questionAnswerUseCases.praiseQuestion(questionId)) {
+                is Result.Success -> sendAction(QuestionDetailAction.Praised(result.value))
+                is Result.Failure -> Unit
+            }
+        }
     }
 }

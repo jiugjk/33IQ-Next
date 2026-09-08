@@ -1,5 +1,7 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,14 +9,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,8 +36,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorAnim
@@ -72,6 +80,15 @@ fun QuestionDetailScreen(
             actions = {
                 val currentUiState = uiState
                 if (currentUiState is QuestionDetailUiState.Content) {
+                    val context = LocalContext.current
+
+                    IconButton(onClick = { shareQuestion(context, currentUiState.detail) }) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = stringResource(R.string.feed_share_content_description),
+                        )
+                    }
+
                     IconButton(onClick = { viewModel.onBookmarkClick(currentUiState.detail) }) {
                         Icon(
                             imageVector = if (currentUiState.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
@@ -92,10 +109,11 @@ fun QuestionDetailScreen(
                     onSubmitAnswerClick = { viewModel.onSubmitAnswerClick(questionId, it) },
                     onRevealAnswerClick = { viewModel.onRevealAnswerClick(questionId) },
                     onConfirmRevealAnswer = { viewModel.onConfirmRevealAnswer(questionId) },
-                    onDismissAnswerFlow = viewModel::onDismissAnswerFlow,
+                    onDismissAnswerFlow = { viewModel.onDismissRevealFlow(RevealKind.ANSWER) },
                     onRevealHintClick = { viewModel.onRevealHintClick(questionId) },
                     onConfirmRevealHint = { viewModel.onConfirmRevealHint(questionId) },
-                    onDismissHintFlow = viewModel::onDismissHintFlow,
+                    onDismissHintFlow = { viewModel.onDismissRevealFlow(RevealKind.HINT) },
+                    onPraiseClick = { viewModel.onPraiseClick(questionId) },
                 )
         }
     }
@@ -113,6 +131,7 @@ private fun QuestionDetailContent(
     onRevealHintClick: () -> Unit,
     onConfirmRevealHint: () -> Unit,
     onDismissHintFlow: () -> Unit,
+    onPraiseClick: () -> Unit,
 ) {
     val detail = uiState.detail
 
@@ -143,24 +162,13 @@ private fun QuestionDetailContent(
             TagRow(tags = detail.tags)
         }
 
-        StatsRow(detail)
+        StatsRow(detail = detail, onPraiseClick = onPraiseClick)
 
         if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
-            // Once the answer has been revealed or already submitted, 33IQ no longer accepts a
-            // scored resubmission - the choice buttons and submit action are disabled to match.
-            val canInteract = uiState.canSubmit && uiState.submission !is SubmissionState.Done
-
-            ChoiceSection(
-                choices = detail.choices,
-                selectedChoiceId = uiState.selectedChoiceId,
-                enabled = canInteract,
+            ChoiceAndSubmitSection(
+                detail = detail,
+                uiState = uiState,
                 onChoiceSelect = onChoiceSelect,
-            )
-
-            SubmitAnswerSection(
-                selectedChoiceId = uiState.selectedChoiceId,
-                submission = uiState.submission,
-                enabled = canInteract,
                 onSubmitAnswerClick = onSubmitAnswerClick,
             )
         }
@@ -180,8 +188,40 @@ private fun QuestionDetailContent(
             onDismissAnswerFlow = onDismissAnswerFlow,
         )
 
-        CommentSection(comments = detail.comments, commentCount = detail.commentCount)
+        // 33IQ hides a question's comments (they routinely spoil the answer) until the real answer
+        // has been revealed - matches the official app's own behaviour, not a client limitation.
+        if (uiState.answerReveal is RevealState.Revealed) {
+            CommentSection(comments = detail.comments, commentCount = detail.commentCount)
+        } else {
+            CommentsLockedNotice()
+        }
     }
+}
+
+@Composable
+private fun ChoiceAndSubmitSection(
+    detail: QuestionDetail,
+    uiState: QuestionDetailUiState.Content,
+    onChoiceSelect: (String) -> Unit,
+    onSubmitAnswerClick: (String) -> Unit,
+) {
+    // Once the answer has been revealed or already submitted, 33IQ no longer accepts a scored
+    // resubmission - the choice buttons and submit action are disabled to match.
+    val canInteract = uiState.canSubmit && uiState.submission !is SubmissionState.Done
+
+    ChoiceSection(
+        choices = detail.choices,
+        selectedChoiceId = uiState.selectedChoiceId,
+        enabled = canInteract,
+        onChoiceSelect = onChoiceSelect,
+    )
+
+    SubmitAnswerSection(
+        selectedChoiceId = uiState.selectedChoiceId,
+        submission = uiState.submission,
+        enabled = canInteract,
+        onSubmitAnswerClick = onSubmitAnswerClick,
+    )
 }
 
 @Composable
@@ -215,14 +255,35 @@ private fun TagRow(tags: List<String>) {
 }
 
 @Composable
-private fun StatsRow(detail: QuestionDetail) {
+private fun StatsRow(
+    detail: QuestionDetail,
+    onPraiseClick: () -> Unit,
+) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(Dimen.spaceL),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(imageVector = Icons.Default.ThumbUp, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(detail.upvoteCount.toString(), style = MaterialTheme.typography.bodyMedium)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .clip(CircleShape)
+                        .clickable(enabled = !detail.isUpvoted, onClick = onPraiseClick)
+                        .padding(horizontal = Dimen.spaceS, vertical = Dimen.spaceS),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ThumbUp,
+                    contentDescription = stringResource(R.string.feed_praise_content_description),
+                    tint = if (detail.isUpvoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = detail.upvoteCount.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (detail.isUpvoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = Dimen.spaceS),
+                )
+            }
 
             Icon(
                 imageVector = Icons.Default.ChatBubbleOutline,
@@ -260,6 +321,21 @@ private fun ChoiceSection(
             OutlinedButton(
                 onClick = { onChoiceSelect(choice.id) },
                 enabled = enabled,
+                colors =
+                    if (isSelected) {
+                        ButtonDefaults.outlinedButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    } else {
+                        ButtonDefaults.outlinedButtonColors()
+                    },
+                border =
+                    if (isSelected) {
+                        BorderStroke(SelectedChoiceBorderWidth, MaterialTheme.colorScheme.primary)
+                    } else {
+                        ButtonDefaults.outlinedButtonBorder(enabled)
+                    },
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -267,20 +343,14 @@ private fun ChoiceSection(
             ) {
                 Text(choice.text, modifier = Modifier.fillMaxWidth())
             }
-
-            if (isSelected) {
-                Text(
-                    text = stringResource(R.string.feed_choice_no_answer_check),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
 
+private val SelectedChoiceBorderWidth = 2.dp
+
 @Composable
-internal fun AnalysisSection(analysis: String?) {
+internal fun AnalysisSection(analysis: String) {
     Card(
         modifier = Modifier.padding(top = Dimen.spaceL).fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -291,7 +361,7 @@ internal fun AnalysisSection(analysis: String?) {
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(
-                text = analysis ?: stringResource(R.string.feed_analysis_unavailable),
+                text = analysis,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
@@ -335,5 +405,5 @@ private fun CommentSection(
 @Preview
 @Composable
 private fun AnalysisSectionPreview() {
-    AnalysisSection(analysis = null)
+    AnalysisSection(analysis = "示例解析文本")
 }

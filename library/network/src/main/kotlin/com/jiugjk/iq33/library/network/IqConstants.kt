@@ -38,6 +38,13 @@ object IqConstants {
     // Answer-submission / paid-reveal endpoints, confirmed from a follow-up HAR capture of a real
     // logged-in Android app session actually submitting answers, buying hints and viewing answers.
     // All take a single `q_id` (or, for submission, `id`) form field. See AnswerRemoteDataSource.
+    //
+    // Every one of them was called by the real app with `?p=1&lang=zh-cn` on the URL (in addition to
+    // the form body) - unlike the question-detail endpoint's `p=3`, this `p=1` was identical across
+    // all of these action endpoints. An earlier version of this client dropped it, which broke every
+    // one of these calls at runtime ("网络异常" from a real user report) - so it's required, not just
+    // cosmetic like the `time=<cache-busting timestamp>` param the real app also adds.
+    const val ACTION_QUERY_SUFFIX = "?p=1&lang=zh-cn"
 
     // Submits an answer. Despite the name/shape (it is 33IQ's generic "post a comment" endpoint,
     // reused for answers via isanswer=1), this is confirmed to score the account and reject a
@@ -55,6 +62,10 @@ object IqConstants {
     // 学识 costs), showtips returns the actual hint text.
     const val SHOW_TIPS_URL = "$BASE_URL/index/showtips"
     const val SHOW_TIPS_BUY_URL = "$BASE_URL/index/showtipsbuy"
+
+    // Praises ("点赞") a question. Confirmed live: form body `q_id=<id>&type=question`, replies
+    // `{"status":"success","num":"<new upvote count>"}`.
+    const val PRAISE_URL = "$BASE_URL/index/praise"
 
     const val USER_AGENT =
         "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) " +

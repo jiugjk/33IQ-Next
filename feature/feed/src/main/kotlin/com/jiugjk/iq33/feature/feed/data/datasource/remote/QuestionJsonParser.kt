@@ -9,7 +9,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import org.jsoup.Jsoup
 
 /**
  * Parses 33IQ's app-facing question detail JSON - `GET /question/<id>.html?p=3` - discovered and
@@ -54,6 +53,7 @@ internal class QuestionJsonParser {
             author = question.stringOrNull("username"),
             publishedDate = question.stringOrNull("ctime")?.substringBefore(" "),
             upvoteCount = question.intOrZero("praise"),
+            isUpvoted = question.stringOrNull("isPraise") == "1",
             commentCount = question.intOrZero("o_commentnum"),
             collectCount = question.intOrZero("o_collectnum"),
             rightRatio = question.stringOrNull("right_ratio")?.toIntOrNull(),
@@ -65,30 +65,10 @@ internal class QuestionJsonParser {
         )
     }
 
-    /**
-     * `qc_context` is arbitrary rich-text HTML, not always wrapped in `<p>` tags - riddles that list
-     * clues as `<ul><li>` (as opposed to prose) previously had that entire list silently dropped
-     * because only `<p>` was extracted, truncating the question body before its actual content.
-     * This walks all "leaf" block-level elements (ones with no nested block child, to avoid emitting
-     * a parent's text twice) so list items, table cells and unwrapped `<div>` text all survive.
-     */
     private fun htmlToText(
         question: JsonObject,
         field: String,
-    ): String {
-        val html = question.stringOrNull(field) ?: return ""
-        val document = Jsoup.parse(html)
-        document.select("br").before("\n")
-
-        val blocks =
-            document
-                .select(BLOCK_SELECTOR)
-                .filter { element -> element.select(BLOCK_SELECTOR).isEmpty() }
-                .map { it.text() }
-                .filter { it.isNotBlank() }
-
-        return blocks.joinToString("\n\n").ifBlank { document.text() }
-    }
+    ): String = question.stringOrNull(field)?.let(::htmlToPlainText) ?: ""
 
     private fun JsonElement.asFirstObjectOrNull(): JsonObject? = (this as? JsonArray)?.firstOrNull() as? JsonObject
 
@@ -103,6 +83,5 @@ internal class QuestionJsonParser {
     private companion object {
         val CHOICE_LETTERS = listOf("a", "b", "c", "d", "e", "f", "g", "h")
         const val TITLE_MAX_LENGTH = 60
-        const val BLOCK_SELECTOR = "p, li, div, td, h1, h2, h3, h4, h5, h6"
     }
 }

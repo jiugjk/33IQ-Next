@@ -20,4 +20,7 @@ internal interface AnswerRepository {
     suspend fun quoteHint(questionId: Long): Result<HintQuote>
 
     suspend fun revealHint(questionId: Long): Result<HintReveal>
+
+    /** Praises ("点赞") a question, returning the new upvote count. */
+    suspend fun praiseQuestion(questionId: Long): Result<Int>
 }
