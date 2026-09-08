@@ -2,6 +2,7 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -240,14 +241,19 @@ private fun AuthorRow(detail: QuestionDetail) {
 
 @Composable
 private fun TagRow(tags: List<String>) {
+    // A plain fillMaxWidth Row squeezes the last chip into whatever space is left once the others
+    // don't fit, wrapping its text one character per line - scrolling instead keeps every chip intact.
     Row(
-        modifier = Modifier.padding(top = Dimen.spaceM),
+        modifier =
+            Modifier
+                .padding(top = Dimen.spaceM)
+                .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(Dimen.spaceS),
     ) {
         tags.forEach { tag ->
             SuggestionChip(
                 onClick = { },
-                label = { Text(tag) },
+                label = { Text(tag, maxLines = 1) },
                 colors = SuggestionChipDefaults.suggestionChipColors(),
             )
         }
