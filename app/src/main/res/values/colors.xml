@@ -2,5 +2,6 @@
 <resources>
     <!-- Splash Screen Colors -->
     <color name="splash_background">#FFFFFF</color>
-    <color name="splash_icon_background">#3DDC84</color>
+    <!-- The launcher icon's own blue, so the splash icon reads as the same mark. -->
+    <color name="splash_icon_background">#0F84E8</color>
 </resources>

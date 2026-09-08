@@ -42,15 +42,16 @@ internal class QuestionJsonParser {
 
         val bodyHtml = question.stringOrNull("qc_context").orEmpty()
         val bodyText = htmlToPlainText(bodyHtml)
-        // Only a *display* fallback: the full body is kept in bodyText either way, so nothing a
-        // reader needs to answer the question depends on this truncation.
-        val title = question.stringOrNull("qc_title")?.takeIf { it.isNotBlank() } ?: bodyText.take(TITLE_MAX_LENGTH)
 
         return QuestionDetail(
             id = id,
-            title = title,
+            // 33IQ has no real title concept: `qc_title` is an empty string on ordinary questions
+            // (confirmed live), and the site's own list pages just print a truncation of the body.
+            // So it stays null here rather than being back-filled with a cut-off copy of the body -
+            // see QuestionDetail.title.
+            title = question.stringOrNull("qc_title")?.takeIf { it.isNotBlank() },
             bodyText = bodyText,
-            imageUrls = htmlImageUrls(bodyHtml, IqConstants.BASE_URL),
+            imageUrls = questionImageUrls(question, bodyHtml),
             tags = tags,
             breadcrumb = emptyList(),
             author = question.stringOrNull("username"),
@@ -70,10 +71,28 @@ internal class QuestionJsonParser {
         )
     }
 
+    /**
+     * The question's images, at their original resolution.
+     *
+     * The body's own `<img>` tags come first (they are the ones placed in the text, in the order the
+     * author placed them). `pic` - the payload's separate full-size image field - is only used when
+     * the body embeds none at all: for questions that have both it is the same upload, and once both
+     * are normalised by [fullSizeImageUrl] the duplicate would be identical anyway.
+     */
+    private fun questionImageUrls(
+        question: JsonObject,
+        bodyHtml: String,
+    ): List<String> {
+        val bodyImages = htmlImageUrls(bodyHtml, IqConstants.BASE_URL)
+
+        if (bodyImages.isNotEmpty()) return bodyImages
+
+        return listOfNotNull(question.stringOrNull("pic")?.takeIf { it.isNotBlank() }?.let(::fullSizeImageUrl))
+    }
+
     private fun JsonElement.asFirstObjectOrNull(): JsonObject? = (this as? JsonArray)?.firstOrNull() as? JsonObject
 
     private companion object {
         val CHOICE_LETTERS = listOf("a", "b", "c", "d", "e", "f", "g", "h")
-        const val TITLE_MAX_LENGTH = 60
     }
 }

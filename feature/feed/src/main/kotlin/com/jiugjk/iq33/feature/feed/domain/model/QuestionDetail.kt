@@ -18,11 +18,18 @@ data class Comment(
 
 data class QuestionDetail(
     val id: Long,
-    val title: String,
     /**
-     * The question's full body text (33IQ's `qc_context`), converted from its rich-text HTML.
-     * Empty when the question is nothing but a title. Never truncated - [title] carries at most a
-     * short summary, so answering a question needs this rather than the heading.
+     * 33IQ's own `qc_title`, which is **null for ordinary questions**: the site has no title concept
+     * for them - a question is just its body - and serves `qc_title` as an empty string. Its own
+     * pages simply print a truncation of the body wherever a one-line label is needed.
+     *
+     * So this is not a heading the UI can rely on. Anything that needs one line of text should use
+     * [shortLabel]; the question itself is [bodyText].
+     */
+    val title: String?,
+    /**
+     * The question's full body text (33IQ's `qc_context`), converted from its rich-text HTML. This
+     * is the question as asked, and it is never truncated.
      */
     val bodyText: String,
     /** Images embedded in the body, in document order - some questions are answerable only from these. */
@@ -45,4 +52,18 @@ data class QuestionDetail(
     val comments: List<Comment>,
     /** The public, browser-readable page for this question - what sharing must hand out. */
     val sourceUrl: String,
-)
+) {
+    /**
+     * One line of text identifying this question, for the places that genuinely need a label rather
+     * than the question itself: a bookmark row, a share sheet's subject.
+     *
+     * Falls back to a truncated body the same way 33IQ's own list pages do. It is deliberately *not*
+     * used as a heading above [bodyText] - that showed every question twice, once cut off.
+     */
+    val shortLabel: String
+        get() = title ?: bodyText.take(SHORT_LABEL_MAX_LENGTH)
+
+    private companion object {
+        const val SHORT_LABEL_MAX_LENGTH = 60
+    }
+}

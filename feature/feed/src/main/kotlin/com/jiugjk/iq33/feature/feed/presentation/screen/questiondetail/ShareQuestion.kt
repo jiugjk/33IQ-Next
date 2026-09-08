@@ -11,7 +11,7 @@ internal fun shareQuestion(
     val sendIntent =
         Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, "${detail.title}\n${detail.sourceUrl}")
+            putExtra(Intent.EXTRA_TEXT, "${detail.shortLabel}\n${detail.sourceUrl}")
         }
     context.startActivity(Intent.createChooser(sendIntent, null))
 }

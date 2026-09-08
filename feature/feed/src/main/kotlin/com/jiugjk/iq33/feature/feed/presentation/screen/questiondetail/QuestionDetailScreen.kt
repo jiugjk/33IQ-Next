@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -70,6 +71,13 @@ fun QuestionDetailScreen(
                 val currentUiState = uiState
                 if (currentUiState is QuestionDetailUiState.Content) {
                     val context = LocalContext.current
+
+                    IconButton(onClick = { copyQuestion(context, currentUiState.detail) }) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = stringResource(R.string.feed_copy_content_description),
+                        )
+                    }
 
                     IconButton(onClick = { shareQuestion(context, currentUiState.detail) }) {
                         Icon(
@@ -136,11 +144,16 @@ private fun QuestionDetailContent(
             )
         }
 
-        Text(
-            text = detail.title,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(top = Dimen.spaceM),
-        )
+        // Only the rare question that really has a 33IQ title gets a heading. Ordinary ones have
+        // none, and the truncated body that used to stand in for it just repeated the question -
+        // cut off mid-sentence - directly above the full text. See QuestionDetail.title.
+        detail.title?.let { title ->
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(top = Dimen.spaceM),
+            )
+        }
 
         AuthorRow(detail)
 
@@ -150,7 +163,7 @@ private fun QuestionDetailContent(
 
         StatsRow(detail = detail, isPraising = uiState.isPraising, onPraiseClick = { onEvent(QuestionDetailEvent.PraiseClicked) })
 
-        QuestionBody(bodyText = detail.bodyText, imageUrls = detail.imageUrls, title = detail.title)
+        QuestionBody(bodyText = detail.bodyText, imageUrls = detail.imageUrls)
 
         if (uiState.bookmarkFailed) {
             Text(

@@ -109,6 +109,45 @@ class AnswerRemoteDataSourceTest {
         }
 
     @Test
+    fun `an answer only the last step returns is still revealed`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returnsMany
+                listOf(
+                    // showanswertrue reads as an eligibility check: "0" is the ordinary
+                    // not-yet-unlocked state, not a refusal, and used to abort the whole flow.
+                    """{"status":"0"}""",
+                    """{"pay":"5"}""",
+                    """{"status":"success","answer":"B","explanation":"<p>因为如此</p>"}""",
+                )
+
+            val reveal = sut.revealAnswer(1)
+
+            reveal.answer shouldBeEqualTo "B"
+            reveal.explanation shouldBeEqualTo "因为如此"
+            reveal.cost shouldBeEqualTo 5
+        }
+
+    @Test
+    fun `a reveal where no step returns an answer fails instead of revealing an empty one`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"success"}"""
+
+            val error = runCatching { sut.revealAnswer(1) }.exceptionOrNull()
+
+            error shouldBeInstanceOf IqResponseException::class
+        }
+
+    @Test
+    fun `a reveal refused because nobody is signed in is reported as a failure`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"guest"}"""
+
+            val error = runCatching { sut.revealAnswer(1) }.exceptionOrNull()
+
+            error shouldBeInstanceOf IqResponseException::class
+        }
+
+    @Test
     fun `an unreported score change is null rather than zero`() =
         runTest {
             coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"success"}"""
