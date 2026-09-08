@@ -95,7 +95,7 @@ The HAR capture that unlocked the JSON endpoints above was a privacy-scrubbed an
 
 **Networking & Images:**
 - **[OkHttp](https://square.github.io/okhttp/)** — HTTP client with a persistent, `SharedPreferences`-backed cookie jar for session persistence
-- **[Coil](https://github.com/coil-kt/coil)** — image loading
+- **[Coil 3](https://github.com/coil-kt/coil)** — image loading (over the same OkHttp stack, via `coil-network-okhttp`)
 
 **Dependency Injection:** **[Koin](https://insert-koin.io/)**
 
@@ -196,6 +196,25 @@ git clone <this-repo>
 ```
 
 No API key/config is required to browse — the app talks straight to `https://www.33iq.com`. Logging in uses your real 33IQ account credentials, sent directly to `33iq.com`'s own server (see the in-app disclaimer on the login screen).
+
+### Building and signing
+
+Both CI workflows (`build.yml`, run manually or on a feature branch, and `check.yml`, run on pull requests and pushes to `main`) build **both** variants — `:app:assembleDebug` and `:app:assembleRelease` — and upload each APK as an artifact. Building release on every run means R8 and resource shrinking, which only run for that build type, are checked continuously rather than the first time a release is actually needed.
+
+Signing material is read from the environment and is never stored in this repository. Configure these four repository secrets to have CI sign what it builds:
+
+| Secret | Contents |
+|---|---|
+| `SIGNING_KEYSTORE_BASE64` | The keystore itself, base64-encoded (`base64 -w0 upload-keystore.jks`) |
+| `SIGNING_KEYSTORE_PASSWORD` | Keystore password |
+| `SIGNING_KEY_ALIAS` | Key alias inside the keystore |
+| `SIGNING_KEY_PASSWORD` | Password for that key |
+
+The workflow decodes the keystore into the runner's temp directory for the length of the job. Both build types then use that one key, so successive CI builds install over each other instead of being rejected for a mismatched signature.
+
+Nothing fails when the secrets are absent — a fork's pull request (GitHub withholds secrets from those) or a fresh clone still builds: debug keeps the throwaway key AGP generates and release comes out as `app-release-unsigned.apk`.
+
+Locally, the same four values can go in `~/.gradle/gradle.properties` as `signingKeystoreFile`, `signingKeystorePassword`, `signingKeyAlias` and `signingKeyPassword` (a path, not base64), or be exported as `SIGNING_KEYSTORE_FILE`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD`.
 
 ## Roadmap
 

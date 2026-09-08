@@ -63,7 +63,7 @@ class ApplicationConventionPlugin : Plugin<Project> {
                 }
 
                 buildFeatures {
-                    viewBinding = true
+                    viewBinding = false
                     buildConfig = true
                     compose = true
                 }
@@ -83,7 +83,6 @@ class ApplicationConventionPlugin : Plugin<Project> {
             }
 
             dependencies {
-                implementation(libs.kotlin.reflect)
                 implementation(libs.core.ktx)
                 implementation(libs.timber)
                 implementation(libs.coroutines)
@@ -95,7 +94,6 @@ class ApplicationConventionPlugin : Plugin<Project> {
                 implementation(platform(libs.compose.bom))
                 implementation(libs.tooling.preview)
                 debugImplementation(libs.compose.ui.tooling)
-                debugImplementation(libs.compose.ui.test.manifest)
                 implementation(libs.navigation.compose)
 
                 // Koin

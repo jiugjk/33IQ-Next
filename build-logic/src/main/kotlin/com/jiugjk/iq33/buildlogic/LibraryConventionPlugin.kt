@@ -41,7 +41,7 @@ class LibraryConventionPlugin : Plugin<Project> {
                 }
 
                 buildFeatures {
-                    viewBinding = true
+                    viewBinding = false
                     buildConfig = true
                     // Compose is NOT enabled here. These are plain library modules (networking,
                     // test helpers) with no @Composable code; enabling it forced every one of them

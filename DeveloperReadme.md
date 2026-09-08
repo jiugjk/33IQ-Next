@@ -22,6 +22,14 @@
 - Android Studio 
   - False positive "Unused symbol" for a custom Android application class referenced in `AndroidManifest.xml`
   file ([KT-27971](https://youtrack.jetbrains.net/issue/KT-27971))
-- Coil 
+- Coil
   - No way to automatically retry image load, so some images may not be loaded when connection speed
   is low ([Issue 132](https://github.com/coil-kt/coil/issues/132))
+- Android Gradle Plugin
+  - The dependency versions the catalog can reach are capped by `compileSdk`. Anything newer than
+  Compose `1.11.x`, `core-ktx` `1.18.x`, `lifecycle` `2.10.x`, `navigation` `2.9.x`, OkHttp `5.4.x`,
+  Coil `3.5.x` or AboutLibraries `14.x` publishes AAR metadata demanding `compileSdk 37`, which in
+  turn needs AGP `9.x` - and AGP 9 needs Gradle `9.6+` and forbids applying
+  `org.jetbrains.kotlin.android` at all (it has built-in Kotlin support), so the convention plugins
+  would have to be rewritten around its own Kotlin DSL. That migration is deliberately not part of
+  a dependency update.
