@@ -11,4 +11,5 @@
     <string name="feed_analysis_unavailable">33IQ 官方对该题的解析内容需要登录/消耗学识值查看，本客户端未抓取到解析文本</string>
     <string name="feed_comments_title">评论（%1$d）</string>
     <string name="feed_comments_empty">暂无评论，或该功能的数据源尚未确认</string>
+    <string name="feed_right_ratio">正确率 %1$d%%</string>
 </resources>

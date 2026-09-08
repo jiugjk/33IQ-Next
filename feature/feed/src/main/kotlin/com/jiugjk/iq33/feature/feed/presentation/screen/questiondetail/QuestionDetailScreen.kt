@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -175,16 +176,33 @@ private fun TagRow(tags: List<String>) {
 
 @Composable
 private fun StatsRow(detail: QuestionDetail) {
-    Row(
-        modifier = Modifier.padding(top = Dimen.spaceL),
-        horizontalArrangement = Arrangement.spacedBy(Dimen.spaceL),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(imageVector = Icons.Default.ThumbUp, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(detail.upvoteCount.toString(), style = MaterialTheme.typography.bodyMedium)
+    Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Dimen.spaceL),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(imageVector = Icons.Default.ThumbUp, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(detail.upvoteCount.toString(), style = MaterialTheme.typography.bodyMedium)
 
-        Icon(imageVector = Icons.Default.ChatBubbleOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(detail.commentCount.toString(), style = MaterialTheme.typography.bodyMedium)
+            Icon(
+                imageVector = Icons.Default.ChatBubbleOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(detail.commentCount.toString(), style = MaterialTheme.typography.bodyMedium)
+
+            Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(detail.collectCount.toString(), style = MaterialTheme.typography.bodyMedium)
+        }
+
+        if (detail.rightRatio != null) {
+            Text(
+                text = stringResource(R.string.feed_right_ratio, detail.rightRatio),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Dimen.spaceS),
+            )
+        }
     }
 }
 

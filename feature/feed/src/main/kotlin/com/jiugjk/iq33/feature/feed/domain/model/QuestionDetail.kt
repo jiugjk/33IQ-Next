@@ -25,6 +25,10 @@ data class QuestionDetail(
     val publishedDate: String?,
     val upvoteCount: Int,
     val commentCount: Int,
+    /** Number of users who have 收藏'd (bookmarked on 33IQ's own servers) this question. */
+    val collectCount: Int,
+    /** Percentage of answerers who got this right, 0-100, when 33IQ reports one. */
+    val rightRatio: Int?,
     val questionType: QuestionType,
     val choices: List<Choice>,
     /** Answer/analysis text, when it could be found without login (33IQ hides this for most guests). */

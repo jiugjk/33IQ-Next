@@ -43,12 +43,13 @@ An unofficial, third-party Android client for [33IQ](https://www.33iq.com) — a
 
 ## How data is obtained (no public API)
 
-33IQ does not publish a documented API for third-party clients. This app was built by inspecting the **public, server-rendered HTML** of `https://www.33iq.com` (page source, embedded `<script>` blocks, and the site's own AJAX endpoints) rather than by decompiling the official app — this session's sandboxed environment had no way to install/traffic-capture the real Android app (Cloudflare blocks direct APK downloads and there's no device/emulator+MITM proxy available here). Everything the app does is therefore backed by requests that were verified against the live site during development:
+33IQ does not publish a documented API for third-party clients. This app started from inspecting the **public, server-rendered HTML** of `https://www.33iq.com` (page source, embedded `<script>` blocks, and the site's own AJAX endpoints), then was upgraded using a real HAR (HTTP Archive) capture of the official 33IQ Android app's own traffic, supplied by a contributor. That capture confirmed a detail neither pure HTML inspection nor guessing could have found: on several endpoints — notably question detail — the **same URL the public website serves as HTML** returns a much richer plain **JSON** payload instead when a request adds the right `p` query parameter (the value is per-endpoint, confirmed live via `curl`). Everything below is backed either by requests verified live during development or by the HAR capture; see the table in the next section for exactly which is which.
 
-- `GET https://www.33iq.com/question/`, `GET https://www.33iq.com/tag/<gbk-encoded-tag>.html` — question list / category pages (parsed by [`QuestionHtmlParser`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/data/datasource/remote/QuestionHtmlParser.kt))
-- `GET https://www.33iq.com/question/<id>.html` — question detail page
-- `GET https://www.33iq.com/index/search?k=<gbk-encoded-keyword>&type=question` — search
-- `POST https://www.33iq.com/index/login` with `email`/`password` form fields — login, returns `{"status": "..."}` JSON (see [`SessionManager`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/SessionManager.kt))
+- `GET https://www.33iq.com/question/`, `GET https://www.33iq.com/tag/<gbk-encoded-tag>.html` — question list / category pages (HTML, parsed by [`QuestionHtmlParser`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/data/datasource/remote/QuestionHtmlParser.kt))
+- `GET https://www.33iq.com/question/<id>.html?p=3` — question detail, returned as **JSON** (parsed by [`QuestionJsonParser`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/data/datasource/remote/QuestionJsonParser.kt)) — confirmed from the real app's own traffic
+- `GET https://www.33iq.com/index/search?k=<gbk-encoded-keyword>&type=question` — search (HTML)
+- `POST https://www.33iq.com/index/login` with `email`/`password`/`ememberme` form fields — login (see [`SessionManager`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/SessionManager.kt)); the `ememberme` field name (not the more obvious `rememberme`) is confirmed from the real app's login request
+- `GET https://www.33iq.com/app/taskall?p=3` — the app's own guest/logged-in probe, replies `{"status":"guest"}` for guests; `SessionManager` uses this instead of scraping the homepage to decide login state
 
 Two site-specific quirks the client handles explicitly:
 - The site's HTML is served as **GBK**, not UTF‑8 (see `<meta charset="GBK">`) — see [`IqHtmlClient`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/IqHtmlClient.kt), which decodes responses and encodes outgoing form values as GBK.
@@ -60,15 +61,17 @@ To be transparent about reliability:
 
 | Capability | Status |
 |---|---|
-| Browsing questions, tags, search | ✅ Verified against live responses |
-| Question detail (title/tags/author/stats/choices) | ✅ Verified against live responses |
-| Login (`/index/login`, `email`/`password`) | ⚠️ Endpoint and field names confirmed; the exact success/error `status` strings are not, so login success is re-verified via the site's own `user_type` signal rather than trusted blindly |
-| Answer analysis / 汤底 | ⚠️ 33IQ hides this from guests entirely; the client looks for a few candidate selectors and shows a clear "not available" message when nothing is found — this is a genuine content limitation of the source, not a client bug |
-| Comments on a question | ⚠️ Best-effort selectors; a live account with existing comments to inspect wasn't available during development |
-| Pagination beyond page 1 | ⚠️ Uses a `?page=N` query param guess; if the site ignores it, the client detects "no new items" and stops loading more rather than looping forever |
-| Favouriting a question on 33IQ's own servers | ❌ Not implemented — the real "收藏" endpoint wasn't discoverable without an authenticated session. Favourites are instead a genuine, fully-working **local** bookmark list |
+| Browsing questions, tags, search | ✅ Verified against live HTML responses |
+| Question detail (title/tags/author/choices/upvotes/comment & collect counts/right-ratio) | ✅ Real JSON endpoint (`?p=3`) and field names confirmed from a captured app session (`QuestionJsonParser`), and re-verified live via `curl` |
+| Login field names (`/index/login`, `email`/`password`/`ememberme`) | ✅ Confirmed from a real captured login request |
+| Login success/failure detection | ⚠️ The endpoint and field names are confirmed, but the exact success/error `status` string values are not (no real account was available to test a live login) — login state is instead re-derived from the confirmed guest-probe endpoint (`/app/taskall?p=3`) rather than trusted from the login response alone |
+| Answer analysis / 汤底 | ⚠️ 33IQ hides this from guests entirely, and the HAR capture didn't include a logged-in session that could see it either. The client looks for a few candidate HTML selectors and shows a clear "not available" message when nothing is found — this is a genuine content limitation of the source, not a client bug |
+| Comments on a question | ⚠️ Best-effort HTML selectors; no comments-list endpoint was present in the HAR capture and a live account with existing comments to inspect wasn't available during development |
+| Pagination beyond page 1 | ⚠️ Uses a `?page=N` query param guess; not present in the HAR capture either. If the site ignores it, the client detects "no new items" and stops loading more rather than looping forever |
+| Favouriting a question on 33IQ's own servers | ❌ Not implemented — no server-side "收藏" endpoint was present in the HAR capture. Favourites are instead a genuine, fully-working **local** bookmark list |
+| Search (`/index/search`) | ⚠️ HTML scraping only; during this round of development the endpoint started returning a login-wall/anti-bot response to repeated automated requests, so this path is untested against a fresh session — the existing implementation is unchanged and best-effort |
 
-If you can supply a HAR file or a documented endpoint list captured from the real app (e.g. via Reqable/Charles/Proxyman), the data layer is isolated behind [`QuestionRepository`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/domain/repository/QuestionRepository.kt) / [`IqHtmlClient`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/IqHtmlClient.kt) so it can be swapped for a precise implementation without touching the UI.
+The HAR capture that unlocked the JSON endpoints above was a privacy-scrubbed analysis package (request/response structure and field *names*, without header or body *values*) rather than a raw HAR file, so some fields visible in it (e.g. notification counts, check-in history, feed-update endpoints) are documented as future work in [Roadmap](#roadmap) rather than wired in — they weren't needed for the features this app currently implements. If you can supply more captured traffic (e.g. via Reqable/Charles/Proxyman) for the endpoints still marked best-effort above, the data layer is isolated behind [`QuestionRepository`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/domain/repository/QuestionRepository.kt) / [`IqHtmlClient`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/IqHtmlClient.kt) so it can be swapped for a precise implementation without touching the UI.
 
 ## Tech-Stack
 
@@ -164,7 +167,7 @@ implementation(projects.library.network)
 ./gradlew :app:bundleDebug                          # Production build verification
 ```
 
-> **Note**: this fork was built in a sandboxed environment without an installed Android SDK, so the above could not actually be executed during development. The code was written and reviewed carefully (matching the original template's patterns closely, keeping the existing test suite where the classes it targets weren't changed), but you should run a full build/test pass yourself before relying on it. The `UseCaseKonsistTest`/`ViewModelKonsistTest` "every class must have a matching unit test" gates from the original template were removed for the same reason — see the comments in those files.
+> **Note**: an Android SDK + JDK 17 toolchain was later installed in the development sandbox and every command above (plus `:app:assembleDebug`) was run for real, with each real compile/lint/detekt/format failure it surfaced fixed in place — this is no longer a "written but unverified" codebase. The `UseCaseKonsistTest`/`ViewModelKonsistTest` "every class must have a matching unit test" gates from the original template were still removed, since this fork intentionally doesn't keep 1:1 test coverage for every generated class — see the comments in those files. CI (`.github/workflows/check.yml`) runs the same checks on every push.
 
 ## Project Scope & Limitations
 
@@ -186,13 +189,17 @@ No API key/config is required to browse — the app talks straight to `https://w
 
 ## Roadmap
 
-- Verify the real "收藏" (server-side favourite) and comment-posting endpoints against a live account and wire them in behind the existing `QuestionRepository`/`BookmarkRepository` interfaces
+- Verify the real "收藏" (server-side favourite) and comment-posting/comments-list endpoints against a live account and wire them in behind the existing `QuestionRepository`/`BookmarkRepository` interfaces
 - Confirm the real pagination parameter for question lists (`feature-feed`'s `QuestionRemoteDataSource` currently guesses `?page=N`)
+- Wire up further endpoints seen in the HAR capture but not yet used by any feature in this app (e.g. `/index/loadnummc` notification counts, `/app/signrecord` check-in history, `/follow/feedupdate` feed updates)
+- Confirm a real logged-in session's response shape (login success/error `status` strings, `IqSession.score` field) — no authenticated capture was available
 - Turtle-soup (海龟汤) style guessing-game questions, exam/竞技 modes — not modeled yet
 
 ## Credits
 
 The modular Clean Architecture skeleton (build-logic convention plugins, base ViewModel/state pattern, Konsist rules) is adapted from Igor Wojda's [android-showcase](https://github.com/igorwojda/android-showcase) (MIT licensed).
+
+The real JSON question-detail endpoint, the correct login field names, and the guest-detection endpoint documented above were confirmed from a HAR capture of the official 33IQ Android app's own traffic, contributed by a project maintainer.
 
 ## License
 
