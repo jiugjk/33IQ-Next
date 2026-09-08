@@ -4,7 +4,6 @@ import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionListUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.PraiseQuestionUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.QuestionAnswerUseCases
-import com.jiugjk.iq33.feature.feed.domain.usecase.QuoteAnswerUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.QuoteHintUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.RevealAnswerUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.RevealHintUseCase
@@ -19,7 +18,6 @@ internal val domainModule =
         singleOf(::SearchQuestionsUseCase)
         singleOf(::GetQuestionDetailUseCase)
         singleOf(::SubmitAnswerUseCase)
-        singleOf(::QuoteAnswerUseCase)
         singleOf(::RevealAnswerUseCase)
         singleOf(::QuoteHintUseCase)
         singleOf(::RevealHintUseCase)

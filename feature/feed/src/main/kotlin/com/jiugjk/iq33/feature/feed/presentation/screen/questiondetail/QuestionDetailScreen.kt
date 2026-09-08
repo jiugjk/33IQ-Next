@@ -2,6 +2,7 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -107,7 +108,7 @@ fun QuestionDetailScreen(
                     uiState = currentUiState,
                     onChoiceSelect = viewModel::onChoiceSelected,
                     onSubmitAnswerClick = { viewModel.onSubmitAnswerClick(questionId, it) },
-                    onRevealAnswerClick = { viewModel.onRevealAnswerClick(questionId) },
+                    onRevealAnswerClick = viewModel::onRevealAnswerClick,
                     onConfirmRevealAnswer = { viewModel.onConfirmRevealAnswer(questionId) },
                     onDismissAnswerFlow = { viewModel.onDismissRevealFlow(RevealKind.ANSWER) },
                     onRevealHintClick = { viewModel.onRevealHintClick(questionId) },
@@ -162,7 +163,7 @@ private fun QuestionDetailContent(
             TagRow(tags = detail.tags)
         }
 
-        StatsRow(detail = detail, onPraiseClick = onPraiseClick)
+        StatsRow(detail = detail, isPraising = uiState.isPraising, onPraiseClick = onPraiseClick)
 
         if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
             ChoiceAndSubmitSection(
@@ -240,14 +241,19 @@ private fun AuthorRow(detail: QuestionDetail) {
 
 @Composable
 private fun TagRow(tags: List<String>) {
+    // A plain fillMaxWidth Row squeezes the last chip into whatever space is left once the others
+    // don't fit, wrapping its text one character per line - scrolling instead keeps every chip intact.
     Row(
-        modifier = Modifier.padding(top = Dimen.spaceM),
+        modifier =
+            Modifier
+                .padding(top = Dimen.spaceM)
+                .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(Dimen.spaceS),
     ) {
         tags.forEach { tag ->
             SuggestionChip(
                 onClick = { },
-                label = { Text(tag) },
+                label = { Text(tag, maxLines = 1) },
                 colors = SuggestionChipDefaults.suggestionChipColors(),
             )
         }
@@ -257,6 +263,7 @@ private fun TagRow(tags: List<String>) {
 @Composable
 private fun StatsRow(
     detail: QuestionDetail,
+    isPraising: Boolean,
     onPraiseClick: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
@@ -264,12 +271,14 @@ private fun StatsRow(
             horizontalArrangement = Arrangement.spacedBy(Dimen.spaceL),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // /index/praise toggles (点赞/取消点赞) - only guard against a double-tap firing two
+            // overlapping requests, don't disable once liked.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier =
                     Modifier
                         .clip(CircleShape)
-                        .clickable(enabled = !detail.isUpvoted, onClick = onPraiseClick)
+                        .clickable(enabled = !isPraising, onClick = onPraiseClick)
                         .padding(horizontal = Dimen.spaceS, vertical = Dimen.spaceS),
             ) {
                 Icon(

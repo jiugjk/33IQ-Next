@@ -22,7 +22,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.feed.R
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
@@ -177,28 +176,13 @@ private fun HintQuoteDialog(
 @Composable
 internal fun AnswerSection(
     fallbackAnalysis: String?,
-    answerReveal: RevealState<AnswerQuote, AnswerReveal>,
+    answerReveal: RevealState<Unit, AnswerReveal>,
     onRevealAnswerClick: () -> Unit,
     onConfirmRevealAnswer: () -> Unit,
     onDismissAnswerFlow: () -> Unit,
 ) {
     if (answerReveal is RevealState.Revealed) {
-        Card(
-            modifier = Modifier.padding(top = Dimen.spaceL).fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(modifier = Modifier.padding(Dimen.spaceL)) {
-                Text(
-                    text = stringResource(R.string.feed_reveal_answer_result_title, answerReveal.reveal.answer),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    text = answerReveal.reveal.explanation,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = Dimen.spaceS),
-                )
-            }
-        }
+        AnswerRevealedCard(answerReveal.reveal)
     } else {
         Column {
             if (fallbackAnalysis != null) {
@@ -225,8 +209,7 @@ internal fun AnswerSection(
     }
 
     if (answerReveal is RevealState.QuoteReady) {
-        AnswerQuoteDialog(
-            quote = answerReveal.quote,
+        AnswerConfirmDialog(
             onConfirm = onConfirmRevealAnswer,
             onDismiss = onDismissAnswerFlow,
         )
@@ -234,23 +217,46 @@ internal fun AnswerSection(
 }
 
 @Composable
-private fun AnswerQuoteDialog(
-    quote: AnswerQuote,
+private fun AnswerRevealedCard(reveal: AnswerReveal) {
+    Card(
+        modifier = Modifier.padding(top = Dimen.spaceL).fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(Dimen.spaceL)) {
+            Text(
+                text = stringResource(R.string.feed_reveal_answer_result_title, reveal.answer),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                text = reveal.explanation,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = Dimen.spaceS),
+            )
+            val costText =
+                if (reveal.alreadyPaid) {
+                    stringResource(R.string.feed_reveal_answer_cost_already_paid)
+                } else {
+                    stringResource(R.string.feed_reveal_answer_cost_spent, reveal.cost)
+                }
+            Text(
+                text = costText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Dimen.spaceS),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnswerConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.feed_reveal_answer_confirm_title)) },
-        text = {
-            val message =
-                if (quote.alreadyPaid) {
-                    stringResource(R.string.feed_reveal_answer_confirm_message_free)
-                } else {
-                    stringResource(R.string.feed_reveal_answer_confirm_message_cost, quote.cost)
-                }
-            Text(message)
-        },
+        text = { Text(stringResource(R.string.feed_reveal_answer_confirm_message)) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.feed_dialog_confirm)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.feed_dialog_cancel)) } },
     )

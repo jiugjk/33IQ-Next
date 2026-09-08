@@ -67,16 +67,8 @@ internal class QuestionDetailViewModel(
         }
     }
 
-    /** Fetches 33IQ's own price quote for revealing the real answer, to confirm with the user before spending 学识. */
-    fun onRevealAnswerClick(questionId: Long) {
-        sendAction(QuestionDetailAction.AnswerQuoteStarted)
-
-        viewModelScope.launch {
-            when (val result = questionAnswerUseCases.quoteAnswer(questionId)) {
-                is Result.Success -> sendAction(QuestionDetailAction.AnswerQuoteReady(result.value))
-                is Result.Failure -> sendAction(QuestionDetailAction.AnswerFlowFailed)
-            }
-        }
+    fun onRevealAnswerClick() {
+        sendAction(QuestionDetailAction.AnswerConfirmRequested)
     }
 
     fun onConfirmRevealAnswer(questionId: Long) {
@@ -121,10 +113,15 @@ internal class QuestionDetailViewModel(
     }
 
     fun onPraiseClick(questionId: Long) {
+        val currentState = uiStateFlow.value
+        if (currentState is QuestionDetailUiState.Content && currentState.isPraising) return
+
+        sendAction(QuestionDetailAction.PraiseStarted)
+
         viewModelScope.launch {
             when (val result = questionAnswerUseCases.praiseQuestion(questionId)) {
                 is Result.Success -> sendAction(QuestionDetailAction.Praised(result.value))
-                is Result.Failure -> Unit
+                is Result.Failure -> sendAction(QuestionDetailAction.PraiseFailed)
             }
         }
     }
