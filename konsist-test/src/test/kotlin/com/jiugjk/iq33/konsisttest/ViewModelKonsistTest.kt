@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test
 
 // Check test coding rules.
 //
-// Note: see UseCaseKonsistTest for why the "every view model has test" coverage gate was dropped
-// in this fork.
+// Note: see UseCaseKonsistTest for why the "every view model has test" coverage gate is not
+// enforced in this fork.
 class ViewModelKonsistTest {
     @Test
     fun `every view model constructor parameter has name derived from parameter type`() {

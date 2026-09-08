@@ -50,23 +50,22 @@ fun SearchScreen(
             }
 
             SearchBar(
-                query = "",
-                onQueryChange = { },
-                onSearch = viewModel::onQueryChange,
+                query = uiState.query,
+                onQueryChange = viewModel::onQueryChange,
                 autoFocus = true,
                 modifier = Modifier.weight(1f),
             )
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
-            when (val currentUiState = uiState) {
-                SearchUiState.Idle -> SearchHint()
-                SearchUiState.Loading -> LoadingIndicator()
-                SearchUiState.Error -> ErrorAnim()
-                SearchUiState.Empty -> SearchEmpty()
-                is SearchUiState.Content ->
+            when (val results = uiState.results) {
+                SearchResults.Idle -> SearchHint()
+                SearchResults.Loading -> LoadingIndicator()
+                SearchResults.Error -> ErrorAnim()
+                SearchResults.Empty -> SearchEmpty()
+                is SearchResults.Content ->
                     SearchResultList(
-                        questions = currentUiState.questions,
+                        questions = results.questions,
                         onQuestionClick = onNavigateToQuestionDetail,
                     )
             }

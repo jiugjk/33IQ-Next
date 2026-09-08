@@ -14,6 +14,8 @@ dependencies {
 
     implementation(libs.okhttp)
     implementation(libs.okhttp.interceptor)
+    // SessionManager parses 33IQ's probe reply instead of pattern-matching its raw text.
+    implementation(libs.serialization.json)
     // api: IqHtmlClient's public functions return org.jsoup.nodes.Document, so consumers
     // (feature/feed) need Jsoup types on their compile classpath too.
     api(libs.jsoup)
@@ -21,9 +23,6 @@ dependencies {
     implementation(platform(libs.koin.bom))
     implementation(libs.koin)
 
-    // This module has no Compose UI, but the library convention plugin applies the Compose
-    // compiler plugin to every module unconditionally, which then requires the runtime on the
-    // classpath even with zero @Composable usages.
-    implementation(platform(libs.compose.bom))
-    implementation(libs.bundles.compose)
+    testImplementation(libs.bundles.test)
+    testRuntimeOnly(libs.junit.jupiter.engine)
 }

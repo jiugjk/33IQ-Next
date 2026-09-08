@@ -19,6 +19,14 @@ data class Comment(
 data class QuestionDetail(
     val id: Long,
     val title: String,
+    /**
+     * The question's full body text (33IQ's `qc_context`), converted from its rich-text HTML.
+     * Empty when the question is nothing but a title. Never truncated - [title] carries at most a
+     * short summary, so answering a question needs this rather than the heading.
+     */
+    val bodyText: String,
+    /** Images embedded in the body, in document order - some questions are answerable only from these. */
+    val imageUrls: List<String>,
     val tags: List<String>,
     val breadcrumb: List<String>,
     val author: String?,
@@ -35,5 +43,6 @@ data class QuestionDetail(
     /** Answer/analysis text, when it could be found without login (33IQ hides this for most guests). */
     val analysis: String?,
     val comments: List<Comment>,
+    /** The public, browser-readable page for this question - what sharing must hand out. */
     val sourceUrl: String,
 )

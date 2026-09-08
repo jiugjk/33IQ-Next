@@ -1,5 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,7 +64,7 @@ private fun SubmissionResultText(submission: SubmissionState) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
-        SubmissionState.Idle, SubmissionState.Submitting -> Unit
+        SubmissionState.Idle, is SubmissionState.Submitting -> Unit
     }
 }
 
@@ -72,14 +73,26 @@ private fun SubmissionDoneText(result: SubmitAnswerResult) {
     when (result) {
         is SubmitAnswerResult.Correct ->
             Text(
-                text = stringResource(R.string.feed_submission_correct, result.scoreDelta, result.myScore),
+                text =
+                    scoreText(
+                        R.string.feed_submission_correct,
+                        R.string.feed_submission_correct_no_score,
+                        result.scoreDelta,
+                        result.myScore,
+                    ),
                 color = CorrectColor,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
         is SubmitAnswerResult.Wrong ->
             Text(
-                text = stringResource(R.string.feed_submission_wrong, result.scoreDelta, result.myScore),
+                text =
+                    scoreText(
+                        R.string.feed_submission_wrong,
+                        R.string.feed_submission_wrong_no_score,
+                        result.scoreDelta,
+                        result.myScore,
+                    ),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
@@ -104,9 +117,8 @@ private fun SubmissionDoneText(result: SubmitAnswerResult) {
 @Composable
 internal fun HintSection(
     hintReveal: RevealState<HintQuote, HintReveal>,
-    onRevealHintClick: () -> Unit,
-    onConfirmRevealHint: () -> Unit,
-    onDismissHintFlow: () -> Unit,
+    canReveal: Boolean,
+    onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
         if (hintReveal is RevealState.Revealed) {
@@ -122,8 +134,8 @@ internal fun HintSection(
             }
         } else {
             OutlinedButton(
-                onClick = onRevealHintClick,
-                enabled = hintReveal !is RevealState.QuoteLoading && hintReveal !is RevealState.Revealing,
+                onClick = { onEvent(QuestionDetailEvent.HintQuoteRequested) },
+                enabled = canReveal && hintReveal !is RevealState.QuoteLoading && hintReveal !is RevealState.Revealing,
             ) {
                 Text(stringResource(R.string.feed_reveal_hint_button))
             }
@@ -142,8 +154,8 @@ internal fun HintSection(
     if (hintReveal is RevealState.QuoteReady) {
         HintQuoteDialog(
             quote = hintReveal.quote,
-            onConfirm = onConfirmRevealHint,
-            onDismiss = onDismissHintFlow,
+            onConfirm = { onEvent(QuestionDetailEvent.HintRevealConfirmed) },
+            onDismiss = { onEvent(QuestionDetailEvent.RevealFlowDismissed(RevealKind.HINT)) },
         )
     }
 }
@@ -158,15 +170,23 @@ private fun HintQuoteDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.feed_reveal_hint_confirm_title)) },
         text = {
-            Text(
-                stringResource(
-                    R.string.feed_reveal_hint_confirm_message,
-                    quote.normalCost,
-                    quote.memberCost,
-                    quote.lifeMemberCost,
-                    quote.effectiveCost,
-                ),
-            )
+            // Only the effective cost is guaranteed; 33IQ may omit a membership tier, and inventing
+            // a 0 for a missing tier would advertise a free hint that does not exist.
+            val tiers = listOfNotNull(quote.normalCost, quote.memberCost, quote.lifeMemberCost)
+            val message =
+                if (tiers.size == ALL_MEMBERSHIP_TIERS) {
+                    stringResource(
+                        R.string.feed_reveal_hint_confirm_message,
+                        quote.normalCost ?: 0,
+                        quote.memberCost ?: 0,
+                        quote.lifeMemberCost ?: 0,
+                        quote.effectiveCost,
+                    )
+                } else {
+                    stringResource(R.string.feed_reveal_hint_confirm_message_simple, quote.effectiveCost)
+                }
+
+            Text(message)
         },
         confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.feed_dialog_confirm)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.feed_dialog_cancel)) } },
@@ -177,9 +197,8 @@ private fun HintQuoteDialog(
 internal fun AnswerSection(
     fallbackAnalysis: String?,
     answerReveal: RevealState<Unit, AnswerReveal>,
-    onRevealAnswerClick: () -> Unit,
-    onConfirmRevealAnswer: () -> Unit,
-    onDismissAnswerFlow: () -> Unit,
+    canReveal: Boolean,
+    onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     if (answerReveal is RevealState.Revealed) {
         AnswerRevealedCard(answerReveal.reveal)
@@ -190,8 +209,8 @@ internal fun AnswerSection(
             }
 
             OutlinedButton(
-                onClick = onRevealAnswerClick,
-                enabled = answerReveal !is RevealState.QuoteLoading && answerReveal !is RevealState.Revealing,
+                onClick = { onEvent(QuestionDetailEvent.AnswerRevealRequested) },
+                enabled = canReveal && answerReveal !is RevealState.QuoteLoading && answerReveal !is RevealState.Revealing,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             ) {
                 Text(stringResource(R.string.feed_reveal_answer_button))
@@ -210,8 +229,8 @@ internal fun AnswerSection(
 
     if (answerReveal is RevealState.QuoteReady) {
         AnswerConfirmDialog(
-            onConfirm = onConfirmRevealAnswer,
-            onDismiss = onDismissAnswerFlow,
+            onConfirm = { onEvent(QuestionDetailEvent.AnswerRevealConfirmed) },
+            onDismiss = { onEvent(QuestionDetailEvent.RevealFlowDismissed(RevealKind.ANSWER)) },
         )
     }
 }
@@ -232,11 +251,13 @@ private fun AnswerRevealedCard(reveal: AnswerReveal) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
+            val cost = reveal.cost
             val costText =
-                if (reveal.alreadyPaid) {
-                    stringResource(R.string.feed_reveal_answer_cost_already_paid)
-                } else {
-                    stringResource(R.string.feed_reveal_answer_cost_spent, reveal.cost)
+                when {
+                    reveal.alreadyPaid -> stringResource(R.string.feed_reveal_answer_cost_already_paid)
+                    // 33IQ did not report a parseable amount - saying "0 学识" would be a guess.
+                    cost == null -> stringResource(R.string.feed_reveal_answer_cost_unknown)
+                    else -> stringResource(R.string.feed_reveal_answer_cost_spent, cost)
                 }
             Text(
                 text = costText,
@@ -261,6 +282,26 @@ private fun AnswerConfirmDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.feed_dialog_cancel)) } },
     )
 }
+
+/**
+ * Uses the numbers-included wording only when 33IQ actually reported both figures - a missing
+ * 学识 field means "not reported", not a change of zero.
+ */
+@Composable
+private fun scoreText(
+    @StringRes withScoreRes: Int,
+    @StringRes withoutScoreRes: Int,
+    scoreDelta: Int?,
+    myScore: Int?,
+): String =
+    if (scoreDelta != null && myScore != null) {
+        stringResource(withScoreRes, scoreDelta, myScore)
+    } else {
+        stringResource(withoutScoreRes)
+    }
+
+/** 普通 / 会员 / 终身会员 - the three tiers `showtipsbuy` quotes. */
+private const val ALL_MEMBERSHIP_TIERS = 3
 
 @Suppress("MagicNumber")
 private val CorrectColor = Color(0xFF2E7D32)

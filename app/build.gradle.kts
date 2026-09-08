@@ -14,8 +14,13 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
-            proguardFiles("proguard-android.txt", "proguard-rules.pro")
+            // Now that the dead Retrofit adapter chain and the preview-only composables are gone,
+            // R8 has something to work with: it strips what is left unreachable and the resource
+            // shrinker drops the resources that go with it. See proguard-rules.pro for the entry
+            // points that must survive (they are reached reflectively, not from call sites).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

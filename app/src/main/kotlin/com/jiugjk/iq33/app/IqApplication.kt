@@ -24,7 +24,6 @@ class IqApplication : Application() {
             androidLogger()
             androidContext(this@IqApplication)
 
-            modules(appModule)
             modules(networkModule)
             modules(featureFavouriteModules)
             modules(featureFeedModules)

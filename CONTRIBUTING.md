@@ -22,10 +22,10 @@ Go right ahead! Just submit a pull request when you're done.
 We love pull requests from everyone:
 
 1. [Fork](https://docs.github.com/en/get-started/quickstart/fork-a-repo) this repository:
-2. Clone forked repository `git clone git@github.com:YOUR-USERNAME/android-showcase.git`
+2. Clone forked repository `git clone git@github.com:YOUR-USERNAME/33IQ-Next.git`
 3. Branch of the `main` branch.
 4. Make changes, push changes to your fork and
-   [submit a pull request](https://github.com/igorwojda/android-showcase/compare) against the `main` branch.
+   [submit a pull request](https://github.com/jiugjk/33IQ-Next/compare) against the `main` branch.
 
 At this point you're waiting on us. We like to at least comment on pull requests within few days. We may suggest some
 changes or improvements or alternatives.

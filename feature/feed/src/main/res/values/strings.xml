@@ -13,10 +13,16 @@
     <string name="feed_comments_empty">暂无评论，或该功能的数据源尚未确认</string>
     <string name="feed_comments_locked">查看正确答案后可查看评论</string>
     <string name="feed_right_ratio">正确率 %1$d%%</string>
+    <string name="feed_question_image_content_description">题目配图</string>
+    <string name="feed_retry">重试</string>
+    <string name="feed_load_more_failed">加载更多失败，点击重试</string>
+    <string name="feed_bookmark_failed">收藏操作失败，请稍后重试</string>
 
     <string name="feed_submit_answer">提交答案</string>
     <string name="feed_submission_correct">回答正确！学识 +%1$d（当前 %2$d）</string>
     <string name="feed_submission_wrong">回答错误。学识 %1$d（当前 %2$d）</string>
+    <string name="feed_submission_correct_no_score">回答正确！（本次学识变化未返回）</string>
+    <string name="feed_submission_wrong_no_score">回答错误。（本次学识变化未返回）</string>
     <string name="feed_submission_already_answered">您已经回答过该题，无法重复提交</string>
     <string name="feed_submission_limit_reached">已达到今日答题上限</string>
     <string name="feed_submission_failed">提交失败，请检查网络或登录状态后重试</string>
@@ -27,10 +33,12 @@
     <string name="feed_reveal_answer_result_title">正确答案：%1$s</string>
     <string name="feed_reveal_answer_cost_spent">本次消耗 %1$d 学识</string>
     <string name="feed_reveal_answer_cost_already_paid">您已购买过本题答案，本次免费查看</string>
+    <string name="feed_reveal_answer_cost_unknown">本次消耗的学识未由服务器返回</string>
 
     <string name="feed_reveal_hint_button">获取提示（消耗学识）</string>
     <string name="feed_reveal_hint_confirm_title">获取提示</string>
     <string name="feed_reveal_hint_confirm_message">普通用户 %1$d 学识 / 会员 %2$d 学识 / 终身会员 %3$d 学识，本次将花费 %4$d 学识，是否继续？</string>
+    <string name="feed_reveal_hint_confirm_message_simple">本次将花费 %1$d 学识，是否继续？</string>
 
     <string name="feed_dialog_confirm">确认</string>
     <string name="feed_dialog_cancel">取消</string>

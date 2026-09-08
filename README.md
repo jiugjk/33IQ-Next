@@ -52,7 +52,7 @@ An unofficial, third-party Android client for [33IQ](https://www.33iq.com) — a
 - `POST https://www.33iq.com/index/login` with `email`/`password`/`ememberme` form fields — login (see [`SessionManager`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/SessionManager.kt)); the `ememberme` field name (not the more obvious `rememberme`) is confirmed from the real app's login request
 - `GET https://www.33iq.com/app/taskall?p=3` — the app's own guest/logged-in probe, replies `{"status":"guest"}` for guests; `SessionManager` uses this instead of scraping the homepage to decide login state
 - `POST https://www.33iq.com/index/commentdeal` with `type=comment&sina_post=0&qq_post=0&context=<answer>&id=<q_id>&isanswer=1&action=comment` — submits an answer; confirmed live to reply `{"status":"success"|"wrong",...}` with a `score`/`myScore` 学识 delta, or `{"status":"repeat"}` if the account already answered that question (see [`AnswerRemoteDataSource`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/data/datasource/remote/AnswerRemoteDataSource.kt))
-- `POST https://www.33iq.com/index/payforshowanswer`, `POST https://www.33iq.com/index/showanswertrue`, `POST https://www.33iq.com/index/showanswernew` (all `q_id=<id>`) — the three calls the real app makes, in that order, to reveal a question's answer/explanation and its 学识 cost; this client mirrors the same sequence
+- `POST https://www.33iq.com/index/showanswertrue`, `POST https://www.33iq.com/index/payforshowanswer`, `POST https://www.33iq.com/index/showanswernew` (all `q_id=<id>`) — the three calls the real app makes, in that order, to reveal a question's answer/explanation and its 学识 cost; this client mirrors the same sequence, and checks each step's business result before making the next call
 - `POST https://www.33iq.com/index/showtipsbuy`, `POST https://www.33iq.com/index/showtips` (both `q_id=<id>`) — hint price quote (with separate normal/member/终身会员 prices) and hint text
 - `POST https://www.33iq.com/index/login` confirmed live to reply `{"status":"1","uid":"<id>"}` on a real successful login (failure `status` strings are still unconfirmed - no failed login was captured - so `SessionManager` still verifies success via the guest-probe endpoint rather than trusting `status` alone)
 
@@ -70,13 +70,13 @@ To be transparent about reliability:
 | Question detail (title/tags/author/choices/upvotes/comment & collect counts/right-ratio) | ✅ Real JSON endpoint (`?p=3`) and field names confirmed from a captured app session (`QuestionJsonParser`), and re-verified live via `curl` |
 | Login field names (`/index/login`, `email`/`password`/`ememberme`) | ✅ Confirmed from a real captured login request |
 | Login success detection | ✅ A real successful login's `{"status":"1",...}` reply is confirmed live; login state is still re-derived from the guest-probe endpoint rather than trusted from `status` alone (more robust, and error `status` strings are still unconfirmed - see next row) |
-| Login failure detection | ⚠️ No failed login was ever captured, so the exact error `status` string values (wrong password, locked account, ...) are still unconfirmed guesses in `describeLoginError` |
+| Login failure detection | ⚠️ No failed login was ever captured, so the exact error `status` string values (wrong password, locked account, ...) are still unconfirmed guesses; they are mapped to a typed `LoginError` and only ever *explain* a failure the guest probe already established. A login whose state cannot be verified is reported as `NotVerified`, never as success |
 | Submitting an answer (`/index/commentdeal`) | ✅ Confirmed live for choice questions: correct/wrong/already-answered are all distinct, real server responses with a real 学识 delta. Open-ended (non-choice) question submission is unconfirmed - every captured example was a choice question |
-| Revealing the real answer (`payforshowanswer` / `showanswertrue` / `showanswernew`) | ✅ Confirmed live for the reveal itself and its 学识 cost. **Not** confirmed: which of the three calls actually spends the 学识, or whether it's genuinely free after answering correctly - the client mirrors the real app's exact call order rather than guessing, and simply displays whatever cost the server reports |
+| Revealing the real answer (`showanswertrue` / `payforshowanswer` / `showanswernew`) | ✅ Confirmed live for the reveal itself and its 学识 cost. **Not** confirmed: which of the three calls actually spends the 学识, or whether it's genuinely free after answering correctly - the client mirrors the real app's exact call order rather than guessing, and simply displays whatever cost the server reports |
 | Hint price + reveal (`showtipsbuy` / `showtips`) | ✅ Confirmed live, including 33IQ's own normal/member/终身会员 price breakdown - shown as-is rather than recomputed client-side |
 | `isLimit` flag on submission/reveal responses | ⚠️ Seen as `"0"` in every capture; its meaning when set (a daily cap of some kind, presumably) is unconfirmed |
-| Answer analysis / 汤底 | ⚠️ 33IQ hides this from guests entirely, and the HAR capture didn't include a logged-in session that could see it either. The client looks for a few candidate HTML selectors and shows a clear "not available" message when nothing is found — this is a genuine content limitation of the source, not a client bug |
-| Comments on a question | ⚠️ Best-effort HTML selectors; no comments-list endpoint was present in the HAR capture and a live account with existing comments to inspect wasn't available during development |
+| Answer analysis / 汤底 | ⚠️ 33IQ hides this from guests entirely, and the HAR capture didn't include a logged-in session that could see it either. The question-detail parser therefore leaves it unset rather than guessing at a field, and the UI offers the paid reveal instead — a genuine content limitation of the source, not a client bug |
+| Comments on a question | ❌ Not loaded. No comments-list endpoint was present in the HAR capture, so the parser leaves the list empty and the UI says so; only the comment *count* from the detail payload is shown |
 | Pagination beyond page 1 | ⚠️ Uses a `?page=N` query param guess; not present in the HAR capture either. If the site ignores it, the client detects "no new items" and stops loading more rather than looping forever |
 | Favouriting a question on 33IQ's own servers | ❌ Not implemented — no server-side "收藏" endpoint was present in the HAR capture. Favourites are instead a genuine, fully-working **local** bookmark list |
 | Search (`/index/search`) | ⚠️ HTML scraping only; during this round of development the endpoint started returning a login-wall/anti-bot response to repeated automated requests, so this path is untested against a fresh session — the existing implementation is unchanged and best-effort |
@@ -140,14 +140,14 @@ Independent of Data/Presentation. `UseCase`s hold business logic, `Repository` i
 
 #### Data Layer
 
-For `feature-feed`, the "data source" is HTML rather than JSON: `QuestionHtmlParser` (Jsoup selectors) + `QuestionRemoteDataSource` (builds the right URL) implement `QuestionRepository`. For `feature-favourite`, the data source is a local Room database.
+For `feature-feed`, lists and search are HTML (`QuestionHtmlParser`, Jsoup selectors) while question detail is 33IQ's app-facing JSON (`QuestionJsonParser`); `QuestionRemoteDataSource` builds the right URL for each and moves every parse off the caller's thread. For `feature-favourite`, the data source is a local Room database.
 
 ### `library/network`
 
 Everything specific to talking to `www.33iq.com` lives here, isolated from the UI:
 - `IqHtmlClient` — GET/POST with GBK-aware encoding/decoding, login-wall detection
-- `PersistentCookieJar` — keeps the session cookie across app restarts
-- `SessionManager` — login/logout, and the only source of truth for "am I logged in" (re-derived from the site's own `user_type` signal, not just trusted client-side state)
+- `PersistentCookieJar` — keeps session cookies across app restarts, keyed by name/domain/path and matched against the request URL, under a lock so concurrent requests cannot corrupt or stale-write the store
+- `SessionManager` — login/logout, and the only source of truth for "am I logged in": the reply from 33IQ's own `/app/taskall` probe is parsed and classified as authenticated, guest or unknown (an HTTP 200, or merely holding cookies, is never taken as proof of a session), and a probe that cannot be completed leaves the last verified state alone
 
 ## Gradle Config
 
@@ -203,7 +203,7 @@ No API key/config is required to browse — the app talks straight to `https://w
 - Confirm the real pagination parameter for question lists (`feature-feed`'s `QuestionRemoteDataSource` currently guesses `?page=N`)
 - Wire up further endpoints seen in the HAR captures but not yet used by any feature in this app (e.g. `/index/loadnummc` notification counts, `/app/signrecord` check-in history, `/follow/feedupdate` feed updates)
 - Confirm the login endpoint's error `status` strings (only a successful login has ever been captured) and populate `IqSession.score` from `/app/userinfo`'s confirmed `score` field
-- Confirm whether revealing an answer is genuinely free after answering correctly, and which of `payforshowanswer`/`showanswertrue`/`showanswernew` actually spends the 学识 - the current implementation mirrors the real app's call sequence and trusts whatever cost the server reports, rather than guessing
+- Confirm whether revealing an answer is genuinely free after answering correctly, and which of `showanswertrue`/`payforshowanswer`/`showanswernew` actually spends the 学识 - the current implementation mirrors the real app's call sequence and trusts whatever cost the server reports, rather than guessing
 - Confirm answer submission for open-ended (non-choice) questions - every captured submission was a multiple-choice question
 - Turtle-soup (海龟汤) style guessing-game questions, exam/竞技 modes — not modeled yet
 

@@ -68,6 +68,11 @@ gradlePlugin {
             implementationClass = "com.jiugjk.iq33.buildlogic.LibraryConventionPlugin"
         }
 
+        register("roomConvention") {
+            id = "com.jiugjk.iq33.convention.room"
+            implementationClass = "com.jiugjk.iq33.buildlogic.RoomConventionPlugin"
+        }
+
         register("kotlinConvention") {
             id = "com.jiugjk.iq33.convention.kotlin"
             implementationClass = "com.jiugjk.iq33.buildlogic.KotlinConventionPlugin"

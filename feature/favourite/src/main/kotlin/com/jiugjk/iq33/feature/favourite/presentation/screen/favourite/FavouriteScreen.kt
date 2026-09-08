@@ -43,6 +43,7 @@ fun FavouriteScreen(
         when (val currentUiState = uiState) {
             FavouriteUiState.Loading -> Unit
             FavouriteUiState.Empty -> EmptyFavourites()
+            FavouriteUiState.Error -> FavouritesUnavailable()
             is FavouriteUiState.Content ->
                 FavouriteList(
                     savedQuestions = currentUiState.savedQuestions,
@@ -60,6 +61,17 @@ private fun EmptyFavourites(modifier: Modifier = Modifier) {
             text = stringResource(R.string.favourite_empty),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun FavouritesUnavailable(modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            text = stringResource(R.string.favourite_storage_error),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.error,
         )
     }
 }

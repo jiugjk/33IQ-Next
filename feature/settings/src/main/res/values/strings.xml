@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_screen_title">我的</string>
-    <string name="settings_screen_about">关于</string>
     <string name="settings_screen_open_source_licenses">开源许可</string>
     <string name="settings_screen_view_licenses_description">查看第三方开源库许可</string>
     <string name="settings_screen_licenses">许可</string>

@@ -21,14 +21,34 @@ internal sealed interface RevealState<out Quote, out Reveal> {
     data object Failed : RevealState<Nothing, Nothing>
 }
 
-internal enum class RevealKind { ANSWER, HINT }
+internal enum class RevealKind {
+    ANSWER,
+    HINT,
+    ;
 
+    /** The action that closes this flow's confirmation step. */
+    fun dismissAction(): QuestionDetailAction =
+        when (this) {
+            ANSWER -> QuestionDetailAction.AnswerFlowDismissed
+            HINT -> QuestionDetailAction.HintFlowDismissed
+        }
+}
+
+/**
+ * State of this question's answer submission.
+ *
+ * [Submitting] and [Done] carry the choice that was actually sent, so the result is always shown
+ * against the option it belongs to even if the user taps another one in the meantime.
+ */
 internal sealed interface SubmissionState {
     data object Idle : SubmissionState
 
-    data object Submitting : SubmissionState
+    data class Submitting(
+        val choiceId: String,
+    ) : SubmissionState
 
     data class Done(
+        val choiceId: String,
         val result: SubmitAnswerResult,
     ) : SubmissionState
 

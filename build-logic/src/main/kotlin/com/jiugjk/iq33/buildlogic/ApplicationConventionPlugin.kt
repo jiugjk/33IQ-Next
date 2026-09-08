@@ -102,7 +102,7 @@ class ApplicationConventionPlugin : Plugin<Project> {
                 implementation(platform(libs.koin.bom))
                 implementation(libs.bundles.koin)
 
-                implementation(libs.bundles.retrofit)
+                implementation(libs.bundles.network)
                 implementation(libs.viewmodel.ktx)
                 implementation(libs.core.splashscreen)
             }

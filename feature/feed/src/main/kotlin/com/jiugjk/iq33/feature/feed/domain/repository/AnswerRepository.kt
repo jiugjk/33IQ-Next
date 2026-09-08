@@ -7,9 +7,10 @@ import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
 
 internal interface AnswerRepository {
+    /** Submits [answer] - the chosen option's id for a choice question - as this account's answer to [questionId]. */
     suspend fun submitAnswer(
         questionId: Long,
-        context: String,
+        answer: String,
     ): Result<SubmitAnswerResult>
 
     suspend fun revealAnswer(questionId: Long): Result<AnswerReveal>
