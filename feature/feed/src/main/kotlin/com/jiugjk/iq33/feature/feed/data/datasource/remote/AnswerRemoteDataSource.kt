@@ -83,7 +83,9 @@ internal class AnswerRemoteDataSource(
 
         return AnswerReveal(
             answer = answerJson.stringOrNull("answer").orEmpty(),
-            explanation = answerJson.stringOrNull("explanation").orEmpty(),
+            // `explanation` is rich-text HTML (raw <p>/<br>/&nbsp; and the like), same as a question's
+            // own qc_context body - it must be converted to plain text rather than rendered as-is.
+            explanation = answerJson.stringOrNull("explanation")?.let(::htmlToPlainText).orEmpty(),
         )
     }
 

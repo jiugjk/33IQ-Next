@@ -201,7 +201,9 @@ internal fun AnswerSection(
         }
     } else {
         Column {
-            AnalysisSection(analysis = fallbackAnalysis)
+            if (fallbackAnalysis != null) {
+                AnalysisSection(analysis = fallbackAnalysis)
+            }
 
             OutlinedButton(
                 onClick = onRevealAnswerClick,
@@ -256,3 +258,13 @@ private fun AnswerQuoteDialog(
 
 @Suppress("MagicNumber")
 private val CorrectColor = Color(0xFF2E7D32)
+
+@Composable
+internal fun CommentsLockedNotice() {
+    Text(
+        text = stringResource(R.string.feed_comments_locked),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = Dimen.spaceL),
+    )
+}
