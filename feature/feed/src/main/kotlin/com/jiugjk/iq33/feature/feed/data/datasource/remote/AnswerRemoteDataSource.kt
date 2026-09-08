@@ -1,6 +1,5 @@
 package com.jiugjk.iq33.feature.feed.data.datasource.remote
 
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
@@ -60,25 +59,18 @@ internal class AnswerRemoteDataSource(
         }
     }
 
-    /** Price quote for revealing the real answer - call before [revealAnswer] to show a confirmation. */
-    suspend fun quoteAnswer(questionId: Long): AnswerQuote {
-        val json = postForJson(IqConstants.PAY_FOR_SHOW_ANSWER_URL, questionIdParams(questionId))
-
-        return AnswerQuote(
-            cost = json.intOrZero("pay"),
-            alreadyPaid = json.stringOrNull("isPaid") == "1",
-        )
-    }
-
     /**
-     * Reveals the real answer and explanation. Mirrors the real app's call sequence - it also calls
-     * `showanswernew` after fetching the content, since that call's role (if any) beyond `showanswertrue`
-     * in actually spending 学识 isn't confirmed and this client would rather match the real sequence
-     * than risk skipping a step the server depends on.
+     * Reveals the real answer and explanation, spending 学识. Calls `showanswertrue`,
+     * `payforshowanswer` and `showanswernew`, **in that exact order** - the real app's own order.
+     * An earlier version of this client called `payforshowanswer` first (to show a cost-confirmation
+     * dialog before spending anything), which broke this flow at runtime ("网络异常" on a real user's
+     * account) - so the exact server-side dependency between these three calls isn't understood well
+     * enough to reorder them again; this client would rather match the real sequence than guess.
      */
     suspend fun revealAnswer(questionId: Long): AnswerReveal {
         val params = questionIdParams(questionId)
         val answerJson = postForJson(IqConstants.SHOW_ANSWER_TRUE_URL, params)
+        val payJson = postForJson(IqConstants.PAY_FOR_SHOW_ANSWER_URL, params)
         postForJson(IqConstants.SHOW_ANSWER_NEW_URL, params)
 
         return AnswerReveal(
@@ -86,6 +78,8 @@ internal class AnswerRemoteDataSource(
             // `explanation` is rich-text HTML (raw <p>/<br>/&nbsp; and the like), same as a question's
             // own qc_context body - it must be converted to plain text rather than rendered as-is.
             explanation = answerJson.stringOrNull("explanation")?.let(::htmlToPlainText).orEmpty(),
+            cost = payJson.intOrZero("pay"),
+            alreadyPaid = payJson.stringOrNull("isPaid") == "1",
         )
     }
 

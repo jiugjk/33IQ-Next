@@ -21,15 +21,12 @@ sealed interface SubmitAnswerResult {
     data object LimitReached : SubmitAnswerResult
 }
 
-/** Price quote for revealing a question's real answer, from 33IQ's own `payforshowanswer` endpoint. */
-data class AnswerQuote(
-    val cost: Int,
-    val alreadyPaid: Boolean,
-)
-
 data class AnswerReveal(
     val answer: String,
     val explanation: String,
+    /** 学识 cost reported by `payforshowanswer` for this reveal - 0 if [alreadyPaid]. */
+    val cost: Int,
+    val alreadyPaid: Boolean,
 )
 
 /**

@@ -1,7 +1,6 @@
 package com.jiugjk.iq33.feature.feed.domain.repository
 
 import com.jiugjk.iq33.feature.base.domain.result.Result
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
@@ -12,8 +11,6 @@ internal interface AnswerRepository {
         questionId: Long,
         context: String,
     ): Result<SubmitAnswerResult>
-
-    suspend fun quoteAnswer(questionId: Long): Result<AnswerQuote>
 
     suspend fun revealAnswer(questionId: Long): Result<AnswerReveal>
 

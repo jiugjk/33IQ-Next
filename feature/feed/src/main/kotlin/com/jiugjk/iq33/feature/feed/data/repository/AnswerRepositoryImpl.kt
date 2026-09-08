@@ -2,7 +2,6 @@ package com.jiugjk.iq33.feature.feed.data.repository
 
 import com.jiugjk.iq33.feature.base.domain.result.Result
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
@@ -22,16 +21,6 @@ internal class AnswerRepositoryImpl(
                 onSuccess = { Result.Success(it) },
                 onFailure = { throwable ->
                     Timber.tag(NETWORK_LOG_TAG).w(throwable, "Failed to submit answer for $questionId")
-                    Result.Failure(throwable)
-                },
-            )
-
-    override suspend fun quoteAnswer(questionId: Long): Result<AnswerQuote> =
-        runCatching { remoteDataSource.quoteAnswer(questionId) }
-            .fold(
-                onSuccess = { Result.Success(it) },
-                onFailure = { throwable ->
-                    Timber.tag(NETWORK_LOG_TAG).w(throwable, "Failed to quote answer price for $questionId")
                     Result.Failure(throwable)
                 },
             )

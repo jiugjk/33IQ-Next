@@ -23,9 +23,10 @@
 
     <string name="feed_reveal_answer_button">查看正确答案（消耗学识）</string>
     <string name="feed_reveal_answer_confirm_title">查看答案</string>
-    <string name="feed_reveal_answer_confirm_message_cost">花费 %1$d 学识查看本题正确答案，查看后将无法再提交作答。是否继续？</string>
-    <string name="feed_reveal_answer_confirm_message_free">您已购买过本题答案，可免费查看。查看后将无法再提交作答。是否继续？</string>
+    <string name="feed_reveal_answer_confirm_message">查看本题正确答案可能会消耗学识（具体数值以官方为准），查看后将无法再提交作答。是否继续？</string>
     <string name="feed_reveal_answer_result_title">正确答案：%1$s</string>
+    <string name="feed_reveal_answer_cost_spent">本次消耗 %1$d 学识</string>
+    <string name="feed_reveal_answer_cost_already_paid">您已购买过本题答案，本次免费查看</string>
 
     <string name="feed_reveal_hint_button">获取提示（消耗学识）</string>
     <string name="feed_reveal_hint_confirm_title">获取提示</string>

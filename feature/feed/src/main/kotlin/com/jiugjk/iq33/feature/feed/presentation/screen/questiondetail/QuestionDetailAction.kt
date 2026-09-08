@@ -1,7 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
@@ -55,16 +54,11 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
             if (state is QuestionDetailUiState.Content) state.copy(submission = SubmissionState.Failed) else state
     }
 
-    object AnswerQuoteStarted : QuestionDetailAction {
+    // Revealing the real answer has no live quote to fetch first (see AnswerRemoteDataSource.revealAnswer's
+    // doc) - tapping "查看正确答案" goes straight to a confirmation step with no network call.
+    object AnswerConfirmRequested : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content) state.copy(answerReveal = RevealState.QuoteLoading) else state
-    }
-
-    class AnswerQuoteReady(
-        private val quote: AnswerQuote,
-    ) : QuestionDetailAction {
-        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content) state.copy(answerReveal = RevealState.QuoteReady(quote)) else state
+            if (state is QuestionDetailUiState.Content) state.copy(answerReveal = RevealState.QuoteReady(Unit)) else state
     }
 
     object AnswerRevealStarted : QuestionDetailAction {
@@ -127,14 +121,37 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
             if (state is QuestionDetailUiState.Content) state.copy(hintReveal = RevealState.Idle) else state
     }
 
+    object PraiseStarted : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
+            if (state is QuestionDetailUiState.Content) state.copy(isPraising = true) else state
+    }
+
+    // /index/praise toggles - a second tap un-praises. It only reports the new total count, not the
+    // direction, so this compares against the previous count to infer whether we just liked or
+    // unliked (rather than assuming "praised" unconditionally, which left the icon stuck lit after
+    // an un-praise).
     class Praised(
         private val newCount: Int,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
             if (state is QuestionDetailUiState.Content) {
-                state.copy(detail = state.detail.copy(upvoteCount = newCount, isUpvoted = true))
+                val isUpvoted =
+                    when {
+                        newCount > state.detail.upvoteCount -> true
+                        newCount < state.detail.upvoteCount -> false
+                        else -> state.detail.isUpvoted
+                    }
+                state.copy(
+                    detail = state.detail.copy(upvoteCount = newCount, isUpvoted = isUpvoted),
+                    isPraising = false,
+                )
             } else {
                 state
             }
+    }
+
+    object PraiseFailed : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
+            if (state is QuestionDetailUiState.Content) state.copy(isPraising = false) else state
     }
 }
