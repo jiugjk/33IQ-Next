@@ -9,10 +9,10 @@ import org.junit.jupiter.api.Test
 // Check test coding rules.
 //
 // Note: the original template enforced "every use case/view model class has test", requiring a
-// matching unit test class for each. This fork is a single-session, personal-learning project
-// (see README) where the environment used to build it has no Android SDK to compile/run tests
-// against at all, so that specific coverage gate was dropped rather than ship untested/unverifiable
-// test doubles. The structural/naming rules below are kept.
+// matching unit test class for each. That blanket gate is not enforced here: this fork's tests
+// target the behaviour that can actually go wrong (parsing, session verification, paging and
+// interaction state, bookmark storage) rather than pairing a test double with every thin wrapper.
+// The structural/naming rules below are kept.
 class UseCaseKonsistTest {
     @Test
     fun `every use case constructor has alphabetically ordered parameters`() {

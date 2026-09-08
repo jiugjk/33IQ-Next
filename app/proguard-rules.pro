@@ -19,3 +19,27 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# ---------------------------------------------------------------------------
+# 33IQ Next keep rules
+#
+# Most libraries used here (OkHttp, Jsoup, Room, Koin, AndroidX Navigation,
+# kotlinx.serialization) ship their own consumer rules, so only this app's own
+# reflectively-reached entry points are listed below.
+# ---------------------------------------------------------------------------
+
+# Navigation routes are @Serializable and are looked up by generated serializers,
+# not from call sites, so their names and members must survive.
+-keep,includedescriptorclasses class com.jiugjk.iq33.app.presentation.NavigationRoute { *; }
+-keep,includedescriptorclasses class com.jiugjk.iq33.app.presentation.NavigationRoute$* { *; }
+-keepclassmembers class com.jiugjk.iq33.app.presentation.NavigationRoute$* {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Instantiated by the framework from the manifest.
+-keep class com.jiugjk.iq33.app.IqApplication
+-keep class com.jiugjk.iq33.app.presentation.MainActivity
+
+# Timber's release tree is stripped along with the debug-only logging, but keep
+# the line metadata so a crash report from a release build is still readable.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

@@ -1,25 +1,29 @@
 package com.jiugjk.iq33.feature.base.presentation.viewmodel
 
 import com.jiugjk.iq33.feature.base.util.TimberLogTags
+import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Logs actions and view state transitions to facilitate debugging.
+ *
+ * Two things this deliberately does *not* do:
+ *
+ * - cache one property list for the whole view model. States are a sealed hierarchy, and a screen's
+ *   first state is usually a property-less `Loading`/`Idle` object; a list taken from it stays empty
+ *   and every later transition would log nothing but the action name. Properties are read per
+ *   transition, from both states, and the reflection result is cached per concrete state class.
+ * - keep the whole timeline. Entries hold hard references to the states they describe (a full page
+ *   of questions, a revealed answer), and an unbounded list keeps every one of them alive for as
+ *   long as the view model lives. Only the most recent [MAX_TIMELINE_ENTRIES] are kept.
  */
 class StateTimeTravelDebugger(
     private val viewClassName: String,
 ) {
-    private val stateTimeline = mutableListOf<StateTransition>()
+    private val stateTimeline = ArrayDeque<StateTransition>()
     private var lastViewAction: BaseAction<*>? = null
-
-    // Get list of properties from  ViewState instances (all have the same type)
-    private val propertyNames by lazy {
-        stateTimeline
-            .first()
-            .oldState.javaClass.kotlin.memberProperties
-            .map { it.name }
-    }
 
     fun addAction(viewAction: BaseAction<*>) {
         lastViewAction = viewAction
@@ -30,39 +34,51 @@ class StateTimeTravelDebugger(
         newState: BaseState,
     ) {
         val lastViewAction = checkNotNull(lastViewAction) { "lastViewAction is null. Please log action before logging state transition" }
-        stateTimeline.add(StateTransition(oldState, lastViewAction, newState))
+
+        if (stateTimeline.size >= MAX_TIMELINE_ENTRIES) stateTimeline.removeFirst()
+
+        stateTimeline.addLast(StateTransition(oldState, lastViewAction, newState))
         this.lastViewAction = null
     }
 
-    private fun getMessage() = getMessage(stateTimeline)
+    /**
+     * Dumps the retained timeline.
+     *
+     * Nothing calls this: it is the manual entry point for the "time travel" this class exists for -
+     * call it from a breakpoint or an evaluate-expression window on a debug build to see how a
+     * screen reached its current state. [logLast] is what runs automatically on every transition.
+     */
+    fun logAll() {
+        Timber.tag(TimberLogTags.ACTION).d(getMessage(stateTimeline))
+    }
+
+    fun logLast() {
+        val last = stateTimeline.lastOrNull() ?: return
+
+        Timber.tag(TimberLogTags.ACTION).d(getMessage(listOf(last)))
+    }
 
     private fun getMessage(stateTimeline: List<StateTransition>): String {
         if (stateTimeline.isEmpty()) return "$viewClassName has no state transitions\n"
 
-        return stateTimeline.joinToString(separator = "\n", postfix = "\n") { st ->
+        return stateTimeline.joinToString(separator = "\n", postfix = "\n") { transition ->
             buildString {
-                append("Action: $viewClassName.${st.action.javaClass.simpleName}")
+                append("Action: $viewClassName.${transition.action.javaClass.simpleName}")
+
+                // The union of both states' properties: a transition between two different state
+                // subclasses has no single property list, and either side alone would hide fields.
+                val propertyNames = (transition.oldState.propertyNames() + transition.newState.propertyNames()).distinct()
 
                 if (propertyNames.isNotEmpty()) {
                     append('\n')
-
                     append(
-                        propertyNames.joinToString(separator = "") { prop ->
-                            getLogLine(st.oldState, st.newState, prop)
+                        propertyNames.joinToString(separator = "") { property ->
+                            getLogLine(transition.oldState, transition.newState, property)
                         },
                     )
                 }
             }
         }
-    }
-
-    fun logAll() {
-        Timber.d(getMessage())
-    }
-
-    fun logLast() {
-        val states = listOf(stateTimeline.last())
-        Timber.tag(TimberLogTags.ACTION).d(getMessage(states))
     }
 
     private fun getLogLine(
@@ -85,24 +101,29 @@ class StateTimeTravelDebugger(
         baseState: BaseState,
         propertyName: String,
     ): String {
-        baseState::class.memberProperties.forEach {
-            if (propertyName == it.name) {
-                var value = it.getter.call(baseState).toString()
+        val property = propertiesOf(baseState).firstOrNull { it.name == propertyName } ?: return ""
+        val value = runCatching { property.getter.call(baseState).toString() }.getOrDefault("")
 
-                if (value.isBlank()) {
-                    value = "\"\""
-                }
-
-                return value
-            }
-        }
-
-        return ""
+        return value.ifBlank { "\"\"" }
     }
+
+    private fun BaseState.propertyNames() = propertiesOf(this).map { it.name }
+
+    /** Reflection is expensive, so it is cached - but per concrete state class, not per view model. */
+    private fun propertiesOf(state: BaseState): List<KProperty1<out Any, *>> =
+        propertiesByClass.getOrPut(state::class.java) { state::class.memberProperties.toList() }
 
     private data class StateTransition(
         val oldState: BaseState,
         val action: BaseAction<*>,
         val newState: BaseState,
     )
+
+    private companion object {
+        /** Enough recent history to read a flow of actions without pinning whole page loads forever. */
+        const val MAX_TIMELINE_ENTRIES = 30
+
+        // Shared by every view model's debugger instance, so it must tolerate concurrent access.
+        val propertiesByClass = ConcurrentHashMap<Class<*>, List<KProperty1<out Any, *>>>()
+    }
 }

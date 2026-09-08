@@ -27,8 +27,7 @@ object NavigationDestinationLogger {
                     if (!bundle.isEmpty) {
                         appendLine("   Arguments:")
                         bundle.keySet().forEach { key ->
-                            val value = getValueFromBundle(bundle, key) ?: "null"
-                            appendLine("\t\t$key: $value")
+                            appendLine("\t\t$key: ${bundle.describe(key)}")
                         }
                     }
                 }
@@ -38,23 +37,33 @@ object NavigationDestinationLogger {
     }
 
     /**
-     * Retrieves a value from Bundle using Android Navigation supported types.
-     * Navigation supports: String, Int, Long, Float, Boolean, Parcelable, Serializable, and their arrays.
+     * Formats one argument by reading the value that is actually stored.
      *
-     * @return String representation of the value, or null if no matching type found
+     * The previous version chained `getInt`, `getLong`, `getBoolean`, ... expecting a mismatched type
+     * to throw. `Bundle` getters do not throw: they catch the class-cast internally and return the
+     * default, so the chain always stopped at `getInt` and logged every `Long` argument (such as a
+     * question id) as `0`.
      */
-    private fun getValueFromBundle(
-        bundle: Bundle,
-        key: String,
-    ): String? =
-        bundle.getString(key)?.let { "\"$it\"" }
-            ?: runCatching { bundle.getInt(key) }.getOrNull()?.toString()
-            ?: runCatching { bundle.getLong(key) }.getOrNull()?.toString()
-            ?: runCatching { bundle.getFloat(key) }.getOrNull()?.toString()
-            ?: runCatching { bundle.getBoolean(key) }.getOrNull()?.toString()
-            ?: bundle.getStringArray(key)?.contentToString()
-            ?: bundle.getIntArray(key)?.contentToString()
-            ?: bundle.getLongArray(key)?.contentToString()
-            ?: bundle.getFloatArray(key)?.contentToString()
-            ?: bundle.getBooleanArray(key)?.contentToString()
+    private fun Bundle.describe(key: String): String =
+        when (val value = valueOf(key)) {
+            null -> "null"
+            is String -> "\"$value\""
+            is Array<*> -> value.contentToString()
+            is IntArray -> value.contentToString()
+            is LongArray -> value.contentToString()
+            is FloatArray -> value.contentToString()
+            is DoubleArray -> value.contentToString()
+            is BooleanArray -> value.contentToString()
+            else -> value.toString()
+        }
+
+    /**
+     * Reads the stored value once, whatever its type.
+     *
+     * `Bundle.get` is deprecated from API 33 on in favour of typed getters, but a generic logger has
+     * no type to ask for - and the typed getters are exactly what cannot be chained safely here. The
+     * deprecated call is kept deliberately, in one place, for a debug-only logger.
+     */
+    @Suppress("DEPRECATION")
+    private fun Bundle.valueOf(key: String): Any? = get(key)
 }

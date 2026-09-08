@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.jiugjk.iq33.app.R
@@ -42,8 +43,15 @@ fun BottomNavigationBar(
                 selected = selectedNavigationIndex == index,
                 onClick = {
                     navController.navigate(item.route) {
-                        popUpTo(0)
-                        restoreState = true // Restores previous state if returning
+                        // Multiple back stacks: saveState is what restoreState restores from - without
+                        // it each tab was rebuilt from scratch, losing its category, paging and scroll
+                        // position. Popping to the graph's own start destination (rather than id 0)
+                        // keeps a single, well-defined back stack behind the tabs.
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
                     }
                 },
                 icon = {

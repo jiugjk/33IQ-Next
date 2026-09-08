@@ -1,35 +1,24 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,17 +26,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorAnim
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndicator
 import com.jiugjk.iq33.feature.feed.R
-import com.jiugjk.iq33.feature.feed.domain.model.Choice
 import com.jiugjk.iq33.feature.feed.domain.model.Comment
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
@@ -63,6 +49,8 @@ fun QuestionDetailScreen(
     val viewModel: QuestionDetailViewModel = koinViewModel()
     val uiState by viewModel.uiStateFlow.collectAsStateWithLifecycle()
 
+    // load() is idempotent for a question that is already loaded, so re-running this effect after a
+    // configuration change keeps the answer/hint state instead of resetting it - see the view model.
     LaunchedEffect(questionId) {
         viewModel.load(questionId)
     }
@@ -90,7 +78,10 @@ fun QuestionDetailScreen(
                         )
                     }
 
-                    IconButton(onClick = { viewModel.onBookmarkClick(currentUiState.detail) }) {
+                    IconButton(
+                        onClick = { viewModel.onEvent(QuestionDetailEvent.BookmarkToggled) },
+                        enabled = !currentUiState.isBookmarkChanging,
+                    ) {
                         Icon(
                             imageVector = if (currentUiState.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                             contentDescription = stringResource(R.string.feed_bookmark_content_description),
@@ -102,37 +93,31 @@ fun QuestionDetailScreen(
 
         when (val currentUiState = uiState) {
             QuestionDetailUiState.Loading -> LoadingIndicator()
-            QuestionDetailUiState.Error -> ErrorAnim()
-            is QuestionDetailUiState.Content ->
-                QuestionDetailContent(
-                    uiState = currentUiState,
-                    onChoiceSelect = viewModel::onChoiceSelected,
-                    onSubmitAnswerClick = { viewModel.onSubmitAnswerClick(questionId, it) },
-                    onRevealAnswerClick = viewModel::onRevealAnswerClick,
-                    onConfirmRevealAnswer = { viewModel.onConfirmRevealAnswer(questionId) },
-                    onDismissAnswerFlow = { viewModel.onDismissRevealFlow(RevealKind.ANSWER) },
-                    onRevealHintClick = { viewModel.onRevealHintClick(questionId) },
-                    onConfirmRevealHint = { viewModel.onConfirmRevealHint(questionId) },
-                    onDismissHintFlow = { viewModel.onDismissRevealFlow(RevealKind.HINT) },
-                    onPraiseClick = { viewModel.onPraiseClick(questionId) },
-                )
+            QuestionDetailUiState.Error -> LoadErrorContent(onRetryClick = { viewModel.onEvent(QuestionDetailEvent.RetryRequested) })
+            is QuestionDetailUiState.Content -> QuestionDetailContent(uiState = currentUiState, onEvent = viewModel::onEvent)
         }
     }
 }
 
-@Suppress("LongParameterList")
+@Composable
+private fun LoadErrorContent(onRetryClick: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        ErrorAnim()
+
+        Button(onClick = onRetryClick, modifier = Modifier.padding(top = Dimen.spaceL)) {
+            Text(stringResource(R.string.feed_retry))
+        }
+    }
+}
+
 @Composable
 private fun QuestionDetailContent(
     uiState: QuestionDetailUiState.Content,
-    onChoiceSelect: (String) -> Unit,
-    onSubmitAnswerClick: (String) -> Unit,
-    onRevealAnswerClick: () -> Unit,
-    onConfirmRevealAnswer: () -> Unit,
-    onDismissAnswerFlow: () -> Unit,
-    onRevealHintClick: () -> Unit,
-    onConfirmRevealHint: () -> Unit,
-    onDismissHintFlow: () -> Unit,
-    onPraiseClick: () -> Unit,
+    onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     val detail = uiState.detail
 
@@ -163,35 +148,35 @@ private fun QuestionDetailContent(
             TagRow(tags = detail.tags)
         }
 
-        StatsRow(detail = detail, isPraising = uiState.isPraising, onPraiseClick = onPraiseClick)
+        StatsRow(detail = detail, isPraising = uiState.isPraising, onPraiseClick = { onEvent(QuestionDetailEvent.PraiseClicked) })
 
-        if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
-            ChoiceAndSubmitSection(
-                detail = detail,
-                uiState = uiState,
-                onChoiceSelect = onChoiceSelect,
-                onSubmitAnswerClick = onSubmitAnswerClick,
+        QuestionBody(bodyText = detail.bodyText, imageUrls = detail.imageUrls, title = detail.title)
+
+        if (uiState.bookmarkFailed) {
+            Text(
+                text = stringResource(R.string.feed_bookmark_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = Dimen.spaceS),
             )
         }
 
-        HintSection(
-            hintReveal = uiState.hintReveal,
-            onRevealHintClick = onRevealHintClick,
-            onConfirmRevealHint = onConfirmRevealHint,
-            onDismissHintFlow = onDismissHintFlow,
-        )
+        if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
+            ChoiceAndSubmitSection(detail = detail, uiState = uiState, onEvent = onEvent)
+        }
+
+        HintSection(hintReveal = uiState.hintReveal, canReveal = uiState.canReveal, onEvent = onEvent)
 
         AnswerSection(
             fallbackAnalysis = detail.analysis,
             answerReveal = uiState.answerReveal,
-            onRevealAnswerClick = onRevealAnswerClick,
-            onConfirmRevealAnswer = onConfirmRevealAnswer,
-            onDismissAnswerFlow = onDismissAnswerFlow,
+            canReveal = uiState.canReveal,
+            onEvent = onEvent,
         )
 
         // 33IQ hides a question's comments (they routinely spoil the answer) until the real answer
         // has been revealed - matches the official app's own behaviour, not a client limitation.
-        if (uiState.answerReveal is RevealState.Revealed) {
+        if (uiState.isAnswerRevealed) {
             CommentSection(comments = detail.comments, commentCount = detail.commentCount)
         } else {
             CommentsLockedNotice()
@@ -203,160 +188,24 @@ private fun QuestionDetailContent(
 private fun ChoiceAndSubmitSection(
     detail: QuestionDetail,
     uiState: QuestionDetailUiState.Content,
-    onChoiceSelect: (String) -> Unit,
-    onSubmitAnswerClick: (String) -> Unit,
+    onEvent: (QuestionDetailEvent) -> Unit,
 ) {
-    // Once the answer has been revealed or already submitted, 33IQ no longer accepts a scored
-    // resubmission - the choice buttons and submit action are disabled to match.
-    val canInteract = uiState.canSubmit && uiState.submission !is SubmissionState.Done
-
+    // Choices stay tappable only while a submission could still be sent: once one is in flight the
+    // selection is frozen, so the result can never be shown next to a different option.
     ChoiceSection(
         choices = detail.choices,
         selectedChoiceId = uiState.selectedChoiceId,
-        enabled = canInteract,
-        onChoiceSelect = onChoiceSelect,
+        enabled = uiState.canSelectChoice,
+        onChoiceSelect = { choiceId -> onEvent(QuestionDetailEvent.ChoiceSelected(choiceId)) },
     )
 
     SubmitAnswerSection(
         selectedChoiceId = uiState.selectedChoiceId,
         submission = uiState.submission,
-        enabled = canInteract,
-        onSubmitAnswerClick = onSubmitAnswerClick,
+        enabled = uiState.canSelectChoice,
+        onSubmitAnswerClick = { choiceId -> onEvent(QuestionDetailEvent.AnswerSubmitted(choiceId)) },
     )
 }
-
-@Composable
-private fun AuthorRow(detail: QuestionDetail) {
-    if (detail.author != null || detail.publishedDate != null) {
-        Text(
-            text =
-                listOfNotNull(detail.author, detail.publishedDate)
-                    .joinToString(" · "),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Dimen.spaceS),
-        )
-    }
-}
-
-@Composable
-private fun TagRow(tags: List<String>) {
-    // A plain fillMaxWidth Row squeezes the last chip into whatever space is left once the others
-    // don't fit, wrapping its text one character per line - scrolling instead keeps every chip intact.
-    Row(
-        modifier =
-            Modifier
-                .padding(top = Dimen.spaceM)
-                .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(Dimen.spaceS),
-    ) {
-        tags.forEach { tag ->
-            SuggestionChip(
-                onClick = { },
-                label = { Text(tag, maxLines = 1) },
-                colors = SuggestionChipDefaults.suggestionChipColors(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatsRow(
-    detail: QuestionDetail,
-    isPraising: Boolean,
-    onPraiseClick: () -> Unit,
-) {
-    Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Dimen.spaceL),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // /index/praise toggles (点赞/取消点赞) - only guard against a double-tap firing two
-            // overlapping requests, don't disable once liked.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier =
-                    Modifier
-                        .clip(CircleShape)
-                        .clickable(enabled = !isPraising, onClick = onPraiseClick)
-                        .padding(horizontal = Dimen.spaceS, vertical = Dimen.spaceS),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ThumbUp,
-                    contentDescription = stringResource(R.string.feed_praise_content_description),
-                    tint = if (detail.isUpvoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = detail.upvoteCount.toString(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (detail.isUpvoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = Dimen.spaceS),
-                )
-            }
-
-            Icon(
-                imageVector = Icons.Default.ChatBubbleOutline,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(detail.commentCount.toString(), style = MaterialTheme.typography.bodyMedium)
-
-            Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(detail.collectCount.toString(), style = MaterialTheme.typography.bodyMedium)
-        }
-
-        if (detail.rightRatio != null) {
-            Text(
-                text = stringResource(R.string.feed_right_ratio, detail.rightRatio),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimen.spaceS),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ChoiceSection(
-    choices: List<Choice>,
-    selectedChoiceId: String?,
-    enabled: Boolean,
-    onChoiceSelect: (String) -> Unit,
-) {
-    Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
-        choices.forEach { choice ->
-            val isSelected = choice.id == selectedChoiceId
-
-            OutlinedButton(
-                onClick = { onChoiceSelect(choice.id) },
-                enabled = enabled,
-                colors =
-                    if (isSelected) {
-                        ButtonDefaults.outlinedButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    } else {
-                        ButtonDefaults.outlinedButtonColors()
-                    },
-                border =
-                    if (isSelected) {
-                        BorderStroke(SelectedChoiceBorderWidth, MaterialTheme.colorScheme.primary)
-                    } else {
-                        ButtonDefaults.outlinedButtonBorder(enabled)
-                    },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = Dimen.spaceS),
-            ) {
-                Text(choice.text, modifier = Modifier.fillMaxWidth())
-            }
-        }
-    }
-}
-
-private val SelectedChoiceBorderWidth = 2.dp
 
 @Composable
 internal fun AnalysisSection(analysis: String) {

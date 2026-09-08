@@ -10,16 +10,26 @@ import okhttp3.HttpUrl
  * A [CookieJar] that persists cookies (session id, remember-me token, ...) to [SharedPreferences] so
  * a logged-in session survives process death.
  *
- * This app only ever talks to a single host ([IqConstants.BASE_URL]), so cookies are kept in a flat,
- * host-agnostic map keyed by cookie name rather than a full multi-host cookie store.
+ * Cookies are stored under their RFC 6265 identity - name + domain + path - rather than name alone,
+ * so two cookies that differ only by path can coexist instead of overwriting each other. Reads go
+ * through OkHttp's own [Cookie.matches], which applies the domain, path and Secure rules against the
+ * request URL; the jar never sends a cookie to a URL it was not scoped to, even if a redirect leaves
+ * the host this app normally talks to.
+ *
+ * Every read, mutation and persist runs under [lock]. OkHttp calls a jar from whichever IO thread is
+ * running a call, so overlapping requests would otherwise iterate the map while another thread
+ * mutates it, and interleave a "mutate, then persist" pair into a stale snapshot.
  */
 class PersistentCookieJar(
     private val preferences: SharedPreferences,
 ) : CookieJar {
-    private val cookiesByName = mutableMapOf<String, Cookie>()
+    private val lock = Any()
+
+    // Guarded by lock.
+    private val cookies = mutableMapOf<CookieKey, Cookie>()
 
     init {
-        restore()
+        synchronized(lock) { restore() }
     }
 
     override fun saveFromResponse(
@@ -28,54 +38,43 @@ class PersistentCookieJar(
     ) {
         if (cookies.isEmpty()) return
 
-        cookies.forEach { cookie ->
-            if (cookie.expiresAt <= System.currentTimeMillis()) {
-                cookiesByName.remove(cookie.name)
-            } else {
-                cookiesByName[cookie.name] = cookie
+        synchronized(lock) {
+            cookies.forEach { cookie ->
+                if (cookie.expiresAt <= System.currentTimeMillis()) {
+                    this.cookies.remove(cookie.key())
+                } else {
+                    this.cookies[cookie.key()] = cookie
+                }
             }
-        }
 
-        persist()
+            persist()
+        }
     }
 
-    override fun loadForRequest(url: HttpUrl): List<Cookie> = cookiesByName.values.filter { it.expiresAt > System.currentTimeMillis() }
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        val now = System.currentTimeMillis()
 
-    fun hasCookies(): Boolean = cookiesByName.isNotEmpty()
-
-    /** Merges cookies parsed from a `document.cookie`-style `"name=value; name2=value2"` string. */
-    fun setCookiesFromRawHeader(rawCookieHeader: String) {
-        rawCookieHeader
-            .split(";")
-            .map { pair -> pair.trim().split("=", limit = 2) }
-            .filter { parts -> parts.size == 2 && parts[0].isNotBlank() }
-            .map { parts ->
-                Cookie
-                    .Builder()
-                    .name(parts[0])
-                    .value(parts[1])
-                    .domain(HOST)
-                    .path("/")
-                    // Session cookies captured from the WebView have no explicit expiry;
-                    // keep them for a year so the persisted session survives restarts.
-                    .expiresAt(System.currentTimeMillis() + ONE_YEAR_MILLIS)
-                    .build()
-            }.forEach { cookie -> cookiesByName[cookie.name] = cookie }
-
-        persist()
+        // Snapshot inside the lock so the returned list can never alias the live map.
+        return synchronized(lock) {
+            cookies.values.filter { cookie -> cookie.expiresAt > now && cookie.matches(url) }
+        }
     }
 
     fun clear() {
-        cookiesByName.clear()
-        preferences.edit { remove(PREF_KEY_COOKIES) }
+        synchronized(lock) {
+            cookies.clear()
+            preferences.edit { remove(PREF_KEY_COOKIES) }
+        }
     }
 
+    // Must be called while holding lock.
     private fun persist() {
-        val serialized = cookiesByName.values.joinToString(separator = COOKIE_SEPARATOR) { it.toString() }
+        val serialized = cookies.values.joinToString(separator = COOKIE_SEPARATOR) { it.toString() }
 
         preferences.edit { putString(PREF_KEY_COOKIES, serialized) }
     }
 
+    // Must be called while holding lock.
     private fun restore() {
         val serialized = preferences.getString(PREF_KEY_COOKIES, null) ?: return
         val url =
@@ -84,18 +83,29 @@ class PersistentCookieJar(
                 .scheme("https")
                 .host(HOST)
                 .build()
+        val now = System.currentTimeMillis()
 
         serialized
             .split(COOKIE_SEPARATOR)
             .filter { it.isNotBlank() }
             .mapNotNull { cookieString -> runCatching { Cookie.parse(url, cookieString) }.getOrNull() }
-            .forEach { cookie -> cookiesByName[cookie.name] = cookie }
+            // A cookie that expired while the app was closed is not a session - dropping it here
+            // keeps an expired jar from looking like a live one.
+            .filter { cookie -> cookie.expiresAt > now }
+            .forEach { cookie -> cookies[cookie.key()] = cookie }
     }
+
+    private fun Cookie.key() = CookieKey(name = name, domain = domain, path = path)
+
+    private data class CookieKey(
+        val name: String,
+        val domain: String,
+        val path: String,
+    )
 
     private companion object {
         const val HOST = "www.33iq.com"
         const val PREF_KEY_COOKIES = "persisted_cookies"
         const val COOKIE_SEPARATOR = "\n"
-        const val ONE_YEAR_MILLIS = 365L * 24 * 60 * 60 * 1000
     }
 }

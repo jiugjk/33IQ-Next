@@ -13,62 +13,52 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.feed.R
-import kotlinx.coroutines.delay
 
+/**
+ * A fully controlled search field: [query] is the only source of truth and every keystroke goes back
+ * out through [onQueryChange].
+ *
+ * It deliberately keeps no copy of the text and does no debouncing of its own. A local copy is lost
+ * whenever the field leaves composition, and the debounce that used to live here then submitted that
+ * lost (empty) text as a real query - clearing results the caller still wanted.
+ */
 @Composable
 fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
-    onSearch: (String) -> Unit,
     modifier: Modifier = Modifier,
     autoFocus: Boolean = false,
 ) {
-    val delayBeforeSubmittingQuery = 300L
-
-    var textFieldValue by remember(query) { mutableStateOf(TextFieldValue(query)) }
     val focusRequester = remember { FocusRequester() }
-    val currentOnQueryChange by rememberUpdatedState(onQueryChange)
-    val currentOnSearch by rememberUpdatedState(onSearch)
-
-    LaunchedEffect(textFieldValue.text) {
-        delay(delayBeforeSubmittingQuery)
-        currentOnQueryChange(textFieldValue.text)
-        currentOnSearch(textFieldValue.text)
-    }
 
     LaunchedEffect(autoFocus) {
         if (autoFocus) focusRequester.requestFocus()
     }
 
     OutlinedTextField(
-        value = textFieldValue,
+        value = query,
         modifier =
             modifier
                 .fillMaxWidth()
                 .padding(Dimen.spaceM)
                 .focusRequester(focusRequester),
-        onValueChange = { newValue -> textFieldValue = newValue },
+        onValueChange = onQueryChange,
         placeholder = { Text(stringResource(R.string.feed_search_placeholder)) },
         leadingIcon = {
             Icon(imageVector = Icons.Default.Search, contentDescription = null)
         },
         trailingIcon =
-            if (textFieldValue.text.isNotEmpty()) {
+            if (query.isNotEmpty()) {
                 {
-                    IconButton(onClick = { textFieldValue = TextFieldValue("") }) {
+                    IconButton(onClick = { onQueryChange("") }) {
                         Icon(imageVector = Icons.Default.Clear, contentDescription = null)
                     }
                 }
@@ -87,5 +77,5 @@ fun SearchBar(
 @Preview
 @Composable
 private fun SearchBarPreview() {
-    SearchBar(query = "", onQueryChange = { }, onSearch = { })
+    SearchBar(query = "", onQueryChange = { })
 }

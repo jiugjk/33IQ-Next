@@ -113,7 +113,7 @@ private fun LoginForm(
 
         if (uiState is LoginUiState.Failure) {
             Text(
-                text = uiState.message,
+                text = uiState.errorMessage(),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = Dimen.spaceS),
@@ -137,6 +137,22 @@ private fun LoginForm(
         }
     }
 }
+
+/** Maps the typed failure reason to this screen's localised copy - see [LoginFailureReason]. */
+@Composable
+private fun LoginUiState.Failure.errorMessage(): String =
+    when (reason) {
+        LoginFailureReason.MISSING_CREDENTIALS -> stringResource(R.string.login_error_missing_credentials)
+        LoginFailureReason.NETWORK_UNAVAILABLE -> stringResource(R.string.login_error_network)
+        LoginFailureReason.UNKNOWN_ACCOUNT -> stringResource(R.string.login_error_unknown_account)
+        LoginFailureReason.WRONG_PASSWORD -> stringResource(R.string.login_error_wrong_password)
+        LoginFailureReason.ACCOUNT_LOCKED -> stringResource(R.string.login_error_account_locked)
+        LoginFailureReason.NOT_VERIFIED -> stringResource(R.string.login_error_not_verified)
+        LoginFailureReason.UNKNOWN ->
+            serverStatus
+                ?.let { status -> stringResource(R.string.login_error_unknown_status, status) }
+                ?: stringResource(R.string.login_error_unknown)
+    }
 
 @Preview
 @Composable

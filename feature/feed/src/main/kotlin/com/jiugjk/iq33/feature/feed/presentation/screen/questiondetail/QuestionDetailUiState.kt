@@ -27,8 +27,33 @@ internal sealed interface QuestionDetailUiState : BaseState {
         val hintReveal: RevealState<HintQuote, HintReveal> = RevealState.Idle,
         /** Guards against a double-tap firing two overlapping praise requests. */
         val isPraising: Boolean = false,
+        /** Guards against overlapping bookmark writes for the same question. */
+        val isBookmarkChanging: Boolean = false,
+        /** A local bookmark read/write failed; the question itself is still usable. */
+        val bookmarkFailed: Boolean = false,
     ) : QuestionDetailUiState {
-        /** Once the real answer has been revealed, 33IQ no longer accepts a scored submission for it. */
-        val canSubmit: Boolean get() = answerReveal !is RevealState.Revealed
+        val isAnswerRevealed: Boolean get() = answerReveal is RevealState.Revealed
+
+        val isSubmitting: Boolean get() = submission is SubmissionState.Submitting
+
+        /**
+         * 33IQ no longer accepts a scored submission once the real answer has been revealed, and a
+         * reveal that is already under way (confirm dialog open, request in flight) is treated the
+         * same - otherwise a submission and a reveal could both land on the same question.
+         */
+        val canSubmit: Boolean
+            get() =
+                answerReveal is RevealState.Idle ||
+                    answerReveal is RevealState.Failed
+
+        /**
+         * Choices are frozen while a submission is in flight or finished: a result that comes back
+         * for choice A must never be displayed next to a freshly selected choice B.
+         */
+        val canSelectChoice: Boolean
+            get() = canSubmit && submission !is SubmissionState.Submitting && submission !is SubmissionState.Done
+
+        /** Revealing the answer or buying a hint is mutually exclusive with an in-flight submission. */
+        val canReveal: Boolean get() = !isSubmitting
     }
 }

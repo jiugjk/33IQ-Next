@@ -1,7 +1,10 @@
 package com.jiugjk.iq33.library.network
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -11,9 +14,14 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
 import java.net.URLEncoder
+import kotlin.coroutines.coroutineContext
 
-/** Thrown when 33IQ redirects a request to its login page instead of serving the requested content. */
-class IqLoginRequiredException : IOException("33IQ 要求登录后才能查看该内容，或触发了反爬虫验证")
+/**
+ * Thrown when 33IQ redirects a request to its login page instead of serving the requested content.
+ *
+ * The message is a diagnostic, not UI copy - callers map this type to their own localised text.
+ */
+class IqLoginRequiredException : IOException("33IQ served its login wall instead of the requested content")
 
 /**
  * Thin HTTP client around [OkHttpClient] used to fetch and parse 33IQ's server-rendered pages.
@@ -21,60 +29,46 @@ class IqLoginRequiredException : IOException("33IQ 要求登录后才能查看�
  * 33IQ has no public JSON API, so this app works by requesting the same HTML pages a mobile browser
  * would get and parsing them with Jsoup. The site's pages are served as GBK (not UTF-8), which is
  * handled explicitly here since OkHttp/Jsoup both default to UTF-8.
+ *
+ * Every call is bound to its coroutine: cancelling the caller aborts the HTTP call instead of
+ * leaving it to run to completion on an IO thread with nobody waiting for - or wanting - its result.
  */
 class IqHtmlClient(
     private val okHttpClient: OkHttpClient,
 ) {
-    suspend fun get(url: String): Document =
-        withContext(Dispatchers.IO) {
-            val request =
-                Request
-                    .Builder()
-                    .url(url)
-                    .get()
-                    .build()
+    suspend fun get(url: String): Document {
+        val request =
+            Request
+                .Builder()
+                .url(url)
+                .get()
+                .build()
 
-            execute(request)
+        return execute(request) { response ->
+            val html = decodeGbk(response.body.bytes())
+            val document = Jsoup.parse(html, response.request.url.toString())
+
+            if (isLoginWall(document)) throw IqLoginRequiredException()
+
+            document
         }
-
-    suspend fun postForm(
-        url: String,
-        params: Map<String, String>,
-    ): Document =
-        withContext(Dispatchers.IO) {
-            val encodedBody = params.entries.joinToString("&") { (key, value) -> "$key=${encodeGbk(value)}" }
-            val body = encodedBody.toRequestBody(FORM_MEDIA_TYPE)
-            val request =
-                Request
-                    .Builder()
-                    .url(url)
-                    .post(body)
-                    .build()
-
-            execute(request)
-        }
+    }
 
     /** Raw text response (e.g. for the JSON login endpoint) rather than a parsed HTML [Document]. */
     suspend fun postFormForText(
         url: String,
         params: Map<String, String>,
-    ): String =
-        withContext(Dispatchers.IO) {
-            val encodedBody = params.entries.joinToString("&") { (key, value) -> "$key=${encodeGbk(value)}" }
-            val body = encodedBody.toRequestBody(FORM_MEDIA_TYPE)
-            val request =
-                Request
-                    .Builder()
-                    .url(url)
-                    .post(body)
-                    .build()
+    ): String {
+        val encodedBody = params.entries.joinToString("&") { (key, value) -> "$key=${encodeGbk(value)}" }
+        val request =
+            Request
+                .Builder()
+                .url(url)
+                .post(encodedBody.toRequestBody(FORM_MEDIA_TYPE))
+                .build()
 
-            okHttpClient.newCall(request).execute().use { response ->
-                response.checkSuccessful()
-
-                decodeGbk(response.body.bytes())
-            }
-        }
+        return execute(request) { response -> decodeGbk(response.body.bytes()) }
+    }
 
     /**
      * Raw text response for 33IQ's app-facing JSON endpoints (e.g. `/question/<id>.html?p=3`,
@@ -82,38 +76,47 @@ class IqHtmlClient(
      * right `p` query parameter (confirmed from a real captured app session, value differs per
      * endpoint) flips the response to plain JSON.
      */
-    suspend fun getText(url: String): String =
-        withContext(Dispatchers.IO) {
-            val request =
-                Request
-                    .Builder()
-                    .url(url)
-                    .get()
-                    .build()
+    suspend fun getText(url: String): String {
+        val request =
+            Request
+                .Builder()
+                .url(url)
+                .get()
+                .build()
 
-            okHttpClient.newCall(request).execute().use { response ->
-                response.checkSuccessful()
+        return execute(request) { response ->
+            val text = decodeGbk(response.body.bytes())
 
-                val text = decodeGbk(response.body.bytes())
+            if (isLoginWallText(text)) throw IqLoginRequiredException()
 
-                if (isLoginWallText(text)) throw IqLoginRequiredException()
-
-                text
-            }
-        }
-
-    private fun execute(request: Request): Document {
-        okHttpClient.newCall(request).execute().use { response ->
-            response.checkSuccessful()
-
-            val html = decodeGbk(response.body.bytes())
-            val document = Jsoup.parse(html, response.request.url.toString())
-
-            if (isLoginWall(document)) throw IqLoginRequiredException()
-
-            return document
+            text
         }
     }
+
+    private suspend fun <T> execute(
+        request: Request,
+        readResponse: (Response) -> T,
+    ): T {
+        coroutineContext.ensureActive()
+
+        return withContext(Dispatchers.IO) {
+            val call = okHttpClient.newCall(request)
+            val cancellation = coroutineContext[Job]?.bindCancellationTo(call)
+
+            try {
+                call.execute().use { response ->
+                    response.checkSuccessful()
+
+                    readResponse(response)
+                }
+            } finally {
+                cancellation?.dispose()
+            }
+        }
+    }
+
+    /** Cancels [call] as soon as this job completes; cancelling a finished call is a no-op. */
+    private fun Job.bindCancellationTo(call: Call) = invokeOnCompletion { call.cancel() }
 
     private fun isLoginWall(document: Document): Boolean = document.title().contains("用户登录") || document.selectFirst(".login-card") != null
 

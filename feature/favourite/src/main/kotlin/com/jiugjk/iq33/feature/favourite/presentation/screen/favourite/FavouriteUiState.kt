@@ -12,6 +12,10 @@ internal sealed interface FavouriteUiState : BaseState {
     @Immutable
     data object Empty : FavouriteUiState
 
+    /** Local storage could not be read - the list is unavailable rather than empty. */
+    @Immutable
+    data object Error : FavouriteUiState
+
     @Immutable
     data class Content(
         val savedQuestions: List<SavedQuestion>,

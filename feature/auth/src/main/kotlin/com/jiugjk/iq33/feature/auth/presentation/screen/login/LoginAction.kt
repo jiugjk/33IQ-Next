@@ -12,8 +12,9 @@ internal sealed interface LoginAction : BaseAction<LoginUiState> {
     }
 
     class LoginFailure(
-        private val message: String,
+        private val reason: LoginFailureReason,
+        private val serverStatus: String? = null,
     ) : LoginAction {
-        override fun reduce(state: LoginUiState) = LoginUiState.Failure(message)
+        override fun reduce(state: LoginUiState) = LoginUiState.Failure(reason, serverStatus)
     }
 }

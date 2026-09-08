@@ -18,8 +18,6 @@ class LibraryConventionPlugin : Plugin<Project> {
                 apply<KotlinConventionPlugin>()
                 apply<TestConventionPlugin>()
                 apply<AboutLibrariesPlugin>()
-                apply("com.google.devtools.ksp")
-                apply("org.jetbrains.kotlin.plugin.compose")
             }
 
             extensions.configure<LibraryExtension> {
@@ -45,7 +43,9 @@ class LibraryConventionPlugin : Plugin<Project> {
                 buildFeatures {
                     viewBinding = true
                     buildConfig = true
-                    compose = true
+                    // Compose is NOT enabled here. These are plain library modules (networking,
+                    // test helpers) with no @Composable code; enabling it forced every one of them
+                    // to depend on the whole Compose runtime just to satisfy the compiler plugin.
                 }
 
                 compileOptions {

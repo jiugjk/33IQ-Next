@@ -16,7 +16,6 @@ package com.jiugjk.iq33.library.network
  */
 object IqConstants {
     const val BASE_URL = "https://www.33iq.com"
-    const val ASSET_HOST = "https://a.33iq.com"
 
     // The site's server-rendered HTML is served as GBK, not UTF-8.
     const val PAGE_CHARSET = "GBK"
@@ -25,7 +24,6 @@ object IqConstants {
     const val SEARCH_URL = "$BASE_URL/index/search"
     const val QUESTION_LIST_URL = "$BASE_URL/question/"
     const val QUESTION_DETAIL_URL = "$BASE_URL/question"
-    const val PROFILE_URL = "$BASE_URL/showprofile/id-%s.html"
 
     // Confirmed live: GET $QUESTION_DETAIL_URL/<id>.html?p=3 returns a JSON array (not HTML) with
     // the full question payload (choices, tags, stats, ...). See QuestionJsonParser.
@@ -70,4 +68,7 @@ object IqConstants {
     const val USER_AGENT =
         "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) " +
             "Chrome/126.0.0.0 Mobile Safari/537.36 33iqNext/1.0"
+
+    /** The page a browser renders for a question - what a share link must point at, not the JSON API URL. */
+    fun questionPageUrl(id: Long): String = "$QUESTION_DETAIL_URL/$id.html"
 }

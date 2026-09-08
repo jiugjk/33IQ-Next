@@ -5,7 +5,6 @@ import com.jiugjk.iq33.buildlogic.config.JavaBuildConfig
 import com.jiugjk.iq33.buildlogic.ext.debugImplementation
 import com.jiugjk.iq33.buildlogic.ext.excludeLicenseAndMetaFiles
 import com.jiugjk.iq33.buildlogic.ext.implementation
-import com.jiugjk.iq33.buildlogic.ext.ksp
 import com.jiugjk.iq33.buildlogic.ext.libs
 import com.jiugjk.iq33.buildlogic.ext.testImplementation
 import com.jiugjk.iq33.buildlogic.ext.testRuntimeOnly
@@ -26,7 +25,6 @@ class FeatureConventionPlugin : Plugin<Project> {
                 apply<KotlinConventionPlugin>()
                 apply<TestConventionPlugin>()
                 apply<AboutLibrariesPlugin>()
-                apply("com.google.devtools.ksp")
                 apply("org.jetbrains.kotlin.plugin.compose")
             }
 
@@ -94,12 +92,12 @@ class FeatureConventionPlugin : Plugin<Project> {
                 implementation(platform(libs.koin.bom))
                 implementation(libs.bundles.koin)
 
-                implementation(libs.bundles.retrofit)
+                implementation(libs.bundles.network)
                 implementation(libs.viewmodel.ktx)
 
-                // Room
-                implementation(libs.bundles.room)
-                ksp(libs.room.compiler)
+                // Room is NOT applied here: only :feature:favourite has a database, and applying the
+                // KSP processor to every feature module costs an annotation-processing round in each
+                // of them for nothing. Modules that need Room apply the room convention plugin.
 
                 // Test dependencies
                 testImplementation(project(":library:test-utils"))

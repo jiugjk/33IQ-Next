@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination
@@ -29,8 +31,19 @@ fun MainScreen(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
 
     if (BuildConfig.DEBUG) {
-        addOnDestinationChangedListener(navController)
+        // DisposableEffect, not a bare call in the composable body: the body runs again on every
+        // recomposition, which added another listener each time and never removed any of them.
+        DisposableEffect(navController) {
+            val listener = destinationLoggingListener()
+            navController.addOnDestinationChangedListener(listener)
+
+            onDispose { navController.removeOnDestinationChangedListener(listener) }
+        }
     }
+
+    // The graph is a plain object graph, not composition state - rebuilding it on every
+    // recomposition is pure work with no effect on what is displayed.
+    val navGraph = remember(navController) { navController.buildAppNavGraph() }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -38,7 +51,7 @@ fun MainScreen(modifier: Modifier = Modifier) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            graph = navController.buildAppNavGraph(),
+            graph = navGraph,
             modifier = Modifier.padding(innerPadding),
         )
     }
@@ -102,16 +115,7 @@ private fun NavController.buildAppNavGraph(): NavGraph =
         }
     }
 
-private fun addOnDestinationChangedListener(navController: NavController) {
-    navController.addOnDestinationChangedListener(
-        object : NavController.OnDestinationChangedListener {
-            override fun onDestinationChanged(
-                controller: NavController,
-                destination: NavDestination,
-                arguments: Bundle?,
-            ) {
-                NavigationDestinationLogger.logDestinationChange(destination, arguments)
-            }
-        },
-    )
-}
+private fun destinationLoggingListener() =
+    NavController.OnDestinationChangedListener { _: NavController, destination: NavDestination, arguments: Bundle? ->
+        NavigationDestinationLogger.logDestinationChange(destination, arguments)
+    }

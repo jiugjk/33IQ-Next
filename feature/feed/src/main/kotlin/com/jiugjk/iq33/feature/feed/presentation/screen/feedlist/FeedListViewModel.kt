@@ -10,17 +10,31 @@ import kotlinx.coroutines.launch
 
 internal class FeedListViewModel(
     private val getQuestionListUseCase: GetQuestionListUseCase,
-) : BaseViewModel<FeedListUiState, FeedListAction>(FeedListUiState.Loading) {
+) : BaseViewModel<FeedListUiState, FeedListAction>(FeedListUiState.Loading()) {
     private var loadJob: Job? = null
+    private var loadMoreJob: Job? = null
+
+    /** Single entry point for the screen's interactions - see [FeedListEvent]. */
+    fun onEvent(event: FeedListEvent) {
+        when (event) {
+            is FeedListEvent.CategorySelected -> selectCategory(event.category)
+            FeedListEvent.Refreshed -> selectCategory(uiStateFlow.value.selectedCategory)
+            FeedListEvent.EndReached -> loadMore()
+            FeedListEvent.LoadMoreRetried -> retryLoadMore()
+        }
+    }
 
     fun onInit() {
-        if (uiStateFlow.value == FeedListUiState.Loading) {
+        if (uiStateFlow.value is FeedListUiState.Loading) {
             selectCategory(Category.ALL)
         }
     }
 
-    fun selectCategory(category: Category) {
+    private fun selectCategory(category: Category) {
+        // Both jobs belong to the category being replaced: a first page and an in-flight next page
+        // must be abandoned together, or the old category's page 2 lands in the new category's list.
         loadJob?.cancel()
+        loadMoreJob?.cancel()
 
         sendAction(FeedListAction.LoadStart(category))
 
@@ -28,36 +42,45 @@ internal class FeedListViewModel(
             viewModelScope.launch {
                 when (val result = getQuestionListUseCase(category, PAGE_FIRST)) {
                     is Result.Success -> sendAction(FeedListAction.LoadSuccess(category, result.value))
-                    is Result.Failure -> sendAction(FeedListAction.LoadFailure)
+                    is Result.Failure -> sendAction(FeedListAction.LoadFailure(category))
                 }
             }
     }
 
-    fun onRefresh() {
-        val currentState = uiStateFlow.value
+    private fun loadMore() {
+        val currentState = uiStateFlow.value as? FeedListUiState.Content ?: return
 
-        if (currentState is FeedListUiState.Content) {
-            selectCategory(currentState.selectedCategory)
-        }
+        // A failed page waits for an explicit retry: the scroll trigger sits at the bottom of the
+        // list, so auto-retrying would hammer a failing endpoint for as long as the user stays there.
+        if (currentState.isLoadingMore || !currentState.canLoadMore || currentState.loadMoreFailed) return
+
+        startLoadMore(currentState)
     }
 
-    fun loadMore() {
-        val currentState = uiStateFlow.value
+    /** Retries the page whose request failed, without discarding what is already listed. */
+    private fun retryLoadMore() {
+        val currentState = uiStateFlow.value as? FeedListUiState.Content ?: return
 
-        if (currentState !is FeedListUiState.Content || currentState.isLoadingMore || !currentState.canLoadMore) {
-            return
-        }
+        if (!currentState.loadMoreFailed || currentState.isLoadingMore) return
 
-        sendAction(FeedListAction.LoadMoreStart)
+        startLoadMore(currentState)
+    }
 
-        viewModelScope.launch {
-            val nextPage = currentState.page + 1
+    private fun startLoadMore(currentState: FeedListUiState.Content) {
+        if (loadMoreJob?.isActive == true) return
 
-            when (val result = getQuestionListUseCase(currentState.selectedCategory, nextPage)) {
-                is Result.Success -> sendAction(FeedListAction.LoadMoreSuccess(nextPage, result.value))
-                is Result.Failure -> sendAction(FeedListAction.LoadMoreFailure)
+        val category = currentState.selectedCategory
+        val nextPage = currentState.page + 1
+
+        sendAction(FeedListAction.LoadMoreStart(category))
+
+        loadMoreJob =
+            viewModelScope.launch {
+                when (val result = getQuestionListUseCase(category, nextPage)) {
+                    is Result.Success -> sendAction(FeedListAction.LoadMoreSuccess(category, nextPage, result.value))
+                    is Result.Failure -> sendAction(FeedListAction.LoadMoreFailure(category))
+                }
             }
-        }
     }
 
     private companion object {

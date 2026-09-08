@@ -1,17 +1,22 @@
 package com.jiugjk.iq33.feature.feed.domain.model
 
-/** Result of submitting an answer via 33IQ's real submission endpoint (see `SUBMIT_ANSWER_URL`). */
+/**
+ * Result of submitting an answer via 33IQ's real submission endpoint (see `SUBMIT_ANSWER_URL`).
+ *
+ * The 学识 figures are nullable throughout: 33IQ does not always report them, and "not reported" is
+ * shown as such rather than as a change of 0.
+ */
 sealed interface SubmitAnswerResult {
     /** Correct. [scoreDelta] is the 学识 gained, [myScore] the account's new total (both server-reported). */
     data class Correct(
-        val scoreDelta: Int,
-        val myScore: Int,
+        val scoreDelta: Int?,
+        val myScore: Int?,
     ) : SubmitAnswerResult
 
     /** Wrong. [scoreDelta] is the 学识 lost (server-reported, zero or negative), [myScore] the new total. */
     data class Wrong(
-        val scoreDelta: Int,
-        val myScore: Int,
+        val scoreDelta: Int?,
+        val myScore: Int?,
     ) : SubmitAnswerResult
 
     /** 33IQ rejected the submission because this account already answered this question before. */
@@ -24,19 +29,24 @@ sealed interface SubmitAnswerResult {
 data class AnswerReveal(
     val answer: String,
     val explanation: String,
-    /** 学识 cost reported by `payforshowanswer` for this reveal - 0 if [alreadyPaid]. */
-    val cost: Int,
+    /**
+     * 学识 cost reported by `payforshowanswer` for this reveal - 0 if [alreadyPaid], and null when
+     * the server did not report a parseable amount (shown as unknown, never as free).
+     */
+    val cost: Int?,
     val alreadyPaid: Boolean,
 )
 
 /**
  * Price quote for a paid hint, from 33IQ's own `showtipsbuy` endpoint - it reports all three of the
  * account's possible prices, letting the UI show the 会员/终身会员 discount even before purchase.
+ * The per-tier prices are nullable (33IQ may omit a tier); [effectiveCost] never is, because it is
+ * the amount the user is asked to confirm spending.
  */
 data class HintQuote(
-    val normalCost: Int,
-    val memberCost: Int,
-    val lifeMemberCost: Int,
+    val normalCost: Int?,
+    val memberCost: Int?,
+    val lifeMemberCost: Int?,
     /** Which of the three costs actually applies to the current account. */
     val effectiveCost: Int,
 )
