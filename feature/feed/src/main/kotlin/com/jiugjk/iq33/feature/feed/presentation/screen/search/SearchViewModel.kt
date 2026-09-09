@@ -44,9 +44,8 @@ internal class SearchViewModel(
 
     fun onEndReached() {
         val state = uiStateFlow.value
-        val content = state.results as? SearchResults.Content ?: return
 
-        if (state.isLoadingMore || !state.canLoadMore || state.loadMoreFailed || content.questions.isEmpty()) return
+        if (!state.canStartLoadMore) return
 
         startLoadMore(state)
     }
@@ -54,7 +53,7 @@ internal class SearchViewModel(
     fun onLoadMoreRetry() {
         val state = uiStateFlow.value
 
-        if (!state.loadMoreFailed || state.isLoadingMore || state.results !is SearchResults.Content) return
+        if (!state.canRetryLoadMore) return
 
         startLoadMore(state)
     }

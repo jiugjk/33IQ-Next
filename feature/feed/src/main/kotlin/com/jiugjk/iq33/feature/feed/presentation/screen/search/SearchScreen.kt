@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -78,11 +79,14 @@ fun SearchScreen(
                 is SearchResults.Content ->
                     SearchResultList(
                         questions = results.questions,
-                        isLoadingMore = uiState.isLoadingMore,
-                        loadMoreFailed = uiState.loadMoreFailed,
+                        paging =
+                            SearchPaging(
+                                isLoadingMore = uiState.isLoadingMore,
+                                failed = uiState.loadMoreFailed,
+                                onEndReached = viewModel::onEndReached,
+                                onRetry = viewModel::onLoadMoreRetry,
+                            ),
                         onQuestionClick = onNavigateToQuestionDetail,
-                        onEndReached = viewModel::onEndReached,
-                        onLoadMoreRetry = viewModel::onLoadMoreRetry,
                     )
             }
         }
@@ -128,19 +132,30 @@ private fun SearchError(
     }
 }
 
+/**
+ * The paging half of the result list: what the next page is doing, and how to ask for it.
+ *
+ * Bundled rather than passed as four separate parameters, so the list keeps one parameter per
+ * concern - the questions, their paging, and what a tap on one means.
+ */
+@Immutable
+private data class SearchPaging(
+    val isLoadingMore: Boolean,
+    val failed: Boolean,
+    val onEndReached: () -> Unit,
+    val onRetry: () -> Unit,
+)
+
 @Composable
 private fun SearchResultList(
     questions: List<QuestionSummary>,
-    isLoadingMore: Boolean,
-    loadMoreFailed: Boolean,
+    paging: SearchPaging,
     onQuestionClick: (Long) -> Unit,
-    onEndReached: () -> Unit,
-    onLoadMoreRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
 
-    SearchLoadMoreTrigger(listState = listState, questionCount = questions.size, onLoadMore = onEndReached)
+    SearchLoadMoreTrigger(listState = listState, questionCount = questions.size, onLoadMore = paging.onEndReached)
 
     LazyColumn(
         state = listState,
@@ -152,7 +167,7 @@ private fun SearchResultList(
             QuestionCard(question = question, onClick = { onQuestionClick(question.id) })
         }
 
-        if (isLoadingMore) {
+        if (paging.isLoadingMore) {
             item {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(modifier = Modifier.size(Dimen.spaceXL).padding(Dimen.spaceM))
@@ -160,9 +175,9 @@ private fun SearchResultList(
             }
         }
 
-        if (loadMoreFailed) {
+        if (paging.failed) {
             item {
-                TextButton(onClick = onLoadMoreRetry, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = paging.onRetry, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = stringResource(R.string.feed_load_more_failed),
                         color = MaterialTheme.colorScheme.error,
