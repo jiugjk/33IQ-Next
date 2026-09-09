@@ -22,12 +22,14 @@ class QuestionJsonParserTest {
     }
 
     @Test
-    fun `a missing title falls back to a truncated body, without truncating the body itself`() {
+    fun `an empty title stays absent instead of becoming a cut-off copy of the body`() {
         val body = "乙".repeat(100)
         val detail = sut.parseQuestionDetail(payload(title = "", context = "<p>$body</p>"), id = 42)
 
-        detail?.title shouldBeEqualTo "乙".repeat(60)
+        detail?.title.shouldBeNull()
         detail?.bodyText shouldBeEqualTo body
+        // Places that genuinely need one line still get the site's own truncation-style label.
+        detail?.shortLabel shouldBeEqualTo "乙".repeat(60)
     }
 
     @Test
@@ -35,6 +37,25 @@ class QuestionJsonParserTest {
         val detail = sut.parseQuestionDetail(payload(title = "看图", context = """<img src="/upload/q.png">"""), id = 7)
 
         detail?.imageUrls shouldBeEqualTo listOf("https://www.33iq.com/upload/q.png")
+    }
+
+    @Test
+    fun `a body thumbnail is upgraded to the original upload`() {
+        val thumbnail = """<img src="https://a.33iq.com/upload/26/09/03/_thumbs/1788.jpg!33.jpg">"""
+        val detail = sut.parseQuestionDetail(payload(title = "", context = thumbnail), id = 7)
+
+        detail?.imageUrls shouldBeEqualTo listOf("https://a.33iq.com/upload/26/09/03/images/1788.jpg")
+    }
+
+    @Test
+    fun `a question whose body embeds no image falls back to the payload's own pic field`() {
+        val detail =
+            sut.parseQuestionDetail(
+                payload(title = "", context = "正文", pic = "https://a.33iq.com/upload/26/09/03/images/1788.jpg"),
+                id = 7,
+            )
+
+        detail?.imageUrls shouldBeEqualTo listOf("https://a.33iq.com/upload/26/09/03/images/1788.jpg")
     }
 
     @Test
@@ -61,10 +82,12 @@ class QuestionJsonParserTest {
     private fun payload(
         title: String,
         context: String,
+        pic: String = "",
     ) = buildJsonArray {
         addJsonObject {
             put("qc_title", title)
             put("qc_context", context)
+            put("pic", pic)
             put("ischoose", "1")
             put("qc_choose_a", "选项一")
             put("qc_choose_b", "选项二")

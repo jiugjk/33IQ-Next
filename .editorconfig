@@ -8,3 +8,10 @@ ktlint_function_naming_ignore_when_annotated_with=Composable
 
 # Detekt orders imports correctly, while ktlint does not
 ktlint_standard_import-ordering = disabled
+
+# Both arrived switched on in ktlint 1.8. Between them they brace every branch of a `when` as
+# soon as one branch is multiline, and blank-line-separate all of them - which triples the height
+# of the compact one-line mappings this codebase is full of (a failure reason to a string
+# resource, a UI state to a composable, an event to an action) without making any of them clearer.
+ktlint_standard_when-entry-bracing = disabled
+ktlint_standard_blank-line-between-when-conditions = disabled

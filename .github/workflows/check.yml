@@ -12,8 +12,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-debug:
+  build:
     runs-on: ubuntu-latest
+    # Passed straight through to Gradle, which reads them in app/build.gradle.kts. Secrets that are
+    # not configured arrive as empty strings, and the build treats that as "no signing material" -
+    # which is also what a pull request from a fork gets, since secrets are withheld from those.
+    env:
+      SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+      SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+      SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+      SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
     steps:
       - name: checkout
         uses: actions/checkout@v5
@@ -27,13 +35,31 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      # The keystore only ever exists in the runner's temp directory, for the length of this job.
+      - name: Decode signing keystore
+        if: env.SIGNING_KEYSTORE_BASE64 != ''
+        run: |
+          echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-keystore.jks"
+          echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_ENV"
+
+      # Release is built too, so R8/resource shrinking - which only runs for that build type - is
+      # checked on every pull request rather than discovered when a release is actually needed.
       - name: Build App
-        run: ./gradlew :app:assembleDebug --no-build-cache
+        run: ./gradlew :app:assembleDebug :app:assembleRelease --no-build-cache
 
       - uses: actions/upload-artifact@v5
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - uses: actions/upload-artifact@v5
+        with:
+          # A glob, because the file is app-release.apk when the signing secrets are configured and
+          # app-release-unsigned.apk when they are not.
+          name: app-release
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/mapping/release/mapping.txt
 
   android-lint:
     runs-on: ubuntu-latest

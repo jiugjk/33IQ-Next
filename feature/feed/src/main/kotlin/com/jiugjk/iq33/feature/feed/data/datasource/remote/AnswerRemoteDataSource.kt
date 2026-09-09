@@ -67,32 +67,55 @@ internal class AnswerRemoteDataSource(
      * account) - so the exact server-side dependency between these three calls isn't understood well
      * enough to reorder them again; this client would rather match the real sequence than guess.
      *
-     * Each step is checked before the next one runs, so a business failure cannot be carried forward
+     * **Which of the three actually returns the answer is not confirmed**, and assuming it was the
+     * first one is what used to make this flow fail for a logged-in user whose hints worked fine:
+     * `showanswertrue` reads as an eligibility check ("may this answer be shown?"), so a reply of
+     * `{"status":"0"}` - not yet unlocked, the normal state before paying - was rejected as a
+     * business error, and even a passing reply was rejected for not carrying an `answer` field that
+     * only a later step may ever have had. The content is therefore taken from whichever step
+     * supplies it, latest first, since `showanswernew` is the call that *shows* the answer; only a
+     * flow where no step at all supplied one is a failure. Statuses are still checked, but against
+     * the values that really mean refusal (not signed in, server-side error) rather than against
+     * every falsy-looking string.
+     *
+     * Each step is still checked before the next one runs, so a refusal cannot be carried forward
      * into a "revealed" state with no answer in it. From step two onwards a failure is flagged as
      * [IqResponseException.afterSideEffect]: the first call already reached the server, and which of
-     * the three actually spends 学识 is not confirmed.
+     * the three spends the 学识 is not confirmed either.
      */
     suspend fun revealAnswer(questionId: Long): AnswerReveal {
         val params = questionIdParams(questionId)
 
-        val answerJson = postForJson(SHOW_ANSWER_TRUE, IqConstants.SHOW_ANSWER_TRUE_URL, params).requireSuccess(SHOW_ANSWER_TRUE)
-        val answer = answerJson.requireString("answer", SHOW_ANSWER_TRUE)
+        val checkJson =
+            postForJson(SHOW_ANSWER_TRUE, IqConstants.SHOW_ANSWER_TRUE_URL, params)
+                .requireSuccess(SHOW_ANSWER_TRUE, fatalStatuses = REFUSAL_STATUSES)
 
         val payJson =
             postForJson(PAY_FOR_SHOW_ANSWER, IqConstants.PAY_FOR_SHOW_ANSWER_URL, params)
-                .requireSuccess(PAY_FOR_SHOW_ANSWER, afterSideEffect = true)
+                .requireSuccess(PAY_FOR_SHOW_ANSWER, afterSideEffect = true, fatalStatuses = REFUSAL_STATUSES)
+
+        val revealJson =
+            postForJson(SHOW_ANSWER_NEW, IqConstants.SHOW_ANSWER_NEW_URL, params)
+                .requireSuccess(SHOW_ANSWER_NEW, afterSideEffect = true, fatalStatuses = REFUSAL_STATUSES)
+
+        // Latest step first: showanswernew is the one that actually shows the answer, so when more
+        // than one step carries the field its copy is the authoritative one.
+        val steps = listOf(revealJson, payJson, checkJson)
+
+        val answer =
+            steps.firstNotNullOfOrNull { step -> step.stringOrNull(ANSWER_FIELD)?.takeIf(String::isNotBlank) }
+                ?: throw revealJson.failure(SHOW_ANSWER_NEW, IqResponseException.Reason.MISSING_FIELD, afterSideEffect = true)
+
         val alreadyPaid = payJson.stringOrNull("isPaid") == "1"
         // An unparseable price is reported as unknown rather than quietly shown to the user as 0.
         val cost = if (alreadyPaid) 0 else payJson.intOrNull("pay")
-
-        postForJson(SHOW_ANSWER_NEW, IqConstants.SHOW_ANSWER_NEW_URL, params)
-            .requireSuccess(SHOW_ANSWER_NEW, afterSideEffect = true)
+        val explanationHtml = steps.firstNotNullOfOrNull { step -> step.stringOrNull(EXPLANATION_FIELD)?.takeIf(String::isNotBlank) }
 
         return AnswerReveal(
             answer = answer,
             // `explanation` is rich-text HTML (raw <p>/<br>/&nbsp; and the like), same as a question's
             // own qc_context body - it must be converted to plain text rather than rendered as-is.
-            explanation = withContext(parsingDispatcher) { answerJson.stringOrNull("explanation")?.let(::htmlToPlainText).orEmpty() },
+            explanation = withContext(parsingDispatcher) { explanationHtml?.let(::htmlToPlainText).orEmpty() },
             cost = cost,
             alreadyPaid = alreadyPaid,
         )
@@ -126,7 +149,9 @@ internal class AnswerRemoteDataSource(
             postForJson(SHOW_TIPS, IqConstants.SHOW_TIPS_URL, questionIdParams(questionId))
                 .requireSuccess(SHOW_TIPS)
 
-        return HintReveal(tips = json.requireString("tips", SHOW_TIPS))
+        // showtips is the call that spends the 学识, so a reply without hint text may still have
+        // charged the account - the caller must not present that as "nothing happened".
+        return HintReveal(tips = json.requireString("tips", SHOW_TIPS, afterSideEffect = true))
     }
 
     /** Praises ("点赞") a question, returning the new upvote count. */
@@ -161,13 +186,22 @@ internal class AnswerRemoteDataSource(
         }
     }
 
+    /**
+     * Rejects a reply whose `status` is one this endpoint cannot make progress from.
+     *
+     * [fatalStatuses] is narrowed to [REFUSAL_STATUSES] by the multi-step answer-reveal flow, whose
+     * calls report *progress* through `status` rather than only success or failure - see
+     * [revealAnswer]. Single-call endpoints keep the broad [ERROR_STATUSES] set: they have no later
+     * step that could still turn a falsy status into a result.
+     */
     private fun JsonObject.requireSuccess(
         endpoint: String,
         afterSideEffect: Boolean = false,
+        fatalStatuses: Set<String> = ERROR_STATUSES,
     ): JsonObject {
         val status = stringOrNull(STATUS_FIELD)
 
-        if (status != null && status.lowercase() in ERROR_STATUSES) {
+        if (status != null && status.lowercase() in fatalStatuses) {
             throw failure(endpoint, IqResponseException.Reason.BUSINESS_ERROR, afterSideEffect)
         }
 
@@ -177,9 +211,10 @@ internal class AnswerRemoteDataSource(
     private fun JsonObject.requireString(
         key: String,
         endpoint: String,
+        afterSideEffect: Boolean = false,
     ): String =
-        stringOrNull(key)?.takeIf { it.isNotBlank() }
-            ?: throw failure(endpoint, IqResponseException.Reason.MISSING_FIELD, afterSideEffect = endpoint != SHOW_ANSWER_TRUE)
+        stringOrNull(key)?.takeIf(String::isNotBlank)
+            ?: throw failure(endpoint, IqResponseException.Reason.MISSING_FIELD, afterSideEffect)
 
     private fun JsonObject.failure(
         endpoint: String,
@@ -189,7 +224,17 @@ internal class AnswerRemoteDataSource(
 
     private companion object {
         const val STATUS_FIELD = "status"
+        const val ANSWER_FIELD = "answer"
+        const val EXPLANATION_FIELD = "explanation"
+
+        /**
+         * For single-call endpoints, whose reply is either the thing that was asked for or a
+         * failure. Deliberately broad: there is no third outcome to leave room for.
+         */
         val ERROR_STATUSES = setOf("error", "fail", "failed", "false", "0", "-1", "nologin", "guest")
+
+        /** Statuses that mean an outright refusal, whatever step of a multi-call flow reports one. */
+        val REFUSAL_STATUSES = setOf("error", "fail", "failed", "nologin", "guest")
 
         const val SUBMIT_ANSWER = "commentdeal"
         const val SHOW_ANSWER_TRUE = "showanswertrue"

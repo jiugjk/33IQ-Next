@@ -101,7 +101,7 @@ internal class QuestionDetailViewModel(
         val savedQuestion =
             SavedQuestion(
                 id = content.detail.id,
-                title = content.detail.title,
+                title = content.detail.shortLabel,
                 tags = content.detail.tags,
                 savedAt = System.currentTimeMillis(),
             )

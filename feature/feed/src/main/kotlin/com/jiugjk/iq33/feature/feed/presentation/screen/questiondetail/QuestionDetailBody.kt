@@ -28,7 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.Choice
@@ -40,16 +40,15 @@ import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
  */
 
 /**
- * The question's own text and images. 33IQ's `qc_title` is often only a heading (or absent, in which
- * case it is a truncated preview of this body), so this is where the question actually gets asked.
+ * The question's own text and images - for almost every 33IQ question this *is* the question, since
+ * the site gives ordinary questions no title at all (see [QuestionDetail.title]).
  */
 @Composable
 internal fun QuestionBody(
     bodyText: String,
     imageUrls: List<String>,
-    title: String,
 ) {
-    if (bodyText.isNotBlank() && bodyText != title) {
+    if (bodyText.isNotBlank()) {
         Text(
             text = bodyText,
             style = MaterialTheme.typography.bodyLarge,

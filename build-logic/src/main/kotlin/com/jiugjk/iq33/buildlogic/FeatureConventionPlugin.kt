@@ -49,7 +49,7 @@ class FeatureConventionPlugin : Plugin<Project> {
                 }
 
                 buildFeatures {
-                    viewBinding = true
+                    viewBinding = false
                     buildConfig = true
                     compose = true
                 }
@@ -74,7 +74,6 @@ class FeatureConventionPlugin : Plugin<Project> {
                     implementation(project(":feature:base"))
                 }
 
-                implementation(libs.kotlin.reflect)
                 implementation(libs.core.ktx)
                 implementation(libs.timber)
                 implementation(libs.coroutines)
@@ -86,7 +85,6 @@ class FeatureConventionPlugin : Plugin<Project> {
                 implementation(platform(libs.compose.bom))
                 implementation(libs.bundles.compose)
                 debugImplementation(libs.compose.ui.tooling)
-                debugImplementation(libs.compose.ui.test.manifest)
 
                 // Koin
                 implementation(platform(libs.koin.bom))

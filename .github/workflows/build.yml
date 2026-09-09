@@ -1,7 +1,8 @@
 name: Build
 
-# Manually-triggerable compile check, independent of Check.yml (which only runs on push to main / PRs).
-# Useful for verifying a feature branch actually compiles before opening a PR.
+# Manually-triggerable build, independent of Check.yml (which only runs on push to main / PRs).
+# Useful for getting installable APKs - and verifying a feature branch really packages - before
+# opening a PR.
 on:
   workflow_dispatch:
   push:
@@ -15,6 +16,13 @@ concurrency:
 jobs:
   compile:
     runs-on: ubuntu-latest
+    # Passed straight through to Gradle, which reads them in app/build.gradle.kts. Secrets that are
+    # not configured arrive as empty strings, and the build treats that as "no signing material".
+    env:
+      SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+      SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+      SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+      SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
     steps:
       - name: checkout
         uses: actions/checkout@v5
@@ -28,18 +36,39 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      # The keystore only ever exists in the runner's temp directory, for the length of this job.
+      # Without the secret - a pull request from a fork, or a clone that has not configured one -
+      # this step is skipped and the release APK simply comes out unsigned, so nothing fails.
+      - name: Decode signing keystore
+        if: env.SIGNING_KEYSTORE_BASE64 != ''
+        run: |
+          echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-keystore.jks"
+          echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_ENV"
+
       - name: Compile all source sets (fast fail, no packaging)
         run: ./gradlew compileDebugKotlin compileDebugUnitTestKotlin --stacktrace
 
-      - name: Assemble debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Assemble debug and release APKs
+        run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
 
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v5
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload release APK
+        if: success()
+        uses: actions/upload-artifact@v5
+        with:
+          # A glob, because the file is app-release.apk when the signing secrets are configured and
+          # app-release-unsigned.apk when they are not. The R8 mapping rides along: without it a
+          # crash report from this build is unreadable.
+          name: app-release
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/mapping/release/mapping.txt
 
       - name: Upload build logs on failure
         if: failure()

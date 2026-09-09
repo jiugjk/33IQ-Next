@@ -1,55 +1,57 @@
 [versions]
-kotlin = "2.3.20"
+kotlin = "2.3.21"
 
 # KSP depends on specific Kotlin version, so it must be upgraded together with Kotlin (disabled in Renovate)
 # https://repo.maven.apache.org/maven2/com/google/devtools/ksp/symbol-processing-gradle-plugin/
-kotlin-symbol-processing = "2.3.9"
+kotlin-symbol-processing = "2.3.11"
 
 # Java and JVM Versions are also stored in buildSrc/src/main/kotlin/config/JavaBuildConfig.kt
 java = "17"
 
 # Android SDK versions are marked as unused, however these are used in the `build.gradle.kts` files
+#
+# compile-sdk is also the ceiling on how far the AndroidX/Coil versions below can go: releases newer
+# than the ones pinned here publish AAR metadata demanding compileSdk 37, which needs AGP 9 - which
+# in turn needs Gradle 9.6+ and refuses the `org.jetbrains.kotlin.android` plugin the convention
+# plugins apply (AGP 9 has built-in Kotlin support). See DeveloperReadme.md.
 compile-sdk = "36"
 min-sdk = "28"
 target-sdk = "35"
 
 navigation = "2.9.8"
 test-logger = "4.0.0"
-coroutines = "1.10.2"
-okhttp = "5.3.2"
+coroutines = "1.11.0"
+okhttp = "5.4.0"
 koin = "4.2.2"
-coil = "2.7.0"
+coil = "3.5.0"
 lifecycle = "2.10.0"
 room = "2.8.4"
-serialization-json = "1.10.0"
+serialization-json = "1.11.0"
 timber = "5.0.1"
-compose = "1.11.3"
-compose-bom = "2025.12.01"
+compose = "1.11.4"
+compose-bom = "2026.06.01"
 material-compose = "1.4.0"
-material = "1.13.0"
+material = "1.14.0"
 material-icons = "1.7.8"
 lottie = "6.7.1"
 core-ktx = "1.18.0"
 core-splashscreen = "1.2.0"
-spotless = "8.1.0"
+spotless = "8.10.2"
 detekt = "1.23.8"
 android-gradle-plugin = "8.13.2"
 easylauncher = "6.4.1"
-about-libraries = "13.2.1"
-jsoup = "1.18.3"
+about-libraries = "14.2.1"
+jsoup = "1.23.2"
 
-# ktlint-rules
-ktlint-ruleset-standard = "1.7.1"
-nlopez-compose-rules = "0.4.27"
-twitter-compose-rules = "0.0.26"
+# ktlint (the engine Spotless runs) and the extra rule sets it loads
+ktlint = "1.8.0"
+nlopez-compose-rules = "0.6.6"
 
 # Test
-junit-jupiter = "6.1.0"
-android-junit5 = "1.14.0.0"
+junit-jupiter = "6.1.3"
+android-junit5 = "2.0.1"
 kluent = "1.73"
-test-runner = "1.7.0"
 mockk = "1.14.11"
-espresso = "3.7.0"
 core-testing = "2.2.0"
 konsist = "0.17.3"
 
@@ -95,7 +97,9 @@ compose-material = { module = "androidx.compose.material3:material3", version.re
 material-material = { module = "com.google.android.material:material", version.ref = "material" }
 material-icons = { module = "androidx.compose.material:material-icons-extended", version.ref = "material-icons" }
 lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "lottie" }
-coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+# Coil 3 splits image loading from fetching: without a network layer it only reads local URIs.
+coil-network = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx" }
 core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "core-splashscreen" }
 viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
@@ -107,25 +111,20 @@ room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 
-# Ktlint Rules
-ktlint-ruleset-standard = { module = "com.pinterest.ktlint:ktlint-ruleset-standard", version.ref = "ktlint-ruleset-standard" }
+# Ktlint Rules - ktlint's own standard rules are built into the engine and are not listed here
 nlopez-compose-rules = { module = "io.nlopez.compose.rules:ktlint", version.ref = "nlopez-compose-rules" }
-twitter-compose-rules = { module = "com.twitter.compose.rules:ktlint", version.ref = "twitter-compose-rules" }
 
 # Test dependencies
 test-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kluent = { module = "org.amshove.kluent:kluent-android", version.ref = "kluent" }
-test-runner = { module = "androidx.test:runner", version.ref = "test-runner" }
-espresso = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 core-testing = { module = "androidx.arch.core:core-testing", version.ref = "core-testing" }
 junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit-jupiter" }
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-jupiter" }
-junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.14.4" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-jupiter" }
 navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "compose" }
-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "compose" }
 
 [bundles]
 # The app has no Retrofit client: 33IQ has no JSON API to model as an interface, so networking is
@@ -143,7 +142,8 @@ compose = [
     "compose-ui",
     "tooling-preview",
     "lottie-compose",
-    "coil-compose"
+    "coil-compose",
+    "coil-network"
 ]
 
 room = [
@@ -154,8 +154,6 @@ room = [
 test = [
     "test-coroutines",
     "kluent",
-    "test-runner",
-    "espresso",
     "mockk",
     "core-testing",
     "junit-jupiter-api",

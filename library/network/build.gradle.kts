@@ -7,7 +7,6 @@ android {
 }
 
 dependencies {
-    implementation(libs.kotlin.reflect)
     implementation(libs.core.ktx)
     implementation(libs.timber)
     implementation(libs.coroutines)
