@@ -15,7 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,9 +33,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
-import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorAnim
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.EmptyState
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorState
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndicator
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
@@ -95,24 +98,21 @@ fun SearchScreen(
 
 @Composable
 private fun SearchHint(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(R.string.feed_search_hint),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    EmptyState(
+        icon = Icons.Outlined.Search,
+        title = stringResource(R.string.feed_search_hint),
+        modifier = modifier,
+    )
 }
 
 @Composable
 private fun SearchEmpty(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(R.string.feed_search_empty),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    EmptyState(
+        icon = Icons.Outlined.SearchOff,
+        title = stringResource(R.string.feed_search_empty),
+        description = stringResource(R.string.feed_search_empty_description),
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -120,16 +120,13 @@ private fun SearchError(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        ErrorAnim()
-        Button(onClick = onRetry, modifier = Modifier.padding(top = Dimen.spaceL)) {
-            Text(stringResource(R.string.feed_retry))
-        }
-    }
+    ErrorState(
+        title = stringResource(R.string.feed_load_failed_title),
+        description = stringResource(R.string.feed_load_failed_description),
+        retryLabel = stringResource(R.string.feed_retry),
+        onRetry = onRetry,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -160,17 +157,21 @@ private fun SearchResultList(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(Dimen.spaceM),
-        verticalArrangement = Arrangement.spacedBy(Dimen.spaceM),
+        contentPadding = PaddingValues(Dimen.spaceL),
+        verticalArrangement = Arrangement.spacedBy(Dimen.spaceML),
     ) {
         items(items = questions, key = { it.id }) { question ->
-            QuestionCard(question = question, onClick = { onQuestionClick(question.id) })
+            QuestionCard(
+                question = question,
+                onClick = { onQuestionClick(question.id) },
+                modifier = Modifier.animateItem(),
+            )
         }
 
         if (paging.isLoadingMore) {
             item {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(modifier = Modifier.size(Dimen.spaceXL).padding(Dimen.spaceM))
+                    CircularProgressIndicator(modifier = Modifier.size(LoadMoreIndicatorSize))
                 }
             }
         }
@@ -215,6 +216,7 @@ private fun SearchLoadMoreTrigger(
 }
 
 private const val LOAD_MORE_THRESHOLD = 4
+private val LoadMoreIndicatorSize = 28.dp
 
 @Preview
 @Composable

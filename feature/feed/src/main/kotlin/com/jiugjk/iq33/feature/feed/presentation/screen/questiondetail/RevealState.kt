@@ -2,7 +2,12 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
 
-/** Shared quote-then-reveal flow state for both the paid-answer and paid-hint features. */
+/**
+ * Quote-then-reveal flow state for the paid-hint feature.
+ *
+ * Still generic over its quote and reveal types: it was written for two flows and the shape is what
+ * makes the reducers' guards readable, but the paid-answer flow it also served has been removed.
+ */
 internal sealed interface RevealState<out Quote, out Reveal> {
     data object Idle : RevealState<Nothing, Nothing>
 
@@ -28,19 +33,6 @@ internal val RevealState<*, *>.isBusy: Boolean
 
 internal val RevealState<*, *>.isRetryBlocked: Boolean
     get() = this is RevealState.Failed && afterSideEffect
-
-internal enum class RevealKind {
-    ANSWER,
-    HINT,
-    ;
-
-    /** The action that closes this flow's confirmation step. */
-    fun dismissAction(): QuestionDetailAction =
-        when (this) {
-            ANSWER -> QuestionDetailAction.AnswerFlowDismissed
-            HINT -> QuestionDetailAction.HintFlowDismissed
-        }
-}
 
 /**
  * State of this question's answer submission.

@@ -49,15 +49,9 @@ object IqConstants {
     // second submission for the same question with {"status":"repeat"}.
     const val SUBMIT_ANSWER_URL = "$BASE_URL/index/commentdeal"
 
-    // The two calls 33IQ's own app makes to reveal a question's real answer, in this order:
-    // payforshowanswer buys the reveal and reports its 学识 cost, then showanswertrue returns the
-    // answer and explanation. Confirmed from a HAR capture of the official app (3.6.3) revealing one
-    // question - the two calls arrive 534ms apart on a single connection, with nothing between them.
-    //
-    // An earlier `showanswernew` endpoint was believed to be part of this sequence; the capture shows
-    // the app never calls it, so this client does not either. See AnswerRemoteDataSource.revealAnswer.
-    const val PAY_FOR_SHOW_ANSWER_URL = "$BASE_URL/index/payforshowanswer"
-    const val SHOW_ANSWER_TRUE_URL = "$BASE_URL/index/showanswertrue"
+    // The paid answer-reveal endpoints (payforshowanswer / showanswertrue) are deliberately absent:
+    // the feature they backed was removed, and an endpoint constant with no caller is an invitation
+    // to wire it up again. The HAR findings that documented them are recorded in git history.
 
     // Paid-hint flow: showtipsbuy returns a price quote (with separate normal/member/life-member
     // 学识 costs), showtips returns the actual hint text.

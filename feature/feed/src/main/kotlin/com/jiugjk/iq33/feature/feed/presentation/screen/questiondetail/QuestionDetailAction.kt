@@ -1,7 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
@@ -116,68 +115,6 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
             if (state is QuestionDetailUiState.Content && state.detail.id == questionId && state.isSubmitting) {
                 state.copy(submission = SubmissionState.Failed)
-            } else {
-                state
-            }
-    }
-
-    object AnswerConfirmRequested : QuestionDetailAction {
-        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.canStartAnswerReveal) {
-                state.copy(answerReveal = RevealState.QuoteReady(Unit))
-            } else {
-                state
-            }
-    }
-
-    class AnswerRevealStarted(
-        private val questionId: Long,
-    ) : QuestionDetailAction {
-        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content &&
-                state.detail.id == questionId &&
-                state.canConfirmAnswerReveal
-            ) {
-                state.copy(answerReveal = RevealState.Revealing)
-            } else {
-                state
-            }
-    }
-
-    class AnswerRevealFinished(
-        private val questionId: Long,
-        private val reveal: AnswerReveal,
-    ) : QuestionDetailAction {
-        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content &&
-                state.detail.id == questionId &&
-                state.answerReveal is RevealState.Revealing
-            ) {
-                state.copy(answerReveal = RevealState.Revealed(reveal))
-            } else {
-                state
-            }
-    }
-
-    class AnswerFlowFailed(
-        private val questionId: Long,
-        private val afterSideEffect: Boolean,
-    ) : QuestionDetailAction {
-        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content &&
-                state.detail.id == questionId &&
-                !state.isAnswerRevealed
-            ) {
-                state.copy(answerReveal = RevealState.Failed(afterSideEffect))
-            } else {
-                state
-            }
-    }
-
-    object AnswerFlowDismissed : QuestionDetailAction {
-        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.answerReveal is RevealState.QuoteReady) {
-                state.copy(answerReveal = RevealState.Idle)
             } else {
                 state
             }

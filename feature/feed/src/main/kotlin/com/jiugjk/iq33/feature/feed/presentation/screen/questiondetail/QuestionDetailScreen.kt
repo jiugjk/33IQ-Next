@@ -1,6 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,7 +13,6 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,7 +20,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,10 +33,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
-import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorAnim
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorState
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndicator
 import com.jiugjk.iq33.feature.feed.R
-import com.jiugjk.iq33.feature.feed.domain.model.Comment
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import org.koin.androidx.compose.koinViewModel
@@ -56,68 +56,69 @@ fun QuestionDetailScreen(
         viewModel.load(questionId)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { },
-            navigationIcon = {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.feed_navigate_back),
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.feed_navigate_back),
+                        )
+                    }
+                },
+                actions = {
+                    val currentUiState = uiState
+                    if (currentUiState is QuestionDetailUiState.Content) {
+                        val context = LocalContext.current
+
+                        IconButton(onClick = { copyQuestion(context, currentUiState.detail) }) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = stringResource(R.string.feed_copy_content_description),
+                            )
+                        }
+
+                        IconButton(onClick = { shareQuestion(context, currentUiState.detail) }) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = stringResource(R.string.feed_share_content_description),
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { viewModel.onEvent(QuestionDetailEvent.BookmarkToggled) },
+                            enabled = !currentUiState.isBookmarkChanging,
+                        ) {
+                            Icon(
+                                imageVector = if (currentUiState.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = stringResource(R.string.feed_bookmark_content_description),
+                            )
+                        }
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            when (val currentUiState = uiState) {
+                QuestionDetailUiState.Loading -> LoadingIndicator()
+                QuestionDetailUiState.Error ->
+                    ErrorState(
+                        title = stringResource(R.string.feed_load_failed_title),
+                        description = stringResource(R.string.feed_load_failed_description),
+                        retryLabel = stringResource(R.string.feed_retry),
+                        onRetry = { viewModel.onEvent(QuestionDetailEvent.RetryRequested) },
                     )
-                }
-            },
-            actions = {
-                val currentUiState = uiState
-                if (currentUiState is QuestionDetailUiState.Content) {
-                    val context = LocalContext.current
-
-                    IconButton(onClick = { copyQuestion(context, currentUiState.detail) }) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = stringResource(R.string.feed_copy_content_description),
-                        )
-                    }
-
-                    IconButton(onClick = { shareQuestion(context, currentUiState.detail) }) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = stringResource(R.string.feed_share_content_description),
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.onEvent(QuestionDetailEvent.BookmarkToggled) },
-                        enabled = !currentUiState.isBookmarkChanging,
-                    ) {
-                        Icon(
-                            imageVector = if (currentUiState.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = stringResource(R.string.feed_bookmark_content_description),
-                        )
-                    }
-                }
-            },
-        )
-
-        when (val currentUiState = uiState) {
-            QuestionDetailUiState.Loading -> LoadingIndicator()
-            QuestionDetailUiState.Error -> LoadErrorContent(onRetryClick = { viewModel.onEvent(QuestionDetailEvent.RetryRequested) })
-            is QuestionDetailUiState.Content -> QuestionDetailContent(uiState = currentUiState, onEvent = viewModel::onEvent)
-        }
-    }
-}
-
-@Composable
-private fun LoadErrorContent(onRetryClick: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        ErrorAnim()
-
-        Button(onClick = onRetryClick, modifier = Modifier.padding(top = Dimen.spaceL)) {
-            Text(stringResource(R.string.feed_retry))
+                is QuestionDetailUiState.Content ->
+                    QuestionDetailContent(uiState = currentUiState, onEvent = viewModel::onEvent)
+            }
         }
     }
 }
@@ -179,8 +180,11 @@ private fun QuestionDetailContent(
 }
 
 /**
- * Everything below the question itself: where the answer is given, the paid hint and answer, and
- * the comments that go with them.
+ * Everything below the question itself: where the answer is given, and the paid hint.
+ *
+ * The analysis 33IQ hands out for free is rendered here directly. It used to be a fallback shown
+ * only until the paid answer-reveal replaced it; with that feature gone it is simply the analysis,
+ * shown whenever the question has one.
  */
 @Composable
 private fun AnswerSections(
@@ -203,20 +207,7 @@ private fun AnswerSections(
 
     HintSection(hintReveal = uiState.hintReveal, canStartHintReveal = uiState.canStartHintReveal, onEvent = onEvent)
 
-    AnswerSection(
-        fallbackAnalysis = detail.analysis,
-        answerReveal = uiState.answerReveal,
-        canStartAnswerReveal = uiState.canStartAnswerReveal,
-        onEvent = onEvent,
-    )
-
-    // 33IQ hides a question's comments (they routinely spoil the answer) until the real answer
-    // has been revealed - matches the official app's own behaviour, not a client limitation.
-    if (uiState.isAnswerRevealed) {
-        CommentSection(comments = detail.comments, commentCount = detail.commentCount)
-    } else {
-        CommentsLockedNotice()
-    }
+    detail.analysis?.let { analysis -> AnalysisSection(analysis = analysis) }
 }
 
 @Composable
@@ -258,39 +249,6 @@ internal fun AnalysisSection(analysis: String) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
-        }
-    }
-}
-
-@Composable
-private fun CommentSection(
-    comments: List<Comment>,
-    commentCount: Int,
-) {
-    Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
-        Text(
-            text = stringResource(R.string.feed_comments_title, commentCount),
-            style = MaterialTheme.typography.titleSmall,
-        )
-
-        if (comments.isEmpty()) {
-            Text(
-                text = stringResource(R.string.feed_comments_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimen.spaceS),
-            )
-        } else {
-            comments.forEach { comment ->
-                Column(modifier = Modifier.padding(top = Dimen.spaceM)) {
-                    Text(
-                        text = "${comment.author}  ${comment.time}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(text = comment.content, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
         }
     }
 }

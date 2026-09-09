@@ -26,20 +26,19 @@ internal class QuestionDetailViewModel(
 
     private val submission = SideWorkSlot(viewModelScope, currentState)
     private val bookmarking = SideWorkSlot(viewModelScope, currentState)
-    private val answerRevealing = SideWorkSlot(viewModelScope, currentState)
     private val hintQuoting = SideWorkSlot(viewModelScope, currentState)
     private val hintRevealing = SideWorkSlot(viewModelScope, currentState)
     private val praising = SideWorkSlot(viewModelScope, currentState)
 
     /** Everything a fresh load has to abandon - all of it belongs to the question being replaced. */
-    private val sideWork = listOf(submission, bookmarking, answerRevealing, hintQuoting, hintRevealing, praising)
+    private val sideWork = listOf(submission, bookmarking, hintQuoting, hintRevealing, praising)
 
     /**
      * Loads [id], skipping the work when this question is already loaded or still loading.
      *
      * Re-entering composition - a rotation, or returning from another screen - runs the screen's
      * `LaunchedEffect` again. Reloading there would replace a `Content` state that already carries
-     * the user's selection, submission result and any revealed (paid for) answer or hint with a
+     * the user's selection, submission result and any revealed (paid for) hint with a
      * blank one, so only [forceReload] - the retry action - starts a fresh load of the same question.
      */
     fun load(
@@ -83,12 +82,10 @@ internal class QuestionDetailViewModel(
             is QuestionDetailEvent.DraftAnswerChanged -> sendAction(QuestionDetailAction.DraftAnswerChanged(event.text))
             is QuestionDetailEvent.AnswerSubmitted -> submitAnswer(content, event.answer)
             QuestionDetailEvent.BookmarkToggled -> toggleBookmark(content)
-            QuestionDetailEvent.AnswerRevealRequested -> requestAnswerReveal(content)
-            QuestionDetailEvent.AnswerRevealConfirmed -> confirmAnswerReveal(content)
             QuestionDetailEvent.HintQuoteRequested -> requestHintQuote(content)
             QuestionDetailEvent.HintRevealConfirmed -> confirmHintReveal(content)
             QuestionDetailEvent.PraiseClicked -> praise(content)
-            is QuestionDetailEvent.RevealFlowDismissed -> sendAction(event.kind.dismissAction())
+            QuestionDetailEvent.HintFlowDismissed -> sendAction(QuestionDetailAction.HintFlowDismissed)
         }
     }
 
@@ -133,29 +130,6 @@ internal class QuestionDetailViewModel(
             when (val result = toggleBookmarkUseCase(savedQuestion)) {
                 is BookmarkResult.Success -> sendAction(QuestionDetailAction.BookmarkChanged(questionId, result.value))
                 is BookmarkResult.Failure -> sendAction(QuestionDetailAction.BookmarkFailed(questionId))
-            }
-        }
-    }
-
-    private fun requestAnswerReveal(content: QuestionDetailUiState.Content?) {
-        if (content?.canStartAnswerReveal != true) return
-
-        sendAction(QuestionDetailAction.AnswerConfirmRequested)
-    }
-
-    private fun confirmAnswerReveal(content: QuestionDetailUiState.Content?) {
-        if (content?.canConfirmAnswerReveal != true || answerRevealing.isActive) return
-
-        val questionId = content.detail.id
-
-        answerRevealing.start(questionId, { it.canConfirmAnswerReveal }) {
-            sendAction(QuestionDetailAction.AnswerRevealStarted(questionId))
-
-            if (answerRevealing.isEligible(questionId) { it.answerReveal is RevealState.Revealing }) {
-                when (val result = questionAnswerUseCases.revealAnswer(questionId)) {
-                    is Result.Success -> sendAction(QuestionDetailAction.AnswerRevealFinished(questionId, result.value))
-                    is Result.Failure -> sendAction(QuestionDetailAction.AnswerFlowFailed(questionId, result.afterSideEffect))
-                }
             }
         }
     }

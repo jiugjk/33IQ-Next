@@ -10,14 +10,14 @@ import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 
 /**
- * Renders the whole question as plain text: its body, every choice, and the link back to 33IQ.
+ * Renders the question as plain text: its body and every choice, and nothing else.
  *
  * Separate from [copyQuestion] so the formatting is testable without a [Context], and so it stays
  * the single definition of "the whole question" if another feature ever needs it.
  *
- * The image URLs are deliberately left out: for a question whose picture *is* the puzzle, a bare CDN
- * link pasted into a chat is noise - the [QuestionDetail.sourceUrl] at the end opens the real page
- * with the images in place.
+ * Neither the image URLs nor the question's own link are included. Copying is for pasting the
+ * *question* somewhere - a chat, a note - and a trailing URL is noise there. Sharing is the action
+ * that hands out a link, and it builds its own (see ShareQuestion).
  */
 internal fun questionAsPlainText(detail: QuestionDetail): String =
     buildString {
@@ -36,10 +36,7 @@ internal fun questionAsPlainText(detail: QuestionDetail): String =
             appendLine()
             detail.choices.forEach { choice -> appendLine("${choice.id}. ${choice.text}") }
         }
-
-        appendLine()
-        append(detail.sourceUrl)
-    }
+    }.trimEnd()
 
 /**
  * Copies [detail] to the clipboard as plain text.

@@ -1,7 +1,8 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.Choice
+import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
+import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
@@ -63,58 +64,51 @@ class QuestionDetailActionTest {
     }
 
     @Test
-    fun `revealing the answer is blocked while a submission is in flight`() {
+    fun `requesting a hint quote is blocked while a submission is in flight`() {
         val submitting = QuestionDetailAction.SubmissionStarted(1, "A").reduce(content())
 
-        val reduced = QuestionDetailAction.AnswerConfirmRequested.reduce(submitting) as QuestionDetailUiState.Content
+        val reduced = QuestionDetailAction.HintQuoteStarted(1).reduce(submitting) as QuestionDetailUiState.Content
 
-        reduced.answerReveal shouldBeInstanceOf RevealState.Idle::class
+        reduced.hintReveal shouldBeInstanceOf RevealState.Idle::class
     }
 
     @Test
-    fun `submitting is blocked once the answer reveal flow has started`() {
-        val confirming = QuestionDetailAction.AnswerConfirmRequested.reduce(content()) as QuestionDetailUiState.Content
+    fun `a second hint reveal is ignored while one is already revealing`() {
+        val quoted = QuestionDetailAction.HintQuoteReady(1, hintQuote()).reduce(quoting()) as QuestionDetailUiState.Content
+        val revealing = QuestionDetailAction.HintRevealStarted(1).reduce(quoted) as QuestionDetailUiState.Content
 
-        confirming.canSubmit shouldBeEqualTo false
-        confirming.canSelectChoice shouldBeEqualTo false
+        revealing.hintReveal shouldBeInstanceOf RevealState.Revealing::class
+        QuestionDetailAction.HintRevealStarted(1).reduce(revealing) shouldBeEqualTo revealing
     }
 
     @Test
-    fun `a second reveal confirm is ignored while already revealing`() {
-        val confirming = QuestionDetailAction.AnswerConfirmRequested.reduce(content()) as QuestionDetailUiState.Content
-        val revealing = QuestionDetailAction.AnswerRevealStarted(1).reduce(confirming) as QuestionDetailUiState.Content
-
-        revealing.answerReveal shouldBeInstanceOf RevealState.Revealing::class
-        QuestionDetailAction.AnswerRevealStarted(1).reduce(revealing) shouldBeEqualTo revealing
-    }
-
-    @Test
-    fun `a charged failure blocks another reveal of the same question`() {
-        val confirming = QuestionDetailAction.AnswerConfirmRequested.reduce(content())
-        val revealing = QuestionDetailAction.AnswerRevealStarted(1).reduce(confirming)
+    fun `a charged hint failure blocks another hint request for the same question`() {
         val failed =
-            QuestionDetailAction.AnswerFlowFailed(1, afterSideEffect = true).reduce(revealing) as QuestionDetailUiState.Content
+            QuestionDetailAction.HintFlowFailed(1, afterSideEffect = true).reduce(quoting()) as QuestionDetailUiState.Content
 
-        failed.canStartAnswerReveal shouldBeEqualTo false
-        failed.answerReveal shouldBeEqualTo RevealState.Failed(afterSideEffect = true)
+        failed.canStartHintReveal shouldBeEqualTo false
+        failed.hintReveal shouldBeEqualTo RevealState.Failed(afterSideEffect = true)
     }
 
     @Test
-    fun `an uncharged failure can still be retried`() {
+    fun `an uncharged hint failure can still be retried`() {
         val failed =
-            QuestionDetailAction.AnswerFlowFailed(1, afterSideEffect = false).reduce(content()) as QuestionDetailUiState.Content
+            QuestionDetailAction.HintFlowFailed(1, afterSideEffect = false).reduce(content()) as QuestionDetailUiState.Content
 
-        failed.canStartAnswerReveal shouldBeEqualTo true
+        failed.canStartHintReveal shouldBeEqualTo true
     }
 
     @Test
-    fun `a reveal result for another question is ignored`() {
-        val confirming = QuestionDetailAction.AnswerConfirmRequested.reduce(content())
-        val revealing = QuestionDetailAction.AnswerRevealStarted(1).reduce(confirming)
-        val reveal = AnswerReveal(answer = "A", explanation = "", cost = 60, alreadyPaid = false)
+    fun `a hint result for another question is ignored`() {
+        val quoted = QuestionDetailAction.HintQuoteReady(1, hintQuote()).reduce(quoting())
+        val revealing = QuestionDetailAction.HintRevealStarted(1).reduce(quoted)
 
-        QuestionDetailAction.AnswerRevealFinished(99, reveal).reduce(revealing) shouldBeEqualTo revealing
+        QuestionDetailAction.HintRevealFinished(99, HintReveal(tips = "提示")).reduce(revealing) shouldBeEqualTo revealing
     }
+
+    private fun quoting() = QuestionDetailAction.HintQuoteStarted(1).reduce(content())
+
+    private fun hintQuote() = HintQuote(normalCost = 30, memberCost = 20, lifeMemberCost = 10, effectiveCost = 30)
 
     private fun content(
         upvoteCount: Int = 0,
@@ -138,7 +132,6 @@ class QuestionDetailActionTest {
                 questionType = QuestionType.CHOICE,
                 choices = listOf(Choice("A", "选项一"), Choice("B", "选项二")),
                 analysis = null,
-                comments = emptyList(),
                 sourceUrl = "https://www.33iq.com/question/1.html",
             ),
         isBookmarked = false,

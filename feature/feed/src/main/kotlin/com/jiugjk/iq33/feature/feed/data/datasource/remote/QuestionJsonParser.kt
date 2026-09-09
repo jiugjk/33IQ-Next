@@ -64,7 +64,6 @@ internal class QuestionJsonParser {
             questionType = if (question.stringOrNull("ischoose") == "1") QuestionType.CHOICE else QuestionType.OPEN,
             choices = choices,
             analysis = null, // 33IQ hides analysis from guests, and no field carrying it has been confirmed.
-            comments = emptyList(), // The HAR capture contains no comments-list endpoint to read them from.
             // The public page, not the `?p=3` API URL that was fetched: that switch makes the same
             // address serve raw JSON, which is not what a share link should open.
             sourceUrl = IqConstants.questionPageUrl(id),

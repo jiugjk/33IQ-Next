@@ -2,13 +2,14 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubbleOutline
@@ -18,21 +19,26 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.jiugjk.iq33.feature.base.common.res.Dimen
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.TagChipRow
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.Choice
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
+import com.jiugjk.iq33.feature.feed.presentation.screen.imageviewer.ImageViewerDialog
 
 /*
  * The read-only parts of the question detail screen: the question itself and the metadata around it.
@@ -42,12 +48,18 @@ import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 /**
  * The question's own text and images - for almost every 33IQ question this *is* the question, since
  * the site gives ordinary questions no title at all (see [QuestionDetail.title]).
+ *
+ * Tapping an image opens the full-screen viewer at that image, with the whole list handed over so
+ * the viewer can page between them. For a question whose picture *is* the puzzle, being able to
+ * zoom into it is the difference between solvable and not.
  */
 @Composable
 internal fun QuestionBody(
     bodyText: String,
     imageUrls: List<String>,
 ) {
+    var viewerIndex by remember(imageUrls) { mutableStateOf<Int?>(null) }
+
     if (bodyText.isNotBlank()) {
         Text(
             text = bodyText,
@@ -56,7 +68,7 @@ internal fun QuestionBody(
         )
     }
 
-    imageUrls.forEach { imageUrl ->
+    imageUrls.forEachIndexed { index, imageUrl ->
         AsyncImage(
             model = imageUrl,
             contentDescription = stringResource(R.string.feed_question_image_content_description),
@@ -64,7 +76,17 @@ internal fun QuestionBody(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(top = Dimen.spaceM),
+                    .padding(top = Dimen.spaceM)
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable { viewerIndex = index },
+        )
+    }
+
+    viewerIndex?.let { index ->
+        ImageViewerDialog(
+            imageUrls = imageUrls,
+            initialIndex = index,
+            onDismiss = { viewerIndex = null },
         )
     }
 }
@@ -85,23 +107,13 @@ internal fun AuthorRow(detail: QuestionDetail) {
 
 @Composable
 internal fun TagRow(tags: List<String>) {
-    // A plain fillMaxWidth Row squeezes the last chip into whatever space is left once the others
-    // don't fit, wrapping its text one character per line - scrolling instead keeps every chip intact.
-    Row(
-        modifier =
-            Modifier
-                .padding(top = Dimen.spaceM)
-                .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(Dimen.spaceS),
-    ) {
-        tags.forEach { tag ->
-            SuggestionChip(
-                onClick = { },
-                label = { Text(tag, maxLines = 1) },
-                colors = SuggestionChipDefaults.suggestionChipColors(),
-            )
-        }
-    }
+    // The same chip row the list cards use, so a tag looks identical wherever it appears. It wraps
+    // rather than scrolls: on the detail screen there is room, and a horizontal scroller nested in
+    // the vertically scrolling page fights the gesture.
+    TagChipRow(
+        tags = tags,
+        modifier = Modifier.padding(top = Dimen.spaceML),
+    )
 }
 
 @Composable
@@ -117,36 +129,41 @@ internal fun StatsRow(
         ) {
             // /index/praise toggles (点赞/取消点赞) - only guard against a double-tap firing two
             // overlapping requests, don't disable once liked.
+            // /index/praise toggles, so this stays tappable once liked; the whole row is the
+            // target and it is held to the 48dp minimum rather than just the icon's own size.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier =
                     Modifier
                         .clip(CircleShape)
                         .clickable(enabled = !isPraising, onClick = onPraiseClick)
-                        .padding(horizontal = Dimen.spaceS, vertical = Dimen.spaceS),
+                        .defaultMinSize(minHeight = Dimen.touchTarget)
+                        .padding(horizontal = Dimen.spaceM),
             ) {
                 Icon(
                     imageVector = Icons.Default.ThumbUp,
                     contentDescription = stringResource(R.string.feed_praise_content_description),
                     tint = if (detail.isUpvoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(StatIconSize),
                 )
                 Text(
                     text = detail.upvoteCount.toString(),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.labelLarge,
                     color = if (detail.isUpvoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = Dimen.spaceS),
+                    modifier = Modifier.padding(start = Dimen.spaceM),
                 )
             }
 
-            Icon(
-                imageVector = Icons.Default.ChatBubbleOutline,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            StatText(
+                icon = Icons.Default.ChatBubbleOutline,
+                value = detail.commentCount,
+                contentDescription = stringResource(R.string.feed_comment_count_content_description),
             )
-            Text(detail.commentCount.toString(), style = MaterialTheme.typography.bodyMedium)
-
-            Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(detail.collectCount.toString(), style = MaterialTheme.typography.bodyMedium)
+            StatText(
+                icon = Icons.Default.Star,
+                value = detail.collectCount,
+                contentDescription = stringResource(R.string.feed_collect_count_content_description),
+            )
         }
 
         if (detail.rightRatio != null) {
@@ -157,6 +174,28 @@ internal fun StatsRow(
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
         }
+    }
+}
+
+@Composable
+private fun StatText(
+    icon: ImageVector,
+    value: Int,
+    contentDescription: String,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(StatIconSize),
+        )
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = Dimen.spaceM),
+        )
     }
 }
 
@@ -189,15 +228,23 @@ internal fun ChoiceSection(
                     } else {
                         ButtonDefaults.outlinedButtonBorder(enabled)
                     },
+                shape = MaterialTheme.shapes.medium,
+                contentPadding = PaddingValues(horizontal = Dimen.spaceL, vertical = Dimen.spaceML),
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .defaultMinSize(minHeight = Dimen.touchTarget)
                         .padding(vertical = Dimen.spaceS),
             ) {
-                Text(choice.text, modifier = Modifier.fillMaxWidth())
+                Text(
+                    text = choice.text,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
 }
 
 private val SelectedChoiceBorderWidth = 2.dp
+private val StatIconSize = 18.dp

@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -25,9 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.EmptyState
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndicator
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.TagChipRow
 import com.jiugjk.iq33.feature.favourite.R
 import com.jiugjk.iq33.feature.favourite.domain.model.SavedQuestion
 import org.koin.androidx.compose.koinViewModel
@@ -58,24 +63,27 @@ fun FavouriteScreen(
 
 @Composable
 private fun EmptyFavourites(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(R.string.favourite_empty),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    EmptyState(
+        icon = Icons.Outlined.BookmarkBorder,
+        title = stringResource(R.string.favourite_empty),
+        description = stringResource(R.string.favourite_empty_description),
+        modifier = modifier,
+    )
 }
 
+/**
+ * The local database could not be read.
+ *
+ * No retry: bookmarks live in Room on this device, so a read that failed will fail again until the
+ * app is restarted. Offering a button that cannot help would be worse than saying so plainly.
+ */
 @Composable
 private fun FavouritesUnavailable(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(R.string.favourite_storage_error),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.error,
-        )
-    }
+    EmptyState(
+        icon = Icons.Outlined.ErrorOutline,
+        title = stringResource(R.string.favourite_storage_error),
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -98,14 +106,15 @@ private fun FavouriteList(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(Dimen.spaceM),
-            verticalArrangement = Arrangement.spacedBy(Dimen.spaceM),
+            contentPadding = PaddingValues(Dimen.spaceL),
+            verticalArrangement = Arrangement.spacedBy(Dimen.spaceML),
         ) {
             items(items = savedQuestions, key = { it.id }) { savedQuestion ->
                 FavouriteItem(
                     savedQuestion = savedQuestion,
                     onClick = { onQuestionClick(savedQuestion.id) },
                     onRemoveClick = { onRemoveClick(savedQuestion) },
+                    modifier = Modifier.animateItem(),
                 )
             }
         }
@@ -122,7 +131,9 @@ private fun FavouriteItem(
     Card(
         modifier = modifier.fillMaxWidth(),
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
             modifier = Modifier.padding(Dimen.spaceL),
@@ -149,11 +160,11 @@ private fun FavouriteItem(
             }
 
             if (savedQuestion.tags.isNotEmpty()) {
-                Text(
-                    text = savedQuestion.tags.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = Dimen.spaceS),
+                // Every tag is shown here: unlike the feed there is no category context, so the tag
+                // is the only clue to where a bookmarked question came from.
+                TagChipRow(
+                    tags = savedQuestion.tags,
+                    modifier = Modifier.padding(top = Dimen.spaceM),
                 )
             }
         }

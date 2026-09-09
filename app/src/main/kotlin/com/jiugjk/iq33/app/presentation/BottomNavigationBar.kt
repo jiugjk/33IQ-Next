@@ -40,6 +40,7 @@ fun BottomNavigationBar(
 
     NavigationBar(
         modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         navigationItems.forEachIndexed { index, item ->
             NavigationBarItem(
@@ -63,16 +64,11 @@ fun BottomNavigationBar(
                         contentDescription = stringResource(item.titleRes),
                     )
                 },
-                label = {
-                    Text(
-                        stringResource(item.titleRes),
-                    )
-                },
-                colors =
-                    NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.surface,
-                        indicatorColor = MaterialTheme.colorScheme.primary,
-                    ),
+                label = { Text(stringResource(item.titleRes), style = MaterialTheme.typography.labelMedium) },
+                // M3's own defaults: the indicator is secondaryContainer with onSecondaryContainer
+                // on top, which stays legible under any dynamic palette. The previous hand-set pair
+                // (surface icon on a primary pill) inverted that and could land light-on-light.
+                colors = NavigationBarItemDefaults.colors(),
             )
         }
     }

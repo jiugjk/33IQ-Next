@@ -26,17 +26,6 @@ sealed interface SubmitAnswerResult {
     data object LimitReached : SubmitAnswerResult
 }
 
-data class AnswerReveal(
-    val answer: String,
-    val explanation: String,
-    /**
-     * 学识 cost reported by `payforshowanswer` for this reveal - 0 if [alreadyPaid], and null when
-     * the server did not report a parseable amount (shown as unknown, never as free).
-     */
-    val cost: Int?,
-    val alreadyPaid: Boolean,
-)
-
 /**
  * Price quote for a paid hint, from 33IQ's own `showtipsbuy` endpoint - it reports all three of the
  * account's possible prices, letting the UI show the 会员/终身会员 discount even before purchase.

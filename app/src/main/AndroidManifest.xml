@@ -4,6 +4,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
+    Saving a question image to the gallery. Android 10+ writes through MediaStore under
+    scoped storage and needs no permission at all, so this is capped at API 28 - which, with
+    minSdk 28, is the single version that still requires it.
+    -->
+    <uses-permission
+            android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+            android:maxSdkVersion="28" />
+
+    <!--
     Data backup:
     dataExtractionRules - API 31+
     allowBackup and fullBackupContent - API < 31

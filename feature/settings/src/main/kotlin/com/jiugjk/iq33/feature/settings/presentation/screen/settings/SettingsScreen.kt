@@ -84,7 +84,9 @@ private fun SettingsContent(
 
         Card(
             modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             SettingsItem(
                 title = stringResource(R.string.settings_screen_open_source_licenses),
@@ -117,7 +119,9 @@ private fun AccountCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(Dimen.spaceL),
@@ -167,7 +171,9 @@ private fun ThemeCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.padding(Dimen.spaceL)) {
             Text(text = stringResource(R.string.settings_theme_title), style = MaterialTheme.typography.bodyLarge)
