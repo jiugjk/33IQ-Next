@@ -3,9 +3,9 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 /**
  * Everything the detail screen can ask its view model to do.
  *
- * The content composable takes this one callback instead of nine same-shaped lambdas, so a wiring
- * mistake (confirm-answer hooked to confirm-hint, say) becomes a compile error rather than a silent
- * mix-up, and the composable stays previewable without a view model.
+ * The content composable takes this one callback instead of a handful of same-shaped lambdas, so a
+ * wiring mistake becomes a compile error rather than a silent mix-up, and the composable stays
+ * previewable without a view model.
  */
 internal sealed interface QuestionDetailEvent {
     data class ChoiceSelected(
@@ -22,17 +22,12 @@ internal sealed interface QuestionDetailEvent {
 
     data object BookmarkToggled : QuestionDetailEvent
 
-    data object AnswerRevealRequested : QuestionDetailEvent
-
-    data object AnswerRevealConfirmed : QuestionDetailEvent
-
     data object HintQuoteRequested : QuestionDetailEvent
 
     data object HintRevealConfirmed : QuestionDetailEvent
 
-    data class RevealFlowDismissed(
-        val kind: RevealKind,
-    ) : QuestionDetailEvent
+    /** Closes the hint's price-confirmation dialog without buying it. */
+    data object HintFlowDismissed : QuestionDetailEvent
 
     data object PraiseClicked : QuestionDetailEvent
 

@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.feed.R
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 
@@ -63,7 +62,7 @@ internal fun HintSection(
         HintQuoteDialog(
             quote = hintReveal.quote,
             onConfirm = { onEvent(QuestionDetailEvent.HintRevealConfirmed) },
-            onDismiss = { onEvent(QuestionDetailEvent.RevealFlowDismissed(RevealKind.HINT)) },
+            onDismiss = { onEvent(QuestionDetailEvent.HintFlowDismissed) },
         )
     }
 }
@@ -101,112 +100,5 @@ private fun HintQuoteDialog(
     )
 }
 
-@Composable
-internal fun AnswerSection(
-    fallbackAnalysis: String?,
-    answerReveal: RevealState<Unit, AnswerReveal>,
-    canStartAnswerReveal: Boolean,
-    onEvent: (QuestionDetailEvent) -> Unit,
-) {
-    if (answerReveal is RevealState.Revealed) {
-        AnswerRevealedCard(answerReveal.reveal)
-    } else {
-        Column {
-            if (fallbackAnalysis != null) {
-                AnalysisSection(analysis = fallbackAnalysis)
-            }
-
-            OutlinedButton(
-                onClick = { onEvent(QuestionDetailEvent.AnswerRevealRequested) },
-                enabled = canStartAnswerReveal,
-                modifier = Modifier.padding(top = Dimen.spaceS),
-            ) {
-                Text(stringResource(R.string.feed_reveal_answer_button))
-            }
-
-            if (answerReveal is RevealState.Failed) {
-                Text(
-                    text =
-                        stringResource(
-                            if (answerReveal.afterSideEffect) {
-                                R.string.feed_flow_failed_after_side_effect
-                            } else {
-                                R.string.feed_flow_failed
-                            },
-                        ),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = Dimen.spaceS),
-                )
-            }
-        }
-    }
-
-    if (answerReveal is RevealState.QuoteReady) {
-        AnswerConfirmDialog(
-            onConfirm = { onEvent(QuestionDetailEvent.AnswerRevealConfirmed) },
-            onDismiss = { onEvent(QuestionDetailEvent.RevealFlowDismissed(RevealKind.ANSWER)) },
-        )
-    }
-}
-
-@Composable
-private fun AnswerRevealedCard(reveal: AnswerReveal) {
-    Card(
-        modifier = Modifier.padding(top = Dimen.spaceL).fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(modifier = Modifier.padding(Dimen.spaceL)) {
-            Text(
-                text = stringResource(R.string.feed_reveal_answer_result_title, reveal.answer),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                text = reveal.explanation,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = Dimen.spaceS),
-            )
-            val cost = reveal.cost
-            val costText =
-                when {
-                    reveal.alreadyPaid -> stringResource(R.string.feed_reveal_answer_cost_already_paid)
-                    // 33IQ did not report a parseable amount - saying "0 学识" would be a guess.
-                    cost == null -> stringResource(R.string.feed_reveal_answer_cost_unknown)
-                    else -> stringResource(R.string.feed_reveal_answer_cost_spent, cost)
-                }
-            Text(
-                text = costText,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimen.spaceS),
-            )
-        }
-    }
-}
-
-@Composable
-private fun AnswerConfirmDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.feed_reveal_answer_confirm_title)) },
-        text = { Text(stringResource(R.string.feed_reveal_answer_confirm_message)) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.feed_dialog_confirm)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.feed_dialog_cancel)) } },
-    )
-}
-
 /** 普通 / 会员 / 终身会员 - the three tiers `showtipsbuy` quotes. */
 private const val ALL_MEMBERSHIP_TIERS = 3
-
-@Composable
-internal fun CommentsLockedNotice() {
-    Text(
-        text = stringResource(R.string.feed_comments_locked),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = Dimen.spaceL),
-    )
-}

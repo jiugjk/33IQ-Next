@@ -1,5 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.feedlist
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -23,9 +24,11 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,10 +39,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
-import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorAnim
-import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndicator
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.EmptyState
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorState
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.SkeletonList
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.Category
 import com.jiugjk.iq33.feature.feed.presentation.composable.QuestionCard
@@ -62,35 +67,62 @@ fun FeedListScreen(
         viewModel.onInit()
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(stringResource(R.string.feed_title)) },
-            actions = {
-                IconButton(onClick = onNavigateToSearch) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = stringResource(R.string.feed_search_content_description),
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.feed_title)) },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                actions = {
+                    IconButton(onClick = onNavigateToSearch) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = stringResource(R.string.feed_search_content_description),
+                        )
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            when (val currentUiState = uiState) {
+                is FeedListUiState.Loading -> LoadingContent(selectedCategory = currentUiState.selectedCategory)
+                // The category is kept on failure, so the chips stay usable and a retry reloads the
+                // category the user was actually browsing rather than starting over from "全部".
+                is FeedListUiState.Error ->
+                    FeedListError(selectedCategory = currentUiState.selectedCategory, onEvent = viewModel::onEvent)
+                is FeedListUiState.Content ->
+                    FeedListContent(
+                        uiState = currentUiState,
+                        onEvent = viewModel::onEvent,
+                        onQuestionClick = onNavigateToQuestionDetail,
                     )
-                }
-            },
+            }
+        }
+    }
+}
+
+/**
+ * The first load, with the category row already usable above the placeholders.
+ *
+ * Skeleton cards rather than a spinner: the shape of what is coming is known, so the layout does not
+ * jump when the questions land.
+ */
+@Composable
+private fun LoadingContent(selectedCategory: Category) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        CategoryChipRow(
+            categories = Category.DEFAULT_CATEGORIES,
+            selectedCategory = selectedCategory,
+            onEvent = { },
+            enabled = false,
         )
 
-        when (val currentUiState = uiState) {
-            is FeedListUiState.Loading ->
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    LoadingIndicator()
-                }
-            // The category is kept on failure, so the chips stay usable and a retry reloads the
-            // category the user was actually browsing rather than starting over from "全部".
-            is FeedListUiState.Error ->
-                FeedListError(selectedCategory = currentUiState.selectedCategory, onEvent = viewModel::onEvent)
-            is FeedListUiState.Content ->
-                FeedListContent(
-                    uiState = currentUiState,
-                    onEvent = viewModel::onEvent,
-                    onQuestionClick = onNavigateToQuestionDetail,
-                )
-        }
+        SkeletonList()
     }
 }
 
@@ -106,17 +138,12 @@ private fun FeedListError(
             onEvent = onEvent,
         )
 
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            ErrorAnim()
-
-            Button(onClick = { onEvent(FeedListEvent.Refreshed) }, modifier = Modifier.padding(top = Dimen.spaceL)) {
-                Text(stringResource(R.string.feed_retry))
-            }
-        }
+        ErrorState(
+            title = stringResource(R.string.feed_load_failed_title),
+            description = stringResource(R.string.feed_load_failed_description),
+            retryLabel = stringResource(R.string.feed_retry),
+            onRetry = { onEvent(FeedListEvent.Refreshed) },
+        )
     }
 }
 
@@ -139,7 +166,19 @@ private fun FeedListContent(
             onRefresh = { onEvent(FeedListEvent.Refreshed) },
             modifier = Modifier.fillMaxSize(),
         ) {
-            QuestionList(uiState = uiState, onEvent = onEvent, onQuestionClick = onQuestionClick)
+            if (uiState.questions.isEmpty() && !uiState.isRefreshing) {
+                // 33IQ answered with nothing rather than failing - a retry is still offered, since
+                // an empty tag page is usually transient.
+                EmptyState(
+                    icon = Icons.Outlined.Inbox,
+                    title = stringResource(R.string.feed_empty_title),
+                    description = stringResource(R.string.feed_empty_description),
+                    actionLabel = stringResource(R.string.feed_retry),
+                    action = { onEvent(FeedListEvent.Refreshed) },
+                )
+            } else {
+                QuestionList(uiState = uiState, onEvent = onEvent, onQuestionClick = onQuestionClick)
+            }
         }
     }
 }
@@ -149,17 +188,44 @@ private fun CategoryChipRow(
     categories: List<Category>,
     selectedCategory: Category,
     onEvent: (FeedListEvent) -> Unit,
+    enabled: Boolean = true,
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = Dimen.spaceM, vertical = Dimen.spaceS),
-        horizontalArrangement = Arrangement.spacedBy(Dimen.spaceS),
+        contentPadding = PaddingValues(horizontal = Dimen.spaceL, vertical = Dimen.spaceM),
+        horizontalArrangement = Arrangement.spacedBy(Dimen.spaceM),
     ) {
         items(items = categories, key = { it.tagName }) { category ->
+            val selected = category == selectedCategory
+
+            // Selected chips carry a little elevation on top of their container colour, so the
+            // current category still reads as chosen where dynamic colour makes the selected and
+            // unselected containers close in tone.
+            val elevation by animateDpAsState(
+                targetValue = if (selected) SelectedChipElevation else 0.dp,
+                label = "categoryChipElevation",
+            )
+
             FilterChip(
-                selected = category == selectedCategory,
+                selected = selected,
+                enabled = enabled,
                 onClick = { onEvent(FeedListEvent.CategorySelected(category)) },
-                label = { Text(category.label()) },
-                colors = FilterChipDefaults.filterChipColors(),
+                label = { Text(category.label(), style = MaterialTheme.typography.labelLarge) },
+                shape = MaterialTheme.shapes.small,
+                elevation = FilterChipDefaults.filterChipElevation(elevation = elevation),
+                colors =
+                    FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                border =
+                    FilterChipDefaults.filterChipBorder(
+                        enabled = enabled,
+                        selected = selected,
+                        borderColor = MaterialTheme.colorScheme.outlineVariant,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary,
+                    ),
             )
         }
     }
@@ -178,24 +244,37 @@ private fun QuestionList(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(Dimen.spaceM),
-        verticalArrangement = Arrangement.spacedBy(Dimen.spaceM),
+        contentPadding = PaddingValues(Dimen.spaceL),
+        verticalArrangement = Arrangement.spacedBy(Dimen.spaceML),
     ) {
         items(items = uiState.questions, key = { it.id }) { question ->
-            QuestionCard(question = question, onClick = { onQuestionClick(question.id) })
+            QuestionCard(
+                question = question,
+                onClick = { onQuestionClick(question.id) },
+                // Inside a category every question carries that category's own tag, so repeating it
+                // on every card says nothing. "全部" has an empty tagName and hides nothing.
+                hiddenTag = uiState.selectedCategory.tagName.takeIf { it.isNotEmpty() },
+                modifier = Modifier.animateItem(),
+            )
         }
 
         if (uiState.isLoadingMore) {
             item {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(modifier = Modifier.size(Dimen.spaceXL).padding(Dimen.spaceM))
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = Dimen.spaceL),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(LoadMoreIndicatorSize))
                 }
             }
         }
 
         if (uiState.loadMoreFailed) {
             item {
-                TextButton(onClick = { onEvent(FeedListEvent.LoadMoreRetried) }, modifier = Modifier.fillMaxWidth()) {
+                TextButton(
+                    onClick = { onEvent(FeedListEvent.LoadMoreRetried) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = Dimen.spaceM),
+                ) {
                     Text(
                         text = stringResource(R.string.feed_load_more_failed),
                         color = MaterialTheme.colorScheme.error,
@@ -244,6 +323,8 @@ private fun LoadMoreTrigger(
 }
 
 private const val LOAD_MORE_THRESHOLD = 4
+private val SelectedChipElevation = 2.dp
+private val LoadMoreIndicatorSize = 28.dp
 
 @Preview
 @Composable

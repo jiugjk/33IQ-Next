@@ -14,6 +14,8 @@ import com.jiugjk.iq33.feature.feed.domain.model.Category
 private val CATEGORY_LABELS: Map<String, Int> =
     mapOf(
         "" to R.string.feed_category_all,
+        "精选" to R.string.feed_category_featured,
+        "恐怖推理" to R.string.feed_category_horror,
         "侦探推理" to R.string.feed_category_detective,
         "逻辑思维" to R.string.feed_category_logic,
         "谜语大全" to R.string.feed_category_riddle,

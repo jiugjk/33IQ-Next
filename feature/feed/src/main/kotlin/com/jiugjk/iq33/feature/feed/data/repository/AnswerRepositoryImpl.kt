@@ -5,7 +5,6 @@ import com.jiugjk.iq33.feature.base.domain.result.resultOf
 import com.jiugjk.iq33.feature.base.util.TimberLogTags
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.IqResponseException
-import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
@@ -20,11 +19,6 @@ internal class AnswerRepositoryImpl(
     ): Result<SubmitAnswerResult> =
         resultOf(TimberLogTags.NETWORK, "Failed to submit answer for $questionId") {
             remoteDataSource.submitAnswer(questionId, answer)
-        }.withSideEffectFlag()
-
-    override suspend fun revealAnswer(questionId: Long): Result<AnswerReveal> =
-        resultOf(TimberLogTags.NETWORK, "Failed to reveal answer for $questionId") {
-            remoteDataSource.revealAnswer(questionId)
         }.withSideEffectFlag()
 
     override suspend fun quoteHint(questionId: Long): Result<HintQuote> =

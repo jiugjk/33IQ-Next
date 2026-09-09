@@ -11,6 +11,11 @@ data class Category(
         val DEFAULT_CATEGORIES =
             listOf(
                 ALL,
+                // 33IQ has no separate "featured" endpoint: 精选 is an ordinary tag like any other,
+                // so these browse through the same /tag/<name>.html list, paging and refresh as the
+                // rest. The Tab reads 精选题目 while the tag it filters on is plain 精选.
+                Category("精选题目", "精选"),
+                Category("恐怖推理", "恐怖推理"),
                 Category("侦探推理", "侦探推理"),
                 Category("逻辑思维", "逻辑思维"),
                 Category("谜语大全", "谜语大全"),

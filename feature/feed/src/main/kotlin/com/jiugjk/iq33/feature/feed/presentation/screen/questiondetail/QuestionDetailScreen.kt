@@ -35,7 +35,6 @@ import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorAnim
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndicator
 import com.jiugjk.iq33.feature.feed.R
-import com.jiugjk.iq33.feature.feed.domain.model.Comment
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import org.koin.androidx.compose.koinViewModel
@@ -179,8 +178,11 @@ private fun QuestionDetailContent(
 }
 
 /**
- * Everything below the question itself: where the answer is given, the paid hint and answer, and
- * the comments that go with them.
+ * Everything below the question itself: where the answer is given, and the paid hint.
+ *
+ * The analysis 33IQ hands out for free is rendered here directly. It used to be a fallback shown
+ * only until the paid answer-reveal replaced it; with that feature gone it is simply the analysis,
+ * shown whenever the question has one.
  */
 @Composable
 private fun AnswerSections(
@@ -203,20 +205,7 @@ private fun AnswerSections(
 
     HintSection(hintReveal = uiState.hintReveal, canStartHintReveal = uiState.canStartHintReveal, onEvent = onEvent)
 
-    AnswerSection(
-        fallbackAnalysis = detail.analysis,
-        answerReveal = uiState.answerReveal,
-        canStartAnswerReveal = uiState.canStartAnswerReveal,
-        onEvent = onEvent,
-    )
-
-    // 33IQ hides a question's comments (they routinely spoil the answer) until the real answer
-    // has been revealed - matches the official app's own behaviour, not a client limitation.
-    if (uiState.isAnswerRevealed) {
-        CommentSection(comments = detail.comments, commentCount = detail.commentCount)
-    } else {
-        CommentsLockedNotice()
-    }
+    detail.analysis?.let { analysis -> AnalysisSection(analysis = analysis) }
 }
 
 @Composable
@@ -258,39 +247,6 @@ internal fun AnalysisSection(analysis: String) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
-        }
-    }
-}
-
-@Composable
-private fun CommentSection(
-    comments: List<Comment>,
-    commentCount: Int,
-) {
-    Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
-        Text(
-            text = stringResource(R.string.feed_comments_title, commentCount),
-            style = MaterialTheme.typography.titleSmall,
-        )
-
-        if (comments.isEmpty()) {
-            Text(
-                text = stringResource(R.string.feed_comments_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimen.spaceS),
-            )
-        } else {
-            comments.forEach { comment ->
-                Column(modifier = Modifier.padding(top = Dimen.spaceM)) {
-                    Text(
-                        text = "${comment.author}  ${comment.time}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(text = comment.content, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
         }
     }
 }

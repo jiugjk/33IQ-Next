@@ -10,14 +10,17 @@
     <string name="feed_copy_content_description">复制题目与选项</string>
     <string name="feed_copy_done">已复制题目与选项</string>
     <string name="feed_praise_content_description">点赞</string>
+    <string name="feed_upvote_count_content_description">点赞数</string>
+    <string name="feed_comment_count_content_description">评论数</string>
     <string name="feed_analysis_title">解析</string>
-    <string name="feed_comments_title">评论（%1$d）</string>
-    <string name="feed_comments_empty">暂无评论，或该功能的数据源尚未确认</string>
-    <string name="feed_comments_locked">查看正确答案后可查看评论</string>
     <string name="feed_right_ratio">正确率 %1$d%%</string>
     <string name="feed_question_image_content_description">题目配图</string>
     <string name="feed_retry">重试</string>
     <string name="feed_load_more_failed">加载更多失败，点击重试</string>
+    <string name="feed_load_failed_title">加载失败</string>
+    <string name="feed_load_failed_description">请检查网络连接后重试</string>
+    <string name="feed_empty_title">这个分类暂时没有题目</string>
+    <string name="feed_empty_description">换个分类看看，或稍后再试</string>
     <string name="feed_bookmark_failed">收藏操作失败，请稍后重试</string>
 
     <string name="feed_submit_answer">提交答案</string>
@@ -28,14 +31,6 @@
     <string name="feed_submission_already_answered">您已经回答过该题，无法重复提交</string>
     <string name="feed_submission_limit_reached">已达到今日答题上限</string>
     <string name="feed_submission_failed">提交失败，请检查网络或登录状态后重试</string>
-
-    <string name="feed_reveal_answer_button">查看正确答案（消耗学识）</string>
-    <string name="feed_reveal_answer_confirm_title">查看答案</string>
-    <string name="feed_reveal_answer_confirm_message">查看本题正确答案可能会消耗学识（具体数值以官方为准），查看后将无法再提交作答。是否继续？</string>
-    <string name="feed_reveal_answer_result_title">正确答案：%1$s</string>
-    <string name="feed_reveal_answer_cost_spent">本次消耗 %1$d 学识</string>
-    <string name="feed_reveal_answer_cost_already_paid">您已购买过本题答案，本次免费查看</string>
-    <string name="feed_reveal_answer_cost_unknown">本次消耗的学识未由服务器返回</string>
 
     <string name="feed_reveal_hint_button">获取提示（消耗学识）</string>
     <string name="feed_reveal_hint_confirm_title">获取提示</string>
@@ -49,6 +44,8 @@
     <string name="feed_open_answer_label">填写答案</string>
 
     <string name="feed_category_all">全部</string>
+    <string name="feed_category_featured">精选题目</string>
+    <string name="feed_category_horror">恐怖推理</string>
     <string name="feed_category_detective">侦探推理</string>
     <string name="feed_category_logic">逻辑思维</string>
     <string name="feed_category_riddle">谜语大全</string>

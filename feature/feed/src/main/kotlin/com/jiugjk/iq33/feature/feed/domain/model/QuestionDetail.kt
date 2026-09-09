@@ -10,12 +10,6 @@ data class Choice(
     val text: String,
 )
 
-data class Comment(
-    val author: String,
-    val content: String,
-    val time: String,
-)
-
 data class QuestionDetail(
     val id: Long,
     /**
@@ -40,6 +34,11 @@ data class QuestionDetail(
     val publishedDate: String?,
     val upvoteCount: Int,
     val isUpvoted: Boolean,
+    /**
+     * How many comments 33IQ reports on this question. Shown as a stat only - the app does not
+     * list comments (33IQ exposes no endpoint for them), so this is a popularity signal, not a
+     * link to content.
+     */
     val commentCount: Int,
     /** Number of users who have 收藏'd (bookmarked on 33IQ's own servers) this question. */
     val collectCount: Int,
@@ -49,7 +48,6 @@ data class QuestionDetail(
     val choices: List<Choice>,
     /** Answer/analysis text, when it could be found without login (33IQ hides this for most guests). */
     val analysis: String?,
-    val comments: List<Comment>,
     /** The public, browser-readable page for this question - what sharing must hand out. */
     val sourceUrl: String,
 ) {

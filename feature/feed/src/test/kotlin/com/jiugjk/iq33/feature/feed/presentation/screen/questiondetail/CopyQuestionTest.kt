@@ -21,9 +21,16 @@ class CopyQuestionTest {
                 "",
                 "A. 冰块",
                 "B. 毛巾冰棒",
-                "",
-                "https://www.33iq.com/question/590073.html",
             ).joinToString("\n")
+    }
+
+    @Test
+    fun `the copied text does not append the question's link`() {
+        val text = questionAsPlainText(detail())
+
+        // Copying is for pasting the question itself; the link is what sharing hands out.
+        text shouldNotContain "33iq.com"
+        text.last().toString() shouldBeEqualTo "棒"
     }
 
     @Test
@@ -42,11 +49,13 @@ class CopyQuestionTest {
     }
 
     @Test
-    fun `an open question copies its body and link without an empty choice block`() {
+    fun `an open question copies its body without an empty choice block`() {
         val text = questionAsPlainText(detail(questionType = QuestionType.OPEN, choices = emptyList()))
 
-        text shouldContain "https://www.33iq.com/question/590073.html"
+        text shouldContain "男子被发现死在自家浴室。"
         text shouldNotContain "A."
+        // No choices means the block is skipped entirely, not left as trailing blank lines.
+        text shouldBeEqualTo "男子被发现死在自家浴室。\n\n第二段正文。"
     }
 
     private fun detail(
@@ -70,7 +79,6 @@ class CopyQuestionTest {
         questionType = questionType,
         choices = choices,
         analysis = null,
-        comments = emptyList(),
         sourceUrl = "https://www.33iq.com/question/590073.html",
     )
 }
