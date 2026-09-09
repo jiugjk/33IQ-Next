@@ -29,9 +29,15 @@ import com.jiugjk.iq33.feature.base.common.res.Dimen
  * A screen with no content to show, for a reason that is not an error - an empty bookmark list, a
  * search that matched nothing.
  *
+ * @param icon illustration for the empty reason.
+ * @param title short headline.
+ * @param modifier layout for the whole state.
+ * @param description optional supporting text under the title.
+ * @param actionLabel label for the optional call to action. Ignored when [action] is null.
  * @param action optional call to action. Omitted when there is nothing useful for the user to do
  *   here but navigate away.
  */
+@Suppress("LongParameterList")
 @Composable
 fun EmptyState(
     icon: ImageVector,

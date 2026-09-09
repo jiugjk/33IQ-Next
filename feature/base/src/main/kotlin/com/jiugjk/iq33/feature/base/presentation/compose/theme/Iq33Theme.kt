@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
  *   light/dark/system preference is resolved by the caller and passed in.
  * @param dynamicColor set false to force the brand scheme even where dynamic colour is available -
  *   used by previews, which have no wallpaper to derive one from.
+ * @param content the UI to theme.
  */
 @Composable
 fun Iq33Theme(
