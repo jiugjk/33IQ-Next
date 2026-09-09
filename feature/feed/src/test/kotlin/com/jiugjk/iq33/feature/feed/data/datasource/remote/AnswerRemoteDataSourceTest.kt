@@ -68,6 +68,43 @@ class AnswerRemoteDataSourceTest {
         }
 
     @Test
+    fun `revealing an answer buys it before asking for it, the order the real app uses`() =
+        runTest {
+            val calledUrls = mutableListOf<String>()
+            coEvery { htmlClient.postFormForText(capture(calledUrls), any()) } returnsMany
+                listOf(
+                    """{"status":"success","isPaid":"0","pay":"60","shownum":"4009","todySeeNum":"0"}""",
+                    """{"answer":"A","explanation":"<p>因为如此</p>","isChangeWrongData":"0","status":"success"}""",
+                )
+
+            val reveal = sut.revealAnswer(108_950)
+
+            // Asking showanswertrue first is what used to fail: the answer is not handed out until
+            // payforshowanswer has bought the reveal.
+            calledUrls.map { url -> url.substringAfter("/index/").substringBefore("?") } shouldBeEqualTo
+                listOf("payforshowanswer", "showanswertrue")
+            reveal.answer shouldBeEqualTo "A"
+            reveal.explanation shouldBeEqualTo "因为如此"
+            reveal.cost shouldBeEqualTo 60
+            reveal.alreadyPaid shouldBeEqualTo false
+        }
+
+    @Test
+    fun `an answer already bought earlier is revealed at no further cost`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returnsMany
+                listOf(
+                    """{"status":"success","isPaid":"1","pay":"60"}""",
+                    """{"answer":"B","explanation":"<p>解析</p>","status":"success"}""",
+                )
+
+            val reveal = sut.revealAnswer(1)
+
+            reveal.alreadyPaid shouldBeEqualTo true
+            reveal.cost shouldBeEqualTo 0
+        }
+
+    @Test
     fun `revealing an answer stops at the first failing step instead of reporting an empty answer`() =
         runTest {
             coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"error"}"""
@@ -78,13 +115,10 @@ class AnswerRemoteDataSourceTest {
         }
 
     @Test
-    fun `a failure after the first step is flagged as possibly already charged`() =
+    fun `a failure after the purchase step is flagged as possibly already charged`() =
         runTest {
-            var call = 0
-            coEvery { htmlClient.postFormForText(any(), any()) } coAnswers {
-                call++
-                if (call == 1) """{"answer":"A","explanation":"<p>解析</p>"}""" else """{"status":"error"}"""
-            }
+            coEvery { htmlClient.postFormForText(any(), any()) } returnsMany
+                listOf("""{"status":"success","pay":"60"}""", """{"status":"error"}""")
 
             val failure = runCatching { sut.revealAnswer(1) }.exceptionOrNull() as IqResponseException
 
@@ -96,34 +130,14 @@ class AnswerRemoteDataSourceTest {
         runTest {
             coEvery { htmlClient.postFormForText(any(), any()) } returnsMany
                 listOf(
+                    """{"status":"success","isPaid":"0","pay":"5"}""",
                     """{"answer":"A","explanation":"<p>第一段</p><p>第二段</p>"}""",
-                    """{"pay":"5"}""",
-                    """{"status":"success"}""",
                 )
 
             val reveal = sut.revealAnswer(1)
 
             reveal.answer shouldBeEqualTo "A"
             reveal.explanation shouldBeEqualTo "第一段\n\n第二段"
-            reveal.cost shouldBeEqualTo 5
-        }
-
-    @Test
-    fun `an answer only the last step returns is still revealed`() =
-        runTest {
-            coEvery { htmlClient.postFormForText(any(), any()) } returnsMany
-                listOf(
-                    // showanswertrue reads as an eligibility check: "0" is the ordinary
-                    // not-yet-unlocked state, not a refusal, and used to abort the whole flow.
-                    """{"status":"0"}""",
-                    """{"pay":"5"}""",
-                    """{"status":"success","answer":"B","explanation":"<p>因为如此</p>"}""",
-                )
-
-            val reveal = sut.revealAnswer(1)
-
-            reveal.answer shouldBeEqualTo "B"
-            reveal.explanation shouldBeEqualTo "因为如此"
             reveal.cost shouldBeEqualTo 5
         }
 

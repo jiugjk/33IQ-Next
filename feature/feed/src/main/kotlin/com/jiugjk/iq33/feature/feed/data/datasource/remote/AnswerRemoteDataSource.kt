@@ -60,51 +60,46 @@ internal class AnswerRemoteDataSource(
     }
 
     /**
-     * Reveals the real answer and explanation, spending 学识. Calls `showanswertrue`,
-     * `payforshowanswer` and `showanswernew`, **in that exact order** - the real app's own order.
-     * An earlier version of this client called `payforshowanswer` first (to show a cost-confirmation
-     * dialog before spending anything), which broke this flow at runtime ("网络异常" on a real user's
-     * account) - so the exact server-side dependency between these three calls isn't understood well
-     * enough to reorder them again; this client would rather match the real sequence than guess.
+     * Reveals the real answer and explanation, spending 学识.
      *
-     * **Which of the three actually returns the answer is not confirmed**, and assuming it was the
-     * first one is what used to make this flow fail for a logged-in user whose hints worked fine:
-     * `showanswertrue` reads as an eligibility check ("may this answer be shown?"), so a reply of
-     * `{"status":"0"}` - not yet unlocked, the normal state before paying - was rejected as a
-     * business error, and even a passing reply was rejected for not carrying an `answer` field that
-     * only a later step may ever have had. The content is therefore taken from whichever step
-     * supplies it, latest first, since `showanswernew` is the call that *shows* the answer; only a
-     * flow where no step at all supplied one is a failure. Statuses are still checked, but against
-     * the values that really mean refusal (not signed in, server-side error) rather than against
-     * every falsy-looking string.
+     * The order here is **pay first, then show**, and it is confirmed rather than inferred: a HAR
+     * capture of the official Android app (3.6.3) revealing question 108950 shows exactly two calls,
+     * 534ms apart on one connection, and no others:
      *
-     * Each step is still checked before the next one runs, so a refusal cannot be carried forward
-     * into a "revealed" state with no answer in it. From step two onwards a failure is flagged as
-     * [IqResponseException.afterSideEffect]: the first call already reached the server, and which of
-     * the three spends the 学识 is not confirmed either.
+     * 1. `payforshowanswer` -> `{"status":"success","isPaid":"0","pay":"60","shownum":"4009","todySeeNum":"0"}`
+     * 2. `showanswertrue`   -> `{"answer":"A","explanation":"<p>...</p>","isChangeWrongData":"0","status":"success"}`
+     *
+     * So `payforshowanswer` is the call that buys the reveal and reports what it cost, and
+     * `showanswertrue` ("show answer, truly") is the one that hands the answer over afterwards.
+     * Asking `showanswertrue` for the answer *before* paying - which is what this client used to do -
+     * is why revealing failed for a signed-in account whose hints worked fine: the answer is simply
+     * not something the server will hand out yet at that point.
+     *
+     * `showanswernew` is not called at all: it appears nowhere in the capture, and there is no answer
+     * left for it to fetch once step 2 has returned one.
+     *
+     * The step-two failure is flagged as [IqResponseException.afterSideEffect] because by then the
+     * purchase has already gone through - a reveal that dies there may well have cost 学识 anyway,
+     * and the caller must not present it as "nothing happened".
      */
     suspend fun revealAnswer(questionId: Long): AnswerReveal {
         val params = questionIdParams(questionId)
 
-        val checkJson =
-            postForJson(SHOW_ANSWER_TRUE, IqConstants.SHOW_ANSWER_TRUE_URL, params)
-                .requireSuccess(SHOW_ANSWER_TRUE, fatalStatuses = REFUSAL_STATUSES)
-
         val payJson =
             postForJson(PAY_FOR_SHOW_ANSWER, IqConstants.PAY_FOR_SHOW_ANSWER_URL, params)
-                .requireSuccess(PAY_FOR_SHOW_ANSWER, afterSideEffect = true, fatalStatuses = REFUSAL_STATUSES)
+                .requireSuccess(PAY_FOR_SHOW_ANSWER, fatalStatuses = REFUSAL_STATUSES)
 
         val revealJson =
-            postForJson(SHOW_ANSWER_NEW, IqConstants.SHOW_ANSWER_NEW_URL, params)
-                .requireSuccess(SHOW_ANSWER_NEW, afterSideEffect = true, fatalStatuses = REFUSAL_STATUSES)
+            postForJson(SHOW_ANSWER_TRUE, IqConstants.SHOW_ANSWER_TRUE_URL, params)
+                .requireSuccess(SHOW_ANSWER_TRUE, afterSideEffect = true, fatalStatuses = REFUSAL_STATUSES)
 
-        // Latest step first: showanswernew is the one that actually shows the answer, so when more
-        // than one step carries the field its copy is the authoritative one.
-        val steps = listOf(revealJson, payJson, checkJson)
+        // The reveal step is where the answer comes from; the purchase step is only checked as a
+        // fallback, so a server that ever answers earlier than expected still works.
+        val steps = listOf(revealJson, payJson)
 
         val answer =
             steps.firstNotNullOfOrNull { step -> step.stringOrNull(ANSWER_FIELD)?.takeIf(String::isNotBlank) }
-                ?: throw revealJson.failure(SHOW_ANSWER_NEW, IqResponseException.Reason.MISSING_FIELD, afterSideEffect = true)
+                ?: throw revealJson.failure(SHOW_ANSWER_TRUE, IqResponseException.Reason.MISSING_FIELD, afterSideEffect = true)
 
         val alreadyPaid = payJson.stringOrNull("isPaid") == "1"
         // An unparseable price is reported as unknown rather than quietly shown to the user as 0.
@@ -239,7 +234,6 @@ internal class AnswerRemoteDataSource(
         const val SUBMIT_ANSWER = "commentdeal"
         const val SHOW_ANSWER_TRUE = "showanswertrue"
         const val PAY_FOR_SHOW_ANSWER = "payforshowanswer"
-        const val SHOW_ANSWER_NEW = "showanswernew"
         const val SHOW_TIPS = "showtips"
         const val SHOW_TIPS_BUY = "showtipsbuy"
         const val PRAISE = "praise"
