@@ -18,6 +18,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavController
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -31,9 +34,9 @@ fun BottomNavigationBar(
     val navigationItems = getBottomNavigationItems()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentDestination = navBackStackEntry?.destination
 
-    val selectedNavigationIndex = getSelectedNavigationIndex(currentRoute, navigationItems)
+    val selectedNavigationIndex = getSelectedNavigationIndex(currentDestination, navigationItems)
 
     NavigationBar(
         modifier = modifier,
@@ -94,25 +97,24 @@ private fun getBottomNavigationItems() =
         ),
     )
 
-/*
-Returns the index of the selected bottom menu item based on the current route.
-If no match is found, it defaults to the first item (index 0).
-*/
 private fun getSelectedNavigationIndex(
-    currentRoute: String?,
+    currentDestination: NavDestination?,
     navigationItems: List<NavigationBarItem>,
-): Int =
-    navigationItems
-        .indexOfFirst { item ->
-            when (currentRoute) {
-                null -> false
-                NavigationRoute.QuestionDetail::class.qualifiedName -> item.route is NavigationRoute.FeedList
-                NavigationRoute.Search::class.qualifiedName -> item.route is NavigationRoute.FeedList
-                NavigationRoute.Login::class.qualifiedName -> item.route is NavigationRoute.Settings
-                NavigationRoute.AboutLibraries::class.qualifiedName -> item.route is NavigationRoute.Settings
-                else -> item.route::class.qualifiedName == currentRoute
-            }
-        }.takeIf { it >= 0 } ?: 0
+): Int {
+    if (currentDestination == null) return 0
+
+    val index =
+        navigationItems.indexOfFirst { item ->
+            currentDestination.hierarchy.any { destination -> destination.hasRoute(item.route::class) }
+        }
+
+    return index.takeIf { it >= 0 } ?: 0
+}
+
+fun NavDestination.showsBottomBar(): Boolean =
+    hasRoute<NavigationRoute.FeedList>() ||
+        hasRoute<NavigationRoute.Favourites>() ||
+        hasRoute<NavigationRoute.Settings>()
 
 data class NavigationBarItem(
     @StringRes val titleRes: Int,

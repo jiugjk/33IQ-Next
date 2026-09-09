@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndicator
 import com.jiugjk.iq33.feature.favourite.R
 import com.jiugjk.iq33.feature.favourite.domain.model.SavedQuestion
 import org.koin.androidx.compose.koinViewModel
@@ -41,12 +42,13 @@ fun FavouriteScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         when (val currentUiState = uiState) {
-            FavouriteUiState.Loading -> Unit
+            FavouriteUiState.Loading -> LoadingIndicator()
             FavouriteUiState.Empty -> EmptyFavourites()
             FavouriteUiState.Error -> FavouritesUnavailable()
             is FavouriteUiState.Content ->
                 FavouriteList(
                     savedQuestions = currentUiState.savedQuestions,
+                    actionFailed = currentUiState.actionFailed,
                     onQuestionClick = onQuestionClick,
                     onRemoveClick = viewModel::onRemoveClick,
                 )
@@ -79,21 +81,33 @@ private fun FavouritesUnavailable(modifier: Modifier = Modifier) {
 @Composable
 private fun FavouriteList(
     savedQuestions: List<SavedQuestion>,
+    actionFailed: Boolean,
     onQuestionClick: (Long) -> Unit,
     onRemoveClick: (SavedQuestion) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(Dimen.spaceM),
-        verticalArrangement = Arrangement.spacedBy(Dimen.spaceM),
-    ) {
-        items(items = savedQuestions, key = { it.id }) { savedQuestion ->
-            FavouriteItem(
-                savedQuestion = savedQuestion,
-                onClick = { onQuestionClick(savedQuestion.id) },
-                onRemoveClick = { onRemoveClick(savedQuestion) },
+    Column(modifier = modifier.fillMaxSize()) {
+        if (actionFailed) {
+            Text(
+                text = stringResource(R.string.favourite_action_failed),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = Dimen.spaceM, vertical = Dimen.spaceS),
             )
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(Dimen.spaceM),
+            verticalArrangement = Arrangement.spacedBy(Dimen.spaceM),
+        ) {
+            items(items = savedQuestions, key = { it.id }) { savedQuestion ->
+                FavouriteItem(
+                    savedQuestion = savedQuestion,
+                    onClick = { onQuestionClick(savedQuestion.id) },
+                    onRemoveClick = { onRemoveClick(savedQuestion) },
+                )
+            }
         }
     }
 }
@@ -154,6 +168,7 @@ private fun FavouriteListPreview() {
             listOf(
                 SavedQuestion(id = 1, title = "示例题目标题", tags = listOf("逻辑思维"), savedAt = 0L),
             ),
+        actionFailed = false,
         onQuestionClick = { },
         onRemoveClick = { },
     )

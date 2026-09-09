@@ -2,6 +2,7 @@ package com.jiugjk.iq33.feature.feed.data.repository
 
 import com.jiugjk.iq33.feature.base.domain.result.Result
 import com.jiugjk.iq33.feature.base.domain.result.resultOf
+import com.jiugjk.iq33.feature.base.util.TimberLogTags
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionRemoteDataSource
 import com.jiugjk.iq33.feature.feed.domain.model.Category
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
@@ -15,7 +16,7 @@ internal class QuestionRepositoryImpl(
         category: Category,
         page: Int,
     ): Result<List<QuestionSummary>> =
-        resultOf(NETWORK_LOG_TAG, "Failed to load question list") {
+        resultOf(TimberLogTags.NETWORK, "Failed to load question list") {
             remoteDataSource.fetchQuestionList(category, page)
         }
 
@@ -23,16 +24,12 @@ internal class QuestionRepositoryImpl(
         keyword: String,
         page: Int,
     ): Result<List<QuestionSummary>> =
-        resultOf(NETWORK_LOG_TAG, "Search failed") {
+        resultOf(TimberLogTags.NETWORK, "Search failed") {
             remoteDataSource.fetchSearchResults(keyword, page)
         }
 
     override suspend fun getQuestionDetail(id: Long): Result<QuestionDetail> =
-        resultOf(NETWORK_LOG_TAG, "Failed to load question $id") {
+        resultOf(TimberLogTags.NETWORK, "Failed to load question $id") {
             remoteDataSource.fetchQuestionDetail(id)
         }
-
-    private companion object {
-        const val NETWORK_LOG_TAG = "Network"
-    }
 }

@@ -26,6 +26,7 @@ internal sealed interface FeedListUiState : BaseState {
         override val selectedCategory: Category = Category.ALL,
         val questions: List<QuestionSummary> = emptyList(),
         val page: Int = 1,
+        val isRefreshing: Boolean = false,
         val isLoadingMore: Boolean = false,
         val canLoadMore: Boolean = true,
         /**

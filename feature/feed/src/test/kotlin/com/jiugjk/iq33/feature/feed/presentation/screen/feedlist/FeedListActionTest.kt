@@ -65,6 +65,31 @@ class FeedListActionTest {
         reduced.selectedCategory shouldBeEqualTo CATEGORY_B
     }
 
+    @Test
+    fun `refreshing keeps the listed questions until the new page arrives`() {
+        val state = FeedListUiState.Content(selectedCategory = CATEGORY_A, questions = listOf(question(10)), page = 2)
+
+        val reduced = FeedListAction.RefreshStart(CATEGORY_A).reduce(state) as FeedListUiState.Content
+
+        reduced.isRefreshing shouldBeEqualTo true
+        reduced.questions.map { it.id } shouldBeEqualTo listOf(10L)
+    }
+
+    @Test
+    fun `a failed refresh does not blank the list`() {
+        val state =
+            FeedListUiState.Content(
+                selectedCategory = CATEGORY_A,
+                questions = listOf(question(10)),
+                isRefreshing = true,
+            )
+
+        val reduced = FeedListAction.RefreshFailure(CATEGORY_A).reduce(state) as FeedListUiState.Content
+
+        reduced.isRefreshing shouldBeEqualTo false
+        reduced.questions.map { it.id } shouldBeEqualTo listOf(10L)
+    }
+
     private fun question(id: Long) = QuestionSummary(id = id, title = "题 $id", tags = emptyList(), upvoteCount = 0, commentCount = 0)
 
     private companion object {

@@ -1,5 +1,6 @@
 package com.jiugjk.iq33.feature.favourite.data.repository
 
+import com.jiugjk.iq33.feature.base.util.TimberLogTags
 import com.jiugjk.iq33.feature.favourite.data.datasource.database.SavedQuestionDao
 import com.jiugjk.iq33.feature.favourite.data.datasource.database.SavedQuestionEntity
 import com.jiugjk.iq33.feature.favourite.domain.model.SavedQuestion
@@ -12,7 +13,6 @@ import kotlinx.coroutines.flow.map
 import timber.log.Timber
 
 private const val TAG_SEPARATOR = "|||"
-private const val DATABASE_LOG_TAG = "Database"
 
 internal class BookmarkRepositoryImpl(
     private val savedQuestionDao: SavedQuestionDao,
@@ -24,7 +24,7 @@ internal class BookmarkRepositoryImpl(
             .catch { throwable ->
                 if (throwable is CancellationException) throw throwable
 
-                Timber.tag(DATABASE_LOG_TAG).w(throwable, "Failed to observe bookmarks")
+                Timber.tag(TimberLogTags.DATABASE).w(throwable, "Failed to observe bookmarks")
                 emit(BookmarkResult.Failure(throwable))
             }
 
@@ -47,7 +47,7 @@ internal class BookmarkRepositoryImpl(
                 onFailure = { throwable ->
                     if (throwable is CancellationException) throw throwable
 
-                    Timber.tag(DATABASE_LOG_TAG).w(throwable, failureMessage)
+                    Timber.tag(TimberLogTags.DATABASE).w(throwable, failureMessage)
                     BookmarkResult.Failure(throwable)
                 },
             )

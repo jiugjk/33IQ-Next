@@ -21,20 +21,11 @@ internal enum class LoginFailureReason {
 }
 
 @Immutable
-internal sealed interface LoginUiState : BaseState {
-    @Immutable
-    data object Idle : LoginUiState
-
-    @Immutable
-    data object Loading : LoginUiState
-
-    @Immutable
-    data object Success : LoginUiState
-
-    @Immutable
-    data class Failure(
-        val reason: LoginFailureReason,
-        /** Raw server-reported status for [LoginFailureReason.UNKNOWN], kept for diagnostics. */
-        val serverStatus: String? = null,
-    ) : LoginUiState
-}
+internal data class LoginUiState(
+    val account: String = "",
+    val password: String = "",
+    val isLoading: Boolean = false,
+    val isSuccess: Boolean = false,
+    val failureReason: LoginFailureReason? = null,
+    val serverStatus: String? = null,
+) : BaseState

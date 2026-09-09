@@ -4,7 +4,6 @@ import com.android.build.api.dsl.LibraryExtension
 import com.jiugjk.iq33.buildlogic.config.JavaBuildConfig
 import com.jiugjk.iq33.buildlogic.ext.excludeLicenseAndMetaFiles
 import com.jiugjk.iq33.buildlogic.ext.versions
-import com.mikepenz.aboutlibraries.plugin.AboutLibrariesPlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.apply
@@ -17,7 +16,6 @@ class LibraryConventionPlugin : Plugin<Project> {
                 apply("com.android.library")
                 apply<KotlinConventionPlugin>()
                 apply<TestConventionPlugin>()
-                apply<AboutLibrariesPlugin>()
             }
 
             extensions.configure<LibraryExtension> {

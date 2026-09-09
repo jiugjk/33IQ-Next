@@ -9,6 +9,7 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 
 val networkModule =
     module {
@@ -19,7 +20,8 @@ val networkModule =
         singleOf(::PersistentCookieJar)
 
         single {
-            HttpLoggingInterceptor { message -> Timber.tag("Network").d(message) }.apply {
+            // BASIC logs method/URL only. Never raise this to BODY: login form fields would leak.
+            HttpLoggingInterceptor { message -> Timber.tag(TimberLogTagsNetwork).d(message) }.apply {
                 level =
                     if (BuildConfig.DEBUG) {
                         HttpLoggingInterceptor.Level.BASIC
@@ -33,6 +35,9 @@ val networkModule =
             OkHttpClient
                 .Builder()
                 .cookieJar(get<PersistentCookieJar>())
+                .connectTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .readTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .writeTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .addInterceptor(UserAgentInterceptor)
                 .addInterceptor(get<HttpLoggingInterceptor>())
                 .build()
@@ -52,3 +57,7 @@ private object UserAgentInterceptor : Interceptor {
             .build()
             .let { chain.proceed(it) }
 }
+
+private const val HTTP_TIMEOUT_SECONDS = 30L
+
+private const val TimberLogTagsNetwork = "Network"

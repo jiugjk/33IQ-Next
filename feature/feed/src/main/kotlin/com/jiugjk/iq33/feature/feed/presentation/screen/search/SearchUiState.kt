@@ -16,6 +16,10 @@ import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
 internal data class SearchUiState(
     val query: String = "",
     val results: SearchResults = SearchResults.Idle,
+    val page: Int = 1,
+    val isLoadingMore: Boolean = false,
+    val canLoadMore: Boolean = false,
+    val loadMoreFailed: Boolean = false,
 ) : BaseState
 
 @Immutable

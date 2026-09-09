@@ -20,6 +20,7 @@ internal sealed interface QuestionDetailUiState : BaseState {
         val detail: QuestionDetail,
         val isBookmarked: Boolean,
         val selectedChoiceId: String? = null,
+        val draftAnswer: String = "",
         val submission: SubmissionState = SubmissionState.Idle,
         // No live quote exists for revealing the real answer (see AnswerRemoteDataSource.revealAnswer) -
         // the confirm step has no data of its own, hence Unit.
@@ -44,16 +45,36 @@ internal sealed interface QuestionDetailUiState : BaseState {
         val canSubmit: Boolean
             get() =
                 answerReveal is RevealState.Idle ||
-                    answerReveal is RevealState.Failed
+                    (answerReveal is RevealState.Failed && !answerReveal.afterSideEffect)
 
         /**
-         * Choices are frozen while a submission is in flight or finished: a result that comes back
-         * for choice A must never be displayed next to a freshly selected choice B.
+         * Choices / the open-answer field are frozen while a submission is in flight or finished: a
+         * result that comes back for choice A must never be displayed next to a freshly selected
+         * choice B.
          */
         val canSelectChoice: Boolean
             get() = canSubmit && submission !is SubmissionState.Submitting && submission !is SubmissionState.Done
 
-        /** Revealing the answer or buying a hint is mutually exclusive with an in-flight submission. */
-        val canReveal: Boolean get() = !isSubmitting
+        val canStartAnswerReveal: Boolean
+            get() =
+                !isSubmitting &&
+                    !isAnswerRevealed &&
+                    !answerReveal.isBusy &&
+                    !hintReveal.isBusy &&
+                    !answerReveal.isRetryBlocked
+
+        val canStartHintReveal: Boolean
+            get() =
+                !isSubmitting &&
+                    hintReveal !is RevealState.Revealed &&
+                    !answerReveal.isBusy &&
+                    !hintReveal.isBusy &&
+                    !hintReveal.isRetryBlocked
+
+        val canConfirmAnswerReveal: Boolean
+            get() = !isSubmitting && answerReveal is RevealState.QuoteReady && !hintReveal.isBusy
+
+        val canConfirmHintReveal: Boolean
+            get() = !isSubmitting && hintReveal is RevealState.QuoteReady && !answerReveal.isBusy
     }
 }

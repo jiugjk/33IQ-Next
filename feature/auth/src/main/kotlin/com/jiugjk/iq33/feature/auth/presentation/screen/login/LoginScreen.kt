@@ -22,10 +22,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,8 +45,8 @@ fun LoginScreen(
     val uiState by viewModel.uiStateFlow.collectAsStateWithLifecycle()
     val currentOnLoginSuccess by rememberUpdatedState(onLoginSuccess)
 
-    LaunchedEffect(uiState) {
-        if (uiState is LoginUiState.Success) {
+    LaunchedEffect(uiState.isSuccess) {
+        if (uiState.isSuccess) {
             currentOnLoginSuccess()
         }
     }
@@ -66,6 +63,8 @@ fun LoginScreen(
 
         LoginForm(
             uiState = uiState,
+            onAccountChange = viewModel::onAccountChange,
+            onPasswordChange = viewModel::onPasswordChange,
             onLoginClick = viewModel::login,
         )
     }
@@ -74,12 +73,11 @@ fun LoginScreen(
 @Composable
 private fun LoginForm(
     uiState: LoginUiState,
-    onLoginClick: (String, String) -> Unit,
+    onAccountChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onLoginClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var account by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-
     Column(
         modifier =
             modifier
@@ -94,16 +92,18 @@ private fun LoginForm(
         )
 
         OutlinedTextField(
-            value = account,
-            onValueChange = { account = it },
+            value = uiState.account,
+            onValueChange = onAccountChange,
+            enabled = !uiState.isLoading,
             label = { Text(stringResource(R.string.login_account_label)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
 
         OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
+            value = uiState.password,
+            onValueChange = onPasswordChange,
+            enabled = !uiState.isLoading,
             label = { Text(stringResource(R.string.login_password_label)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
@@ -111,9 +111,9 @@ private fun LoginForm(
             modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
         )
 
-        if (uiState is LoginUiState.Failure) {
+        uiState.failureReason?.let { reason ->
             Text(
-                text = uiState.errorMessage(),
+                text = reason.errorMessage(uiState.serverStatus),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = Dimen.spaceS),
@@ -124,13 +124,13 @@ private fun LoginForm(
             modifier = Modifier.padding(top = Dimen.spaceL),
             horizontalArrangement = Arrangement.End,
         ) {
-            if (uiState is LoginUiState.Loading) {
+            if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.padding(end = Dimen.spaceM).size(24.dp))
             }
 
             Button(
-                onClick = { onLoginClick(account, password) },
-                enabled = uiState !is LoginUiState.Loading,
+                onClick = onLoginClick,
+                enabled = !uiState.isLoading,
             ) {
                 Text(stringResource(R.string.login_submit))
             }
@@ -140,8 +140,8 @@ private fun LoginForm(
 
 /** Maps the typed failure reason to this screen's localised copy - see [LoginFailureReason]. */
 @Composable
-private fun LoginUiState.Failure.errorMessage(): String =
-    when (reason) {
+private fun LoginFailureReason.errorMessage(serverStatus: String?): String =
+    when (this) {
         LoginFailureReason.MISSING_CREDENTIALS -> stringResource(R.string.login_error_missing_credentials)
         LoginFailureReason.NETWORK_UNAVAILABLE -> stringResource(R.string.login_error_network)
         LoginFailureReason.UNKNOWN_ACCOUNT -> stringResource(R.string.login_error_unknown_account)
@@ -157,5 +157,10 @@ private fun LoginUiState.Failure.errorMessage(): String =
 @Preview
 @Composable
 private fun LoginFormPreview() {
-    LoginForm(uiState = LoginUiState.Idle, onLoginClick = { _, _ -> })
+    LoginForm(
+        uiState = LoginUiState(),
+        onAccountChange = {},
+        onPasswordChange = {},
+        onLoginClick = {},
+    )
 }

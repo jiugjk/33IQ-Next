@@ -13,12 +13,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.jiugjk.iq33.feature.base.common.res.Dimen
@@ -54,6 +54,33 @@ internal fun SubmitAnswerSection(
 }
 
 @Composable
+internal fun OpenAnswerSection(
+    draftAnswer: String,
+    submission: SubmissionState,
+    enabled: Boolean,
+    onDraftChange: (String) -> Unit,
+    onSubmitAnswerClick: (String) -> Unit,
+) {
+    Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
+        OutlinedTextField(
+            value = draftAnswer,
+            onValueChange = onDraftChange,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3,
+            label = { Text(stringResource(R.string.feed_open_answer_label)) },
+        )
+
+        SubmitAnswerSection(
+            selectedChoiceId = draftAnswer.takeIf { it.isNotBlank() },
+            submission = submission,
+            enabled = enabled,
+            onSubmitAnswerClick = onSubmitAnswerClick,
+        )
+    }
+}
+
+@Composable
 private fun SubmissionResultText(submission: SubmissionState) {
     when (submission) {
         is SubmissionState.Done -> SubmissionDoneText(submission.result)
@@ -80,7 +107,7 @@ private fun SubmissionDoneText(result: SubmitAnswerResult) {
                         result.scoreDelta,
                         result.myScore,
                     ),
-                color = CorrectColor,
+                color = MaterialTheme.colorScheme.tertiary,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
@@ -117,7 +144,7 @@ private fun SubmissionDoneText(result: SubmitAnswerResult) {
 @Composable
 internal fun HintSection(
     hintReveal: RevealState<HintQuote, HintReveal>,
-    canReveal: Boolean,
+    canStartHintReveal: Boolean,
     onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
@@ -135,7 +162,7 @@ internal fun HintSection(
         } else {
             OutlinedButton(
                 onClick = { onEvent(QuestionDetailEvent.HintQuoteRequested) },
-                enabled = canReveal && hintReveal !is RevealState.QuoteLoading && hintReveal !is RevealState.Revealing,
+                enabled = canStartHintReveal,
             ) {
                 Text(stringResource(R.string.feed_reveal_hint_button))
             }
@@ -143,7 +170,10 @@ internal fun HintSection(
 
         if (hintReveal is RevealState.Failed) {
             Text(
-                text = stringResource(R.string.feed_flow_failed),
+                text =
+                    stringResource(
+                        if (hintReveal.afterSideEffect) R.string.feed_flow_failed_after_side_effect else R.string.feed_flow_failed,
+                    ),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = Dimen.spaceS),
@@ -197,7 +227,7 @@ private fun HintQuoteDialog(
 internal fun AnswerSection(
     fallbackAnalysis: String?,
     answerReveal: RevealState<Unit, AnswerReveal>,
-    canReveal: Boolean,
+    canStartAnswerReveal: Boolean,
     onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     if (answerReveal is RevealState.Revealed) {
@@ -210,7 +240,7 @@ internal fun AnswerSection(
 
             OutlinedButton(
                 onClick = { onEvent(QuestionDetailEvent.AnswerRevealRequested) },
-                enabled = canReveal && answerReveal !is RevealState.QuoteLoading && answerReveal !is RevealState.Revealing,
+                enabled = canStartAnswerReveal,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             ) {
                 Text(stringResource(R.string.feed_reveal_answer_button))
@@ -218,7 +248,14 @@ internal fun AnswerSection(
 
             if (answerReveal is RevealState.Failed) {
                 Text(
-                    text = stringResource(R.string.feed_flow_failed),
+                    text =
+                        stringResource(
+                            if (answerReveal.afterSideEffect) {
+                                R.string.feed_flow_failed_after_side_effect
+                            } else {
+                                R.string.feed_flow_failed
+                            },
+                        ),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = Dimen.spaceS),
@@ -302,9 +339,6 @@ private fun scoreText(
 
 /** 普通 / 会员 / 终身会员 - the three tiers `showtipsbuy` quotes. */
 private const val ALL_MEMBERSHIP_TIERS = 3
-
-@Suppress("MagicNumber")
-private val CorrectColor = Color(0xFF2E7D32)
 
 @Composable
 internal fun CommentsLockedNotice() {

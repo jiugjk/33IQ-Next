@@ -176,14 +176,22 @@ private fun QuestionDetailContent(
 
         if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
             ChoiceAndSubmitSection(detail = detail, uiState = uiState, onEvent = onEvent)
+        } else if (detail.questionType == QuestionType.OPEN) {
+            OpenAnswerSection(
+                draftAnswer = uiState.draftAnswer,
+                submission = uiState.submission,
+                enabled = uiState.canSelectChoice,
+                onDraftChange = { text -> onEvent(QuestionDetailEvent.DraftAnswerChanged(text)) },
+                onSubmitAnswerClick = { answer -> onEvent(QuestionDetailEvent.AnswerSubmitted(answer)) },
+            )
         }
 
-        HintSection(hintReveal = uiState.hintReveal, canReveal = uiState.canReveal, onEvent = onEvent)
+        HintSection(hintReveal = uiState.hintReveal, canStartHintReveal = uiState.canStartHintReveal, onEvent = onEvent)
 
         AnswerSection(
             fallbackAnalysis = detail.analysis,
             answerReveal = uiState.answerReveal,
-            canReveal = uiState.canReveal,
+            canStartAnswerReveal = uiState.canStartAnswerReveal,
             onEvent = onEvent,
         )
 

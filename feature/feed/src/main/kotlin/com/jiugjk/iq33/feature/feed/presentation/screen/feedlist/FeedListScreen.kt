@@ -43,6 +43,7 @@ import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndic
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.Category
 import com.jiugjk.iq33.feature.feed.presentation.composable.QuestionCard
+import com.jiugjk.iq33.feature.feed.presentation.composable.label
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import org.koin.androidx.compose.koinViewModel
@@ -134,7 +135,7 @@ private fun FeedListContent(
         )
 
         PullToRefreshBox(
-            isRefreshing = false,
+            isRefreshing = uiState.isRefreshing,
             onRefresh = { onEvent(FeedListEvent.Refreshed) },
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -157,7 +158,7 @@ private fun CategoryChipRow(
             FilterChip(
                 selected = category == selectedCategory,
                 onClick = { onEvent(FeedListEvent.CategorySelected(category)) },
-                label = { Text(category.displayName) },
+                label = { Text(category.label()) },
                 colors = FilterChipDefaults.filterChipColors(),
             )
         }

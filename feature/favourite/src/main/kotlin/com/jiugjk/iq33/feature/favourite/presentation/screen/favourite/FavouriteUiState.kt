@@ -19,5 +19,6 @@ internal sealed interface FavouriteUiState : BaseState {
     @Immutable
     data class Content(
         val savedQuestions: List<SavedQuestion>,
+        val actionFailed: Boolean = false,
     ) : FavouriteUiState
 }

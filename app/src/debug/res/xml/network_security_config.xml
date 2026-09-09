@@ -1,7 +1,4 @@
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">ws.audioscrobbler.com</domain>
-    </domain-config>
     <debug-overrides>
         <trust-anchors>
             <!-- Trust user added CAs.

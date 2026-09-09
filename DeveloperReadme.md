@@ -12,9 +12,6 @@
 - Gradle 
   - Gradle `9.0` - Generated type-safe version catalogs accessors for `projcts` are not avialable inside `build-logic` module
   - Gradle `9.0` - Generated type-safe version catalogs accessors for `libs` are not accessible from precompiled script plugin e.g. add("implementation", libs.koin). Workaround is to use `implementation(files(libs.javaClass.superclass.protectionDomain.codeSource.location))`.
-- Mockk 
-  - Unable to mock some methods with implicit `continuation`
-  parameter in the `AlbumListViewModelTest` class ([Issue-957](https://github.com/mockk/mockk/issues/957))
 - Detekt
   - The `UnnecessaryParentheses` rule was disabled https://github.com/detekt/detekt/issues/8668
 - Kotlin Plugin
@@ -33,3 +30,5 @@
   `org.jetbrains.kotlin.android` at all (it has built-in Kotlin support), so the convention plugins
   would have to be rewritten around its own Kotlin DSL. That migration is deliberately not part of
   a dependency update.
+  `compileSdk` is 36 and `targetSdk` is 35 on purpose: raising targetSdk is a behaviour change, not
+  just a catalog bump, and is kept off this dependency-ceiling note.

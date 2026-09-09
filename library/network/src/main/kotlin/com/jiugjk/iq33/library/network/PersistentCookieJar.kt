@@ -54,9 +54,15 @@ class PersistentCookieJar(
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
         val now = System.currentTimeMillis()
 
-        // Snapshot inside the lock so the returned list can never alias the live map.
         return synchronized(lock) {
-            cookies.values.filter { cookie -> cookie.expiresAt > now && cookie.matches(url) }
+            val expiredKeys = cookies.filterValues { cookie -> cookie.expiresAt <= now }.keys.toList()
+
+            if (expiredKeys.isNotEmpty()) {
+                expiredKeys.forEach { cookies.remove(it) }
+                persist()
+            }
+
+            cookies.values.filter { cookie -> cookie.matches(url) }
         }
     }
 
@@ -93,6 +99,8 @@ class PersistentCookieJar(
             // keeps an expired jar from looking like a live one.
             .filter { cookie -> cookie.expiresAt > now }
             .forEach { cookie -> cookies[cookie.key()] = cookie }
+
+        persist()
     }
 
     private fun Cookie.key() = CookieKey(name = name, domain = domain, path = path)

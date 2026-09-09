@@ -12,6 +12,7 @@ import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.QuestionAnswerUseCases
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 
 internal class QuestionDetailViewModel(
     private val getQuestionDetailUseCase: GetQuestionDetailUseCase,
@@ -20,7 +21,19 @@ internal class QuestionDetailViewModel(
     private val questionAnswerUseCases: QuestionAnswerUseCases,
 ) : BaseViewModel<QuestionDetailUiState, QuestionDetailAction>(QuestionDetailUiState.Loading) {
     private var loadJob: Job? = null
+    private var submitJob: Job? = null
+    private var bookmarkJob: Job? = null
+    private var answerRevealJob: Job? = null
+    private var hintQuoteJob: Job? = null
+    private var hintRevealJob: Job? = null
+    private var praiseJob: Job? = null
     private var loadedQuestionId: Long? = null
+    private val submitMutex = Mutex()
+    private val answerRevealMutex = Mutex()
+    private val hintQuoteMutex = Mutex()
+    private val hintRevealMutex = Mutex()
+    private val praiseMutex = Mutex()
+    private val bookmarkMutex = Mutex()
 
     /**
      * Loads [id], skipping the work when this question is already loaded or still loading.
@@ -40,6 +53,7 @@ internal class QuestionDetailViewModel(
         if (!forceReload && (alreadyLoaded || stillLoading)) return
 
         loadJob?.cancel()
+        cancelSideWork()
         loadedQuestionId = id
 
         sendAction(QuestionDetailAction.LoadStart)
@@ -65,7 +79,9 @@ internal class QuestionDetailViewModel(
             QuestionDetailEvent.RetryRequested -> loadedQuestionId?.let { id -> load(id, forceReload = true) }
             is QuestionDetailEvent.ChoiceSelected ->
                 if (content?.canSelectChoice == true) sendAction(QuestionDetailAction.ChoiceSelected(event.choiceId))
-            is QuestionDetailEvent.AnswerSubmitted -> submitAnswer(content, event.choiceId)
+            is QuestionDetailEvent.DraftAnswerChanged ->
+                if (content?.canSelectChoice == true) sendAction(QuestionDetailAction.DraftAnswerChanged(event.text))
+            is QuestionDetailEvent.AnswerSubmitted -> submitAnswer(content, event.answer)
             QuestionDetailEvent.BookmarkToggled -> toggleBookmark(content)
             QuestionDetailEvent.AnswerRevealRequested -> requestAnswerReveal(content)
             QuestionDetailEvent.AnswerRevealConfirmed -> confirmAnswerReveal(content)
@@ -76,111 +92,188 @@ internal class QuestionDetailViewModel(
         }
     }
 
-    /** Submits [choiceId] as the answer. 33IQ itself also rejects a second submission. */
+    /** Submits [answer]. 33IQ itself also rejects a second submission. */
     private fun submitAnswer(
         content: QuestionDetailUiState.Content?,
-        choiceId: String,
+        answer: String,
     ) {
-        if (content?.canSelectChoice != true) return
+        if (content?.canSelectChoice != true || answer.isBlank() || submitJob?.isActive == true) return
 
         val questionId = content.detail.id
 
-        sendAction(QuestionDetailAction.SubmissionStarted(choiceId))
+        submitJob =
+            viewModelScope.launch {
+                if (!submitMutex.tryLock()) return@launch
+                try {
+                    val latest = uiStateFlow.value as? QuestionDetailUiState.Content ?: return@launch
+                    if (!latest.canSelectChoice || latest.detail.id != questionId) return@launch
 
-        viewModelScope.launch {
-            when (val result = questionAnswerUseCases.submitAnswer(questionId, choiceId)) {
-                is Result.Success -> sendAction(QuestionDetailAction.SubmissionFinished(result.value))
-                is Result.Failure -> sendAction(QuestionDetailAction.SubmissionFailed)
+                    sendAction(QuestionDetailAction.SubmissionStarted(questionId, answer))
+                    if ((uiStateFlow.value as? QuestionDetailUiState.Content)?.isSubmitting != true) return@launch
+
+                    when (val result = questionAnswerUseCases.submitAnswer(questionId, answer)) {
+                        is Result.Success -> sendAction(QuestionDetailAction.SubmissionFinished(questionId, result.value))
+                        is Result.Failure -> sendAction(QuestionDetailAction.SubmissionFailed(questionId))
+                    }
+                } finally {
+                    submitMutex.unlock()
+                }
             }
-        }
     }
 
     private fun toggleBookmark(content: QuestionDetailUiState.Content?) {
-        if (content == null || content.isBookmarkChanging) return
+        if (content == null || content.isBookmarkChanging || bookmarkJob?.isActive == true) return
 
+        val questionId = content.detail.id
         val savedQuestion =
             SavedQuestion(
-                id = content.detail.id,
+                id = questionId,
                 title = content.detail.shortLabel,
                 tags = content.detail.tags,
                 savedAt = System.currentTimeMillis(),
             )
 
-        sendAction(QuestionDetailAction.BookmarkStarted)
+        bookmarkJob =
+            viewModelScope.launch {
+                if (!bookmarkMutex.tryLock()) return@launch
+                try {
+                    val latest = uiStateFlow.value as? QuestionDetailUiState.Content ?: return@launch
+                    if (latest.isBookmarkChanging || latest.detail.id != questionId) return@launch
 
-        viewModelScope.launch {
-            when (val result = toggleBookmarkUseCase(savedQuestion)) {
-                is BookmarkResult.Success -> sendAction(QuestionDetailAction.BookmarkChanged(result.value))
-                is BookmarkResult.Failure -> sendAction(QuestionDetailAction.BookmarkFailed)
+                    sendAction(QuestionDetailAction.BookmarkStarted)
+
+                    when (val result = toggleBookmarkUseCase(savedQuestion)) {
+                        is BookmarkResult.Success -> sendAction(QuestionDetailAction.BookmarkChanged(questionId, result.value))
+                        is BookmarkResult.Failure -> sendAction(QuestionDetailAction.BookmarkFailed(questionId))
+                    }
+                } finally {
+                    bookmarkMutex.unlock()
+                }
             }
-        }
     }
 
     private fun requestAnswerReveal(content: QuestionDetailUiState.Content?) {
-        if (content?.canReveal != true || content.isAnswerRevealed) return
+        if (content?.canStartAnswerReveal != true) return
 
         sendAction(QuestionDetailAction.AnswerConfirmRequested)
     }
 
     private fun confirmAnswerReveal(content: QuestionDetailUiState.Content?) {
-        if (content?.canReveal != true) return
+        if (content?.canConfirmAnswerReveal != true || answerRevealJob?.isActive == true) return
 
         val questionId = content.detail.id
 
-        sendAction(QuestionDetailAction.AnswerRevealStarted)
+        answerRevealJob =
+            viewModelScope.launch {
+                if (!answerRevealMutex.tryLock()) return@launch
+                try {
+                    val latest = uiStateFlow.value as? QuestionDetailUiState.Content ?: return@launch
+                    if (!latest.canConfirmAnswerReveal || latest.detail.id != questionId) return@launch
 
-        viewModelScope.launch {
-            when (val result = questionAnswerUseCases.revealAnswer(questionId)) {
-                is Result.Success -> sendAction(QuestionDetailAction.AnswerRevealFinished(result.value))
-                is Result.Failure -> sendAction(QuestionDetailAction.AnswerFlowFailed)
+                    sendAction(QuestionDetailAction.AnswerRevealStarted(questionId))
+                    if ((uiStateFlow.value as? QuestionDetailUiState.Content)?.answerReveal !is RevealState.Revealing) {
+                        return@launch
+                    }
+
+                    when (val result = questionAnswerUseCases.revealAnswer(questionId)) {
+                        is Result.Success -> sendAction(QuestionDetailAction.AnswerRevealFinished(questionId, result.value))
+                        is Result.Failure ->
+                            sendAction(QuestionDetailAction.AnswerFlowFailed(questionId, result.afterSideEffect))
+                    }
+                } finally {
+                    answerRevealMutex.unlock()
+                }
             }
-        }
     }
 
     /** Fetches 33IQ's own price quote for a hint - it reports the account's actual member-discounted price. */
     private fun requestHintQuote(content: QuestionDetailUiState.Content?) {
-        if (content?.canReveal != true) return
+        if (content?.canStartHintReveal != true || hintQuoteJob?.isActive == true) return
 
         val questionId = content.detail.id
 
-        sendAction(QuestionDetailAction.HintQuoteStarted)
+        hintQuoteJob =
+            viewModelScope.launch {
+                if (!hintQuoteMutex.tryLock()) return@launch
+                try {
+                    val latest = uiStateFlow.value as? QuestionDetailUiState.Content ?: return@launch
+                    if (!latest.canStartHintReveal || latest.detail.id != questionId) return@launch
 
-        viewModelScope.launch {
-            when (val result = questionAnswerUseCases.quoteHint(questionId)) {
-                is Result.Success -> sendAction(QuestionDetailAction.HintQuoteReady(result.value))
-                is Result.Failure -> sendAction(QuestionDetailAction.HintFlowFailed)
+                    sendAction(QuestionDetailAction.HintQuoteStarted(questionId))
+                    if ((uiStateFlow.value as? QuestionDetailUiState.Content)?.hintReveal !is RevealState.QuoteLoading) {
+                        return@launch
+                    }
+
+                    when (val result = questionAnswerUseCases.quoteHint(questionId)) {
+                        is Result.Success -> sendAction(QuestionDetailAction.HintQuoteReady(questionId, result.value))
+                        is Result.Failure ->
+                            sendAction(QuestionDetailAction.HintFlowFailed(questionId, result.afterSideEffect))
+                    }
+                } finally {
+                    hintQuoteMutex.unlock()
+                }
             }
-        }
     }
 
     private fun confirmHintReveal(content: QuestionDetailUiState.Content?) {
-        if (content?.canReveal != true) return
+        if (content?.canConfirmHintReveal != true || hintRevealJob?.isActive == true) return
 
         val questionId = content.detail.id
 
-        sendAction(QuestionDetailAction.HintRevealStarted)
+        hintRevealJob =
+            viewModelScope.launch {
+                if (!hintRevealMutex.tryLock()) return@launch
+                try {
+                    val latest = uiStateFlow.value as? QuestionDetailUiState.Content ?: return@launch
+                    if (!latest.canConfirmHintReveal || latest.detail.id != questionId) return@launch
 
-        viewModelScope.launch {
-            when (val result = questionAnswerUseCases.revealHint(questionId)) {
-                is Result.Success -> sendAction(QuestionDetailAction.HintRevealFinished(result.value))
-                is Result.Failure -> sendAction(QuestionDetailAction.HintFlowFailed)
+                    sendAction(QuestionDetailAction.HintRevealStarted(questionId))
+                    if ((uiStateFlow.value as? QuestionDetailUiState.Content)?.hintReveal !is RevealState.Revealing) {
+                        return@launch
+                    }
+
+                    when (val result = questionAnswerUseCases.revealHint(questionId)) {
+                        is Result.Success -> sendAction(QuestionDetailAction.HintRevealFinished(questionId, result.value))
+                        is Result.Failure ->
+                            sendAction(QuestionDetailAction.HintFlowFailed(questionId, result.afterSideEffect))
+                    }
+                } finally {
+                    hintRevealMutex.unlock()
+                }
             }
-        }
     }
 
     private fun praise(content: QuestionDetailUiState.Content?) {
-        if (content == null || content.isPraising) return
+        if (content == null || content.isPraising || praiseJob?.isActive == true) return
 
         val questionId = content.detail.id
 
-        sendAction(QuestionDetailAction.PraiseStarted)
+        praiseJob =
+            viewModelScope.launch {
+                if (!praiseMutex.tryLock()) return@launch
+                try {
+                    val latest = uiStateFlow.value as? QuestionDetailUiState.Content ?: return@launch
+                    if (latest.isPraising || latest.detail.id != questionId) return@launch
 
-        viewModelScope.launch {
-            when (val result = questionAnswerUseCases.praiseQuestion(questionId)) {
-                is Result.Success -> sendAction(QuestionDetailAction.Praised(result.value))
-                is Result.Failure -> sendAction(QuestionDetailAction.PraiseFailed)
+                    sendAction(QuestionDetailAction.PraiseStarted)
+
+                    when (val result = questionAnswerUseCases.praiseQuestion(questionId)) {
+                        is Result.Success -> sendAction(QuestionDetailAction.Praised(questionId, result.value))
+                        is Result.Failure -> sendAction(QuestionDetailAction.PraiseFailed(questionId))
+                    }
+                } finally {
+                    praiseMutex.unlock()
+                }
             }
-        }
+    }
+
+    private fun cancelSideWork() {
+        submitJob?.cancel()
+        bookmarkJob?.cancel()
+        answerRevealJob?.cancel()
+        hintQuoteJob?.cancel()
+        hintRevealJob?.cancel()
+        praiseJob?.cancel()
     }
 
     /** A failed bookmark lookup must not take the loaded question down with it - it is a side note. */

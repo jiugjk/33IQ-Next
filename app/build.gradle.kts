@@ -80,4 +80,6 @@ dependencies {
     implementation(projects.feature.settings)
     implementation(projects.feature.favourite)
     implementation(projects.library.network)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network)
 }

@@ -12,8 +12,12 @@ internal sealed interface QuestionDetailEvent {
         val choiceId: String,
     ) : QuestionDetailEvent
 
+    data class DraftAnswerChanged(
+        val text: String,
+    ) : QuestionDetailEvent
+
     data class AnswerSubmitted(
-        val choiceId: String,
+        val answer: String,
     ) : QuestionDetailEvent
 
     data object BookmarkToggled : QuestionDetailEvent

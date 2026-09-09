@@ -5,28 +5,41 @@ import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseViewModel
 import com.jiugjk.iq33.library.network.LoginError
 import com.jiugjk.iq33.library.network.LoginResult
 import com.jiugjk.iq33.library.network.SessionManager
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal class LoginViewModel(
     private val sessionManager: SessionManager,
-) : BaseViewModel<LoginUiState, LoginAction>(LoginUiState.Idle) {
-    fun login(
-        account: String,
-        password: String,
-    ) {
-        if (account.isBlank() || password.isBlank()) {
+) : BaseViewModel<LoginUiState, LoginAction>(LoginUiState()) {
+    private var loginJob: Job? = null
+
+    fun onAccountChange(account: String) {
+        sendAction(LoginAction.AccountChanged(account))
+    }
+
+    fun onPasswordChange(password: String) {
+        sendAction(LoginAction.PasswordChanged(password))
+    }
+
+    fun login() {
+        val state = uiStateFlow.value
+
+        if (state.isLoading || loginJob?.isActive == true) return
+
+        if (state.account.isBlank() || state.password.isBlank()) {
             sendAction(LoginAction.LoginFailure(LoginFailureReason.MISSING_CREDENTIALS))
             return
         }
 
         sendAction(LoginAction.LoginStart)
 
-        viewModelScope.launch {
-            when (val result = sessionManager.login(account, password)) {
-                LoginResult.Success -> sendAction(LoginAction.LoginSuccess)
-                is LoginResult.Failure -> sendAction(result.error.toAction())
+        loginJob =
+            viewModelScope.launch {
+                when (val result = sessionManager.login(state.account, state.password)) {
+                    LoginResult.Success -> sendAction(LoginAction.LoginSuccess)
+                    is LoginResult.Failure -> sendAction(result.error.toAction())
+                }
             }
-        }
     }
 
     private fun LoginError.toAction(): LoginAction.LoginFailure =

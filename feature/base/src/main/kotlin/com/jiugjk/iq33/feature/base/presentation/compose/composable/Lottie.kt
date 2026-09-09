@@ -58,7 +58,7 @@ fun LottieAssetLoader(
 private fun LabeledAnimationPreview() {
     LabeledAnimation(
         label = android.R.string.ok,
-        assetResId = com.jiugjk.iq33.feature.base.R.raw.lottie_building_screen,
+        assetResId = com.jiugjk.iq33.feature.base.R.raw.lottie_error_screen,
     )
 }
 
@@ -66,6 +66,6 @@ private fun LabeledAnimationPreview() {
 @Composable
 private fun LottieAssetLoaderPreview() {
     LottieAssetLoader(
-        assetResId = com.jiugjk.iq33.feature.base.R.raw.lottie_building_screen,
+        assetResId = com.jiugjk.iq33.feature.base.R.raw.lottie_error_screen,
     )
 }

@@ -67,7 +67,13 @@ class IqHtmlClient(
                 .post(encodedBody.toRequestBody(FORM_MEDIA_TYPE))
                 .build()
 
-        return execute(request) { response -> decodeGbk(response.body.bytes()) }
+        return execute(request) { response ->
+            val text = decodeGbk(response.body.bytes())
+
+            if (isLoginWallText(text)) throw IqLoginRequiredException()
+
+            text
+        }
     }
 
     /**
@@ -120,7 +126,17 @@ class IqHtmlClient(
 
     private fun isLoginWall(document: Document): Boolean = document.title().contains("用户登录") || document.selectFirst(".login-card") != null
 
-    private fun isLoginWallText(text: String): Boolean = text.contains("用户登录") || text.contains("login-card")
+    /**
+     * JSON payloads (question detail, probes, action endpoints) are never a login wall, even when a
+     * riddle's body happens to contain the words "用户登录". Only HTML-shaped responses are checked.
+     */
+    private fun isLoginWallText(text: String): Boolean {
+        val trimmed = text.trimStart()
+
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) return false
+
+        return text.contains("用户登录") || text.contains("login-card")
+    }
 
     private fun decodeGbk(bytes: ByteArray): String = String(bytes, charset(IqConstants.PAGE_CHARSET))
 

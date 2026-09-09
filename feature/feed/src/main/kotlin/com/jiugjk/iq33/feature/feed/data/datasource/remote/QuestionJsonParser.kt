@@ -53,7 +53,7 @@ internal class QuestionJsonParser {
             bodyText = bodyText,
             imageUrls = questionImageUrls(question, bodyHtml),
             tags = tags,
-            breadcrumb = emptyList(),
+            breadcrumb = emptyList(), // TODO: no breadcrumb field confirmed on the JSON payload
             author = question.stringOrNull("username"),
             publishedDate = question.stringOrNull("ctime")?.substringBefore(" "),
             upvoteCount = question.intOrZero("praise"),
@@ -63,8 +63,8 @@ internal class QuestionJsonParser {
             rightRatio = question.stringOrNull("right_ratio")?.toIntOrNull(),
             questionType = if (question.stringOrNull("ischoose") == "1") QuestionType.CHOICE else QuestionType.OPEN,
             choices = choices,
-            analysis = null,
-            comments = emptyList(),
+            analysis = null, // TODO: 33IQ hides analysis from guests; no confirmed field yet
+            comments = emptyList(), // TODO: no comments-list endpoint in the HAR capture
             // The public page, not the `?p=3` API URL that was fetched: that switch makes the same
             // address serve raw JSON, which is not what a share link should open.
             sourceUrl = IqConstants.questionPageUrl(id),

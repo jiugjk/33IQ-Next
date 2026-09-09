@@ -16,8 +16,10 @@ internal sealed interface FavouriteAction : BaseAction<FavouriteUiState> {
     }
 
     object StorageFailed : FavouriteAction {
-        // Keep whatever was already listed: a failed write should not blank out a readable list.
         override fun reduce(state: FavouriteUiState): FavouriteUiState =
-            if (state is FavouriteUiState.Content) state else FavouriteUiState.Error
+            when (state) {
+                is FavouriteUiState.Content -> state.copy(actionFailed = true)
+                else -> FavouriteUiState.Error
+            }
     }
 }

@@ -4,14 +4,15 @@ import androidx.lifecycle.ViewModel
 import com.jiugjk.iq33.feature.base.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Base for the screen view models: an action is reduced against the current state and the result is
  * published.
  *
- * [MutableStateFlow] is the single source of truth. It already suppresses an update that equals the
- * current value, so the observable-delegate copy this class used to keep alongside it only made it
- * ambiguous which of the two held "the" state and where the debug logging happened.
+ * [MutableStateFlow.update] is the single source of truth. The read-reduce-write runs atomically, so
+ * two coroutines sending actions at once cannot each reduce a stale snapshot and drop the other's
+ * transition.
  */
 abstract class BaseViewModel<State : BaseState, Action : BaseAction<State>>(
     initialState: State,
@@ -23,20 +24,27 @@ abstract class BaseViewModel<State : BaseState, Action : BaseAction<State>>(
         if (BuildConfig.DEBUG) StateTimeTravelDebugger(this::class.java.simpleName) else null
 
     /**
-     * Reduces [action] against the current state. Reducers are pure, so this is safe to call from
-     * anywhere; the logging below runs only for a transition that was actually published.
+     * Reduces [action] against the current state. Reducers are pure; logging below runs only for a
+     * transition that was actually published.
      */
     protected fun sendAction(action: Action) {
-        val oldState = _uiStateFlow.value
-        val newState = action.reduce(oldState)
+        var transition: Pair<State, State>? = null
 
-        if (oldState == newState) return
+        _uiStateFlow.update { oldState ->
+            val newState = action.reduce(oldState)
 
-        _uiStateFlow.value = newState
+            if (oldState != newState) {
+                transition = oldState to newState
+            }
+
+            newState
+        }
+
+        val logged = transition ?: return
 
         stateTimeTravelDebugger?.apply {
             addAction(action)
-            addStateTransition(oldState, newState)
+            addStateTransition(logged.first, logged.second)
             logLast()
         }
     }

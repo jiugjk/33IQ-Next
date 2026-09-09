@@ -8,6 +8,5 @@ object Dimen {
     val spaceL = 16.dp
     val spaceXL = 32.dp
     val spaceXXL = 64.dp
-    val screenContentPadding = spaceL
     val imageSize = 100.dp
 }

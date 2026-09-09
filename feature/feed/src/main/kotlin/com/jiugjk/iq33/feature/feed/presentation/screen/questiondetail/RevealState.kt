@@ -18,8 +18,16 @@ internal sealed interface RevealState<out Quote, out Reveal> {
         val reveal: Reveal,
     ) : RevealState<Nothing, Reveal>
 
-    data object Failed : RevealState<Nothing, Nothing>
+    data class Failed(
+        val afterSideEffect: Boolean = false,
+    ) : RevealState<Nothing, Nothing>
 }
+
+internal val RevealState<*, *>.isBusy: Boolean
+    get() = this is RevealState.QuoteLoading || this is RevealState.QuoteReady || this is RevealState.Revealing
+
+internal val RevealState<*, *>.isRetryBlocked: Boolean
+    get() = this is RevealState.Failed && afterSideEffect
 
 internal enum class RevealKind {
     ANSWER,

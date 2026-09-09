@@ -29,6 +29,28 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
             )
     }
 
+    class RefreshStart(
+        private val category: Category,
+    ) : FeedListAction {
+        override fun reduce(state: FeedListUiState): FeedListUiState =
+            if (state is FeedListUiState.Content && state.selectedCategory == category) {
+                state.copy(isRefreshing = true, isLoadingMore = false, loadMoreFailed = false)
+            } else {
+                state
+            }
+    }
+
+    class RefreshFailure(
+        private val category: Category,
+    ) : FeedListAction {
+        override fun reduce(state: FeedListUiState): FeedListUiState =
+            if (state is FeedListUiState.Content && state.selectedCategory == category) {
+                state.copy(isRefreshing = false)
+            } else {
+                state
+            }
+    }
+
     class LoadFailure(
         private val category: Category,
     ) : FeedListAction {

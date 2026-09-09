@@ -28,8 +28,8 @@ internal class QuestionHtmlParser {
                 .firstOrNull()
                 ?.text()
                 .orEmpty()
-        val upvoteCount = extractCount(statsText, "点赞")
-        val commentCount = extractCount(statsText, "评论")
+        val upvoteCount = extractCount(statsText, UPVOTE_COUNT)
+        val commentCount = extractCount(statsText, COMMENT_COUNT)
 
         val tags = element.select(".info .pull-right a").map { it.text() }
 
@@ -43,7 +43,7 @@ internal class QuestionHtmlParser {
     }
 
     private fun questionIdFromHref(href: String): Long? =
-        Regex("""/question/(\d+)\.html""")
+        QUESTION_ID_IN_HREF
             .find(href)
             ?.groupValues
             ?.get(1)
@@ -51,11 +51,17 @@ internal class QuestionHtmlParser {
 
     private fun extractCount(
         text: String,
-        label: String,
+        pattern: Regex,
     ): Int =
-        Regex("""(\d+)\s*$label""")
+        pattern
             .find(text)
             ?.groupValues
             ?.get(1)
             ?.toIntOrNull() ?: 0
+
+    private companion object {
+        val QUESTION_ID_IN_HREF = Regex("""/question/(\d+)\.html""")
+        val UPVOTE_COUNT = Regex("""(\d+)\s*点赞""")
+        val COMMENT_COUNT = Regex("""(\d+)\s*评论""")
+    }
 }

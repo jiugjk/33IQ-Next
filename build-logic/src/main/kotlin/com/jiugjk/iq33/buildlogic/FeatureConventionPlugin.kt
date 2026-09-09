@@ -9,7 +9,6 @@ import com.jiugjk.iq33.buildlogic.ext.libs
 import com.jiugjk.iq33.buildlogic.ext.testImplementation
 import com.jiugjk.iq33.buildlogic.ext.testRuntimeOnly
 import com.jiugjk.iq33.buildlogic.ext.versions
-import com.mikepenz.aboutlibraries.plugin.AboutLibrariesPlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.apply
@@ -24,7 +23,6 @@ class FeatureConventionPlugin : Plugin<Project> {
                 apply("com.android.library")
                 apply<KotlinConventionPlugin>()
                 apply<TestConventionPlugin>()
-                apply<AboutLibrariesPlugin>()
                 apply("org.jetbrains.kotlin.plugin.compose")
             }
 
@@ -90,7 +88,6 @@ class FeatureConventionPlugin : Plugin<Project> {
                 implementation(platform(libs.koin.bom))
                 implementation(libs.bundles.koin)
 
-                implementation(libs.bundles.network)
                 implementation(libs.viewmodel.ktx)
 
                 // Room is NOT applied here: only :feature:favourite has a database, and applying the

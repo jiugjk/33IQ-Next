@@ -10,7 +10,8 @@ import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
 /*
  * Reducers re-check the interaction rules that the UI also enforces through `enabled` flags: two
  * taps in the same frame, or a result arriving for a request the state has since moved past, must
- * not be able to install a state the rules forbid.
+ * not be able to install a state the rules forbid. Async results carry the question id they were
+ * requested for so a retry cannot install another question's (or a superseded load's) outcome.
  */
 internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiState> {
     object LoadStart : QuestionDetailAction {
@@ -41,6 +42,17 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
             }
     }
 
+    class DraftAnswerChanged(
+        private val text: String,
+    ) : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
+            if (state is QuestionDetailUiState.Content && state.canSelectChoice) {
+                state.copy(draftAnswer = text)
+            } else {
+                state
+            }
+    }
+
     object BookmarkStarted : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
             if (state is QuestionDetailUiState.Content && !state.isBookmarkChanging) {
@@ -51,27 +63,34 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
     }
 
     class BookmarkChanged(
+        private val questionId: Long,
         private val isBookmarked: Boolean,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content) {
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId) {
                 state.copy(isBookmarked = isBookmarked, isBookmarkChanging = false, bookmarkFailed = false)
             } else {
                 state
             }
     }
 
-    object BookmarkFailed : QuestionDetailAction {
+    class BookmarkFailed(
+        private val questionId: Long,
+    ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content) state.copy(isBookmarkChanging = false, bookmarkFailed = true) else state
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId) {
+                state.copy(isBookmarkChanging = false, bookmarkFailed = true)
+            } else {
+                state
+            }
     }
 
     class SubmissionStarted(
+        private val questionId: Long,
         private val choiceId: String,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.canSelectChoice) {
-                // Freeze the selection at what is actually being sent.
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId && state.canSelectChoice) {
                 state.copy(selectedChoiceId = choiceId, submission = SubmissionState.Submitting(choiceId))
             } else {
                 state
@@ -79,10 +98,11 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
     }
 
     class SubmissionFinished(
+        private val questionId: Long,
         private val result: SubmitAnswerResult,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState {
-            if (state !is QuestionDetailUiState.Content) return state
+            if (state !is QuestionDetailUiState.Content || state.detail.id != questionId) return state
 
             val submitting = state.submission as? SubmissionState.Submitting ?: return state
 
@@ -90,37 +110,68 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         }
     }
 
-    object SubmissionFailed : QuestionDetailAction {
+    class SubmissionFailed(
+        private val questionId: Long,
+    ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.isSubmitting) state.copy(submission = SubmissionState.Failed) else state
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId && state.isSubmitting) {
+                state.copy(submission = SubmissionState.Failed)
+            } else {
+                state
+            }
     }
 
-    // Revealing the real answer has no live quote to fetch first (see AnswerRemoteDataSource.revealAnswer's
-    // doc) - tapping "查看正确答案" goes straight to a confirmation step with no network call.
     object AnswerConfirmRequested : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.canReveal && !state.isAnswerRevealed) {
+            if (state is QuestionDetailUiState.Content && state.canStartAnswerReveal) {
                 state.copy(answerReveal = RevealState.QuoteReady(Unit))
             } else {
                 state
             }
     }
 
-    object AnswerRevealStarted : QuestionDetailAction {
+    class AnswerRevealStarted(
+        private val questionId: Long,
+    ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.canReveal) state.copy(answerReveal = RevealState.Revealing) else state
+            if (state is QuestionDetailUiState.Content &&
+                state.detail.id == questionId &&
+                state.canConfirmAnswerReveal
+            ) {
+                state.copy(answerReveal = RevealState.Revealing)
+            } else {
+                state
+            }
     }
 
     class AnswerRevealFinished(
+        private val questionId: Long,
         private val reveal: AnswerReveal,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content) state.copy(answerReveal = RevealState.Revealed(reveal)) else state
+            if (state is QuestionDetailUiState.Content &&
+                state.detail.id == questionId &&
+                state.answerReveal is RevealState.Revealing
+            ) {
+                state.copy(answerReveal = RevealState.Revealed(reveal))
+            } else {
+                state
+            }
     }
 
-    object AnswerFlowFailed : QuestionDetailAction {
+    class AnswerFlowFailed(
+        private val questionId: Long,
+        private val afterSideEffect: Boolean,
+    ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && !state.isAnswerRevealed) state.copy(answerReveal = RevealState.Failed) else state
+            if (state is QuestionDetailUiState.Content &&
+                state.detail.id == questionId &&
+                !state.isAnswerRevealed
+            ) {
+                state.copy(answerReveal = RevealState.Failed(afterSideEffect))
+            } else {
+                state
+            }
     }
 
     object AnswerFlowDismissed : QuestionDetailAction {
@@ -132,38 +183,74 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
             }
     }
 
-    object HintQuoteStarted : QuestionDetailAction {
+    class HintQuoteStarted(
+        private val questionId: Long,
+    ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.canReveal) state.copy(hintReveal = RevealState.QuoteLoading) else state
+            if (state is QuestionDetailUiState.Content &&
+                state.detail.id == questionId &&
+                state.canStartHintReveal
+            ) {
+                state.copy(hintReveal = RevealState.QuoteLoading)
+            } else {
+                state
+            }
     }
 
     class HintQuoteReady(
+        private val questionId: Long,
         private val quote: HintQuote,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.hintReveal is RevealState.QuoteLoading) {
+            if (state is QuestionDetailUiState.Content &&
+                state.detail.id == questionId &&
+                state.hintReveal is RevealState.QuoteLoading
+            ) {
                 state.copy(hintReveal = RevealState.QuoteReady(quote))
             } else {
                 state
             }
     }
 
-    object HintRevealStarted : QuestionDetailAction {
+    class HintRevealStarted(
+        private val questionId: Long,
+    ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.canReveal) state.copy(hintReveal = RevealState.Revealing) else state
+            if (state is QuestionDetailUiState.Content &&
+                state.detail.id == questionId &&
+                state.canConfirmHintReveal
+            ) {
+                state.copy(hintReveal = RevealState.Revealing)
+            } else {
+                state
+            }
     }
 
     class HintRevealFinished(
+        private val questionId: Long,
         private val reveal: HintReveal,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content) state.copy(hintReveal = RevealState.Revealed(reveal)) else state
+            if (state is QuestionDetailUiState.Content &&
+                state.detail.id == questionId &&
+                state.hintReveal is RevealState.Revealing
+            ) {
+                state.copy(hintReveal = RevealState.Revealed(reveal))
+            } else {
+                state
+            }
     }
 
-    object HintFlowFailed : QuestionDetailAction {
+    class HintFlowFailed(
+        private val questionId: Long,
+        private val afterSideEffect: Boolean,
+    ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.hintReveal !is RevealState.Revealed) {
-                state.copy(hintReveal = RevealState.Failed)
+            if (state is QuestionDetailUiState.Content &&
+                state.detail.id == questionId &&
+                state.hintReveal !is RevealState.Revealed
+            ) {
+                state.copy(hintReveal = RevealState.Failed(afterSideEffect))
             } else {
                 state
             }
@@ -191,10 +278,11 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
      * direction from whether the total went up or down mis-reads any concurrent vote by someone else.
      */
     class Praised(
+        private val questionId: Long,
         private val newCount: Int,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.isPraising) {
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId && state.isPraising) {
                 state.copy(
                     detail = state.detail.copy(upvoteCount = newCount, isUpvoted = !state.detail.isUpvoted),
                     isPraising = false,
@@ -204,8 +292,14 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
             }
     }
 
-    object PraiseFailed : QuestionDetailAction {
+    class PraiseFailed(
+        private val questionId: Long,
+    ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content) state.copy(isPraising = false) else state
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId) {
+                state.copy(isPraising = false)
+            } else {
+                state
+            }
     }
 }

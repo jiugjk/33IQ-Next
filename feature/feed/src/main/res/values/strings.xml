@@ -45,4 +45,19 @@
     <string name="feed_dialog_confirm">确认</string>
     <string name="feed_dialog_cancel">取消</string>
     <string name="feed_flow_failed">请求失败，请检查网络或登录状态后重试</string>
+    <string name="feed_flow_failed_after_side_effect">请求未完成，但学识可能已经扣除。请先刷新本题，不要立即重试。</string>
+    <string name="feed_open_answer_label">填写答案</string>
+
+    <string name="feed_category_all">全部</string>
+    <string name="feed_category_detective">侦探推理</string>
+    <string name="feed_category_logic">逻辑思维</string>
+    <string name="feed_category_riddle">谜语大全</string>
+    <string name="feed_category_lateral">脑筋急转弯</string>
+    <string name="feed_category_fun">趣味益智</string>
+    <string name="feed_category_visual">图形视觉</string>
+    <string name="feed_category_math">数学天地</string>
+    <string name="feed_category_knowledge">知识百科</string>
+    <string name="feed_category_decision">决策判断</string>
+    <string name="feed_category_board">棋牌世界</string>
+    <string name="feed_category_couplet">对联大全</string>
 </resources>

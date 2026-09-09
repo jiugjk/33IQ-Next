@@ -12,6 +12,7 @@ internal class SearchViewModel(
     private val searchQuestionsUseCase: SearchQuestionsUseCase,
 ) : BaseViewModel<SearchUiState, SearchAction>(SearchUiState()) {
     private var searchJob: Job? = null
+    private var loadMoreJob: Job? = null
 
     /**
      * Records what the user typed and, after a short pause, searches for it.
@@ -23,19 +24,69 @@ internal class SearchViewModel(
         if (query == uiStateFlow.value.query) return
 
         searchJob?.cancel()
+        loadMoreJob?.cancel()
         sendAction(SearchAction.QueryChanged(query))
 
         if (query.isBlank()) return
 
+        searchJob = launchSearch(query)
+    }
+
+    fun onRetry() {
+        val query = uiStateFlow.value.query
+        if (query.isBlank() || searchJob?.isActive == true) return
+
         searchJob =
             viewModelScope.launch {
-                delay(QUERY_DEBOUNCE_MILLIS)
+                performSearch(query)
+            }
+    }
 
-                sendAction(SearchAction.SearchStart(query))
+    fun onEndReached() {
+        val state = uiStateFlow.value
+        val content = state.results as? SearchResults.Content ?: return
 
-                when (val result = searchQuestionsUseCase(query, PAGE_FIRST)) {
-                    is Result.Success -> sendAction(SearchAction.SearchSuccess(query, result.value))
-                    is Result.Failure -> sendAction(SearchAction.SearchFailure(query))
+        if (state.isLoadingMore || !state.canLoadMore || state.loadMoreFailed || content.questions.isEmpty()) return
+
+        startLoadMore(state)
+    }
+
+    fun onLoadMoreRetry() {
+        val state = uiStateFlow.value
+
+        if (!state.loadMoreFailed || state.isLoadingMore || state.results !is SearchResults.Content) return
+
+        startLoadMore(state)
+    }
+
+    private fun launchSearch(query: String): Job =
+        viewModelScope.launch {
+            delay(QUERY_DEBOUNCE_MILLIS)
+            performSearch(query)
+        }
+
+    private suspend fun performSearch(query: String) {
+        sendAction(SearchAction.SearchStart(query))
+
+        when (val result = searchQuestionsUseCase(query, PAGE_FIRST)) {
+            is Result.Success -> sendAction(SearchAction.SearchSuccess(query, result.value))
+            is Result.Failure -> sendAction(SearchAction.SearchFailure(query))
+        }
+    }
+
+    private fun startLoadMore(state: SearchUiState) {
+        if (loadMoreJob?.isActive == true) return
+
+        val query = state.query
+        val nextPage = state.page + 1
+
+        sendAction(SearchAction.LoadMoreStart(query))
+
+        loadMoreJob =
+            viewModelScope.launch {
+                when (val result = searchQuestionsUseCase(query, nextPage)) {
+                    is Result.Success -> sendAction(SearchAction.LoadMoreSuccess(query, nextPage, result.value))
+                    is Result.Failure -> sendAction(SearchAction.LoadMoreFailure(query))
                 }
             }
     }

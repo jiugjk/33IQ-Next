@@ -13,13 +13,29 @@ internal sealed interface SearchAction : BaseAction<SearchUiState> {
         private val query: String,
     ) : SearchAction {
         override fun reduce(state: SearchUiState) =
-            state.copy(query = query, results = if (query.isBlank()) SearchResults.Idle else state.results)
+            state.copy(
+                query = query,
+                results = if (query.isBlank()) SearchResults.Idle else state.results,
+                page = if (query.isBlank()) 1 else state.page,
+                isLoadingMore = false,
+                canLoadMore = if (query.isBlank()) false else state.canLoadMore,
+                loadMoreFailed = false,
+            )
     }
 
     class SearchStart(
         private val query: String,
     ) : SearchAction {
-        override fun reduce(state: SearchUiState) = state.forQuery(query) { copy(results = SearchResults.Loading) }
+        override fun reduce(state: SearchUiState) =
+            state.forQuery(query) {
+                copy(
+                    results = SearchResults.Loading,
+                    page = 1,
+                    isLoadingMore = false,
+                    canLoadMore = false,
+                    loadMoreFailed = false,
+                )
+            }
     }
 
     class SearchSuccess(
@@ -28,14 +44,64 @@ internal sealed interface SearchAction : BaseAction<SearchUiState> {
     ) : SearchAction {
         override fun reduce(state: SearchUiState) =
             state.forQuery(query) {
-                copy(results = if (questions.isEmpty()) SearchResults.Empty else SearchResults.Content(questions))
+                copy(
+                    results = if (questions.isEmpty()) SearchResults.Empty else SearchResults.Content(questions),
+                    page = 1,
+                    isLoadingMore = false,
+                    canLoadMore = questions.isNotEmpty(),
+                    loadMoreFailed = false,
+                )
             }
     }
 
     class SearchFailure(
         private val query: String,
     ) : SearchAction {
-        override fun reduce(state: SearchUiState) = state.forQuery(query) { copy(results = SearchResults.Error) }
+        override fun reduce(state: SearchUiState) =
+            state.forQuery(query) {
+                copy(results = SearchResults.Error, isLoadingMore = false, canLoadMore = false, loadMoreFailed = false)
+            }
+    }
+
+    class LoadMoreStart(
+        private val query: String,
+    ) : SearchAction {
+        override fun reduce(state: SearchUiState) =
+            state.forQuery(query) {
+                if (results is SearchResults.Content) copy(isLoadingMore = true, loadMoreFailed = false) else this
+            }
+    }
+
+    class LoadMoreSuccess(
+        private val query: String,
+        private val page: Int,
+        private val newQuestions: List<QuestionSummary>,
+    ) : SearchAction {
+        override fun reduce(state: SearchUiState): SearchUiState {
+            if (state.query != query) return state
+            val content = state.results as? SearchResults.Content ?: return state
+            if (state.page != page - 1) return state
+
+            val existingIds = content.questions.map { it.id }.toSet()
+            val actuallyNew = newQuestions.filterNot { it.id in existingIds }
+
+            return state.copy(
+                results = SearchResults.Content(content.questions + actuallyNew),
+                page = page,
+                isLoadingMore = false,
+                loadMoreFailed = false,
+                canLoadMore = actuallyNew.isNotEmpty(),
+            )
+        }
+    }
+
+    class LoadMoreFailure(
+        private val query: String,
+    ) : SearchAction {
+        override fun reduce(state: SearchUiState) =
+            state.forQuery(query) {
+                copy(isLoadingMore = false, loadMoreFailed = true)
+            }
     }
 }
 

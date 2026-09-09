@@ -2,4 +2,5 @@
     <string name="favourite_empty">还没有收藏任何题目\n在题目详情页点击收藏即可加入这里</string>
     <string name="favourite_remove_content_description">取消收藏</string>
     <string name="favourite_storage_error">无法读取本地收藏数据，请稍后重试</string>
+    <string name="favourite_action_failed">收藏操作失败，请稍后重试</string>
 </resources>

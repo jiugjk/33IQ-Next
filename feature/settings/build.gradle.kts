@@ -1,5 +1,6 @@
 plugins {
     id("com.jiugjk.iq33.convention.feature")
+    id("com.jiugjk.iq33.convention.aboutlibraries")
 }
 
 android {
