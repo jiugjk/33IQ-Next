@@ -75,15 +75,7 @@ internal class FeedListViewModel(
     private fun loadMore() {
         val currentState = uiStateFlow.value as? FeedListUiState.Content ?: return
 
-        // A failed page waits for an explicit retry: the scroll trigger sits at the bottom of the
-        // list, so auto-retrying would hammer a failing endpoint for as long as the user stays there.
-        if (currentState.isLoadingMore ||
-            currentState.isRefreshing ||
-            !currentState.canLoadMore ||
-            currentState.loadMoreFailed
-        ) {
-            return
-        }
+        if (!currentState.canStartLoadMore) return
 
         startLoadMore(currentState)
     }
@@ -92,7 +84,7 @@ internal class FeedListViewModel(
     private fun retryLoadMore() {
         val currentState = uiStateFlow.value as? FeedListUiState.Content ?: return
 
-        if (!currentState.loadMoreFailed || currentState.isLoadingMore || currentState.isRefreshing) return
+        if (!currentState.canRetryLoadMore) return
 
         startLoadMore(currentState)
     }

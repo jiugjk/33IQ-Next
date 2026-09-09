@@ -78,9 +78,10 @@ internal sealed interface SearchAction : BaseAction<SearchUiState> {
         private val newQuestions: List<QuestionSummary>,
     ) : SearchAction {
         override fun reduce(state: SearchUiState): SearchUiState {
-            if (state.query != query) return state
-            val content = state.results as? SearchResults.Content ?: return state
-            if (state.page != page - 1) return state
+            // Anything but the page that was actually asked for - a stale query, a state that is no
+            // longer showing results, an out-of-order page - is dropped rather than appended.
+            val content = state.results as? SearchResults.Content
+            if (state.query != query || content == null || state.page != page - 1) return state
 
             val existingIds = content.questions.map { it.id }.toSet()
             val actuallyNew = newQuestions.filterNot { it.id in existingIds }

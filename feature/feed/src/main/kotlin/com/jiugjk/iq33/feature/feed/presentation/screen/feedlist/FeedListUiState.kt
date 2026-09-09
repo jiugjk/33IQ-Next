@@ -34,5 +34,23 @@ internal sealed interface FeedListUiState : BaseState {
          * there is nothing more - a failure here is retryable, the end of the list is not.
          */
         val loadMoreFailed: Boolean = false,
-    ) : FeedListUiState
+    ) : FeedListUiState {
+        /** No page request is in flight, and none is sitting unretried. */
+        private val isPagingIdle: Boolean
+            get() = !isLoadingMore && !isRefreshing && !loadMoreFailed
+
+        /**
+         * A further page may be started right now.
+         *
+         * A failed page waits for [canRetryLoadMore] instead: the scroll trigger sits at the bottom
+         * of the list, so auto-retrying would hammer a failing endpoint for as long as the user
+         * stays there.
+         */
+        val canStartLoadMore: Boolean
+            get() = isPagingIdle && canLoadMore
+
+        /** The failed page can be asked for again, without discarding what is already listed. */
+        val canRetryLoadMore: Boolean
+            get() = loadMoreFailed && !isLoadingMore && !isRefreshing
+    }
 }

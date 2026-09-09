@@ -21,7 +21,7 @@ val networkModule =
 
         single {
             // BASIC logs method/URL only. Never raise this to BODY: login form fields would leak.
-            HttpLoggingInterceptor { message -> Timber.tag(TimberLogTagsNetwork).d(message) }.apply {
+            HttpLoggingInterceptor { message -> Timber.tag(TIMBER_LOG_TAG_NETWORK).d(message) }.apply {
                 level =
                     if (BuildConfig.DEBUG) {
                         HttpLoggingInterceptor.Level.BASIC
@@ -60,4 +60,4 @@ private object UserAgentInterceptor : Interceptor {
 
 private const val HTTP_TIMEOUT_SECONDS = 30L
 
-private const val TimberLogTagsNetwork = "Network"
+private const val TIMBER_LOG_TAG_NETWORK = "Network"

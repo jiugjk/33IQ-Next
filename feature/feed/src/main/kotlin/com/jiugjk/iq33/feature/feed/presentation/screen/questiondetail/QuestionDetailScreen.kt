@@ -174,34 +174,48 @@ private fun QuestionDetailContent(
             )
         }
 
-        if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
-            ChoiceAndSubmitSection(detail = detail, uiState = uiState, onEvent = onEvent)
-        } else if (detail.questionType == QuestionType.OPEN) {
-            OpenAnswerSection(
-                draftAnswer = uiState.draftAnswer,
-                submission = uiState.submission,
-                enabled = uiState.canSelectChoice,
-                onDraftChange = { text -> onEvent(QuestionDetailEvent.DraftAnswerChanged(text)) },
-                onSubmitAnswerClick = { answer -> onEvent(QuestionDetailEvent.AnswerSubmitted(answer)) },
-            )
-        }
+        AnswerSections(uiState = uiState, onEvent = onEvent)
+    }
+}
 
-        HintSection(hintReveal = uiState.hintReveal, canStartHintReveal = uiState.canStartHintReveal, onEvent = onEvent)
+/**
+ * Everything below the question itself: where the answer is given, the paid hint and answer, and
+ * the comments that go with them.
+ */
+@Composable
+private fun AnswerSections(
+    uiState: QuestionDetailUiState.Content,
+    onEvent: (QuestionDetailEvent) -> Unit,
+) {
+    val detail = uiState.detail
 
-        AnswerSection(
-            fallbackAnalysis = detail.analysis,
-            answerReveal = uiState.answerReveal,
-            canStartAnswerReveal = uiState.canStartAnswerReveal,
-            onEvent = onEvent,
+    if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
+        ChoiceAndSubmitSection(detail = detail, uiState = uiState, onEvent = onEvent)
+    } else if (detail.questionType == QuestionType.OPEN) {
+        OpenAnswerSection(
+            draftAnswer = uiState.draftAnswer,
+            submission = uiState.submission,
+            enabled = uiState.canSelectChoice,
+            onDraftChange = { text -> onEvent(QuestionDetailEvent.DraftAnswerChanged(text)) },
+            onSubmitAnswerClick = { answer -> onEvent(QuestionDetailEvent.AnswerSubmitted(answer)) },
         )
+    }
 
-        // 33IQ hides a question's comments (they routinely spoil the answer) until the real answer
-        // has been revealed - matches the official app's own behaviour, not a client limitation.
-        if (uiState.isAnswerRevealed) {
-            CommentSection(comments = detail.comments, commentCount = detail.commentCount)
-        } else {
-            CommentsLockedNotice()
-        }
+    HintSection(hintReveal = uiState.hintReveal, canStartHintReveal = uiState.canStartHintReveal, onEvent = onEvent)
+
+    AnswerSection(
+        fallbackAnalysis = detail.analysis,
+        answerReveal = uiState.answerReveal,
+        canStartAnswerReveal = uiState.canStartAnswerReveal,
+        onEvent = onEvent,
+    )
+
+    // 33IQ hides a question's comments (they routinely spoil the answer) until the real answer
+    // has been revealed - matches the official app's own behaviour, not a client limitation.
+    if (uiState.isAnswerRevealed) {
+        CommentSection(comments = detail.comments, commentCount = detail.commentCount)
+    } else {
+        CommentsLockedNotice()
     }
 }
 

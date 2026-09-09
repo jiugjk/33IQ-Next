@@ -20,7 +20,28 @@ internal data class SearchUiState(
     val isLoadingMore: Boolean = false,
     val canLoadMore: Boolean = false,
     val loadMoreFailed: Boolean = false,
-) : BaseState
+) : BaseState {
+    /** The results currently listed, if any - paging only ever appends to those. */
+    private val listedQuestions: List<QuestionSummary>
+        get() = (results as? SearchResults.Content)?.questions.orEmpty()
+
+    /** No page request is in flight, and none is sitting unretried. */
+    private val isPagingIdle: Boolean
+        get() = !isLoadingMore && !loadMoreFailed
+
+    /**
+     * A further page may be started right now.
+     *
+     * A failed page waits for [canRetryLoadMore] instead: the scroll trigger sits at the bottom of
+     * the list, so auto-retrying would hammer a failing endpoint for as long as the user stays there.
+     */
+    val canStartLoadMore: Boolean
+        get() = isPagingIdle && canLoadMore && listedQuestions.isNotEmpty()
+
+    /** The failed page can be asked for again, without discarding what is already listed. */
+    val canRetryLoadMore: Boolean
+        get() = loadMoreFailed && !isLoadingMore && results is SearchResults.Content
+}
 
 @Immutable
 internal sealed interface SearchResults {
