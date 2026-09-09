@@ -1,6 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,7 +13,6 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,7 +20,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,7 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
-import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorAnim
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorState
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.LoadingIndicator
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
@@ -55,68 +56,69 @@ fun QuestionDetailScreen(
         viewModel.load(questionId)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { },
-            navigationIcon = {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.feed_navigate_back),
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.feed_navigate_back),
+                        )
+                    }
+                },
+                actions = {
+                    val currentUiState = uiState
+                    if (currentUiState is QuestionDetailUiState.Content) {
+                        val context = LocalContext.current
+
+                        IconButton(onClick = { copyQuestion(context, currentUiState.detail) }) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = stringResource(R.string.feed_copy_content_description),
+                            )
+                        }
+
+                        IconButton(onClick = { shareQuestion(context, currentUiState.detail) }) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = stringResource(R.string.feed_share_content_description),
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { viewModel.onEvent(QuestionDetailEvent.BookmarkToggled) },
+                            enabled = !currentUiState.isBookmarkChanging,
+                        ) {
+                            Icon(
+                                imageVector = if (currentUiState.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = stringResource(R.string.feed_bookmark_content_description),
+                            )
+                        }
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            when (val currentUiState = uiState) {
+                QuestionDetailUiState.Loading -> LoadingIndicator()
+                QuestionDetailUiState.Error ->
+                    ErrorState(
+                        title = stringResource(R.string.feed_load_failed_title),
+                        description = stringResource(R.string.feed_load_failed_description),
+                        retryLabel = stringResource(R.string.feed_retry),
+                        onRetry = { viewModel.onEvent(QuestionDetailEvent.RetryRequested) },
                     )
-                }
-            },
-            actions = {
-                val currentUiState = uiState
-                if (currentUiState is QuestionDetailUiState.Content) {
-                    val context = LocalContext.current
-
-                    IconButton(onClick = { copyQuestion(context, currentUiState.detail) }) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = stringResource(R.string.feed_copy_content_description),
-                        )
-                    }
-
-                    IconButton(onClick = { shareQuestion(context, currentUiState.detail) }) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = stringResource(R.string.feed_share_content_description),
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.onEvent(QuestionDetailEvent.BookmarkToggled) },
-                        enabled = !currentUiState.isBookmarkChanging,
-                    ) {
-                        Icon(
-                            imageVector = if (currentUiState.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = stringResource(R.string.feed_bookmark_content_description),
-                        )
-                    }
-                }
-            },
-        )
-
-        when (val currentUiState = uiState) {
-            QuestionDetailUiState.Loading -> LoadingIndicator()
-            QuestionDetailUiState.Error -> LoadErrorContent(onRetryClick = { viewModel.onEvent(QuestionDetailEvent.RetryRequested) })
-            is QuestionDetailUiState.Content -> QuestionDetailContent(uiState = currentUiState, onEvent = viewModel::onEvent)
-        }
-    }
-}
-
-@Composable
-private fun LoadErrorContent(onRetryClick: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        ErrorAnim()
-
-        Button(onClick = onRetryClick, modifier = Modifier.padding(top = Dimen.spaceL)) {
-            Text(stringResource(R.string.feed_retry))
+                is QuestionDetailUiState.Content ->
+                    QuestionDetailContent(uiState = currentUiState, onEvent = viewModel::onEvent)
+            }
         }
     }
 }

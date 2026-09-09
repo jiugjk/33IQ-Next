@@ -12,9 +12,16 @@
     <string name="feed_praise_content_description">点赞</string>
     <string name="feed_upvote_count_content_description">点赞数</string>
     <string name="feed_comment_count_content_description">评论数</string>
+    <string name="feed_collect_count_content_description">收藏数</string>
     <string name="feed_analysis_title">解析</string>
     <string name="feed_right_ratio">正确率 %1$d%%</string>
     <string name="feed_question_image_content_description">题目配图</string>
+    <string name="feed_image_close">关闭图片</string>
+    <string name="feed_image_page_indicator">%1$d / %2$d</string>
+    <string name="feed_image_save_to_gallery">保存到相册</string>
+    <string name="feed_image_saved">图片已保存到相册</string>
+    <string name="feed_image_save_failed">保存失败，请稍后重试</string>
+    <string name="feed_image_save_permission_denied">未授予存储权限，无法保存图片</string>
     <string name="feed_retry">重试</string>
     <string name="feed_load_more_failed">加载更多失败，点击重试</string>
     <string name="feed_load_failed_title">加载失败</string>
