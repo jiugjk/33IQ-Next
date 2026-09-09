@@ -34,10 +34,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.jiugjk.iq33.feature.base.common.res.Dimen
+import com.jiugjk.iq33.feature.base.presentation.compose.composable.TagChipRow
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.Choice
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
-import com.jiugjk.iq33.feature.feed.presentation.composable.TagChipRow
 import com.jiugjk.iq33.feature.feed.presentation.screen.imageviewer.ImageViewerDialog
 
 /*

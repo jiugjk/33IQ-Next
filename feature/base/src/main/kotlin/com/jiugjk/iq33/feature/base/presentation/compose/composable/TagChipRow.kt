@@ -1,4 +1,4 @@
-package com.jiugjk.iq33.feature.feed.presentation.composable
+package com.jiugjk.iq33.feature.base.presentation.compose.composable
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi

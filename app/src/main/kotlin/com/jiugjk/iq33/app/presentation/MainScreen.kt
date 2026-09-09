@@ -1,6 +1,13 @@
 package com.jiugjk.iq33.app.presentation
 
 import android.os.Bundle
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -61,9 +68,43 @@ fun MainScreen(modifier: Modifier = Modifier) {
             navController = navController,
             graph = navGraph,
             modifier = Modifier.padding(innerPadding),
+            enterTransition = { slideInForward() },
+            exitTransition = { slideOutForward() },
+            popEnterTransition = { slideInBack() },
+            popExitTransition = { slideOutBack() },
         )
     }
 }
+
+/*
+ * Page transitions.
+ *
+ * A forward navigation slides the incoming screen in from the trailing edge while the outgoing one
+ * fades and drifts a little the same way, which reads as "further in"; going back mirrors it. The
+ * distance is a fraction of the screen rather than the whole width, so the motion stays quick and
+ * the outgoing screen never fully clears the frame - restrained, per the design brief.
+ *
+ * These are explicit specs rather than MaterialTheme.motionScheme: material3 1.4.0 compiles the
+ * Expressive motion API internal, so it cannot be read here yet. See Iq33Theme.
+ */
+private const val SLIDE_FRACTION = 4
+private const val TRANSITION_MILLIS = 300
+
+private fun slideInForward(): EnterTransition =
+    slideInHorizontally(animationSpec = tween(TRANSITION_MILLIS)) { width -> width / SLIDE_FRACTION } +
+        fadeIn(animationSpec = tween(TRANSITION_MILLIS))
+
+private fun slideOutForward(): ExitTransition =
+    slideOutHorizontally(animationSpec = tween(TRANSITION_MILLIS)) { width -> -width / SLIDE_FRACTION } +
+        fadeOut(animationSpec = tween(TRANSITION_MILLIS))
+
+private fun slideInBack(): EnterTransition =
+    slideInHorizontally(animationSpec = tween(TRANSITION_MILLIS)) { width -> -width / SLIDE_FRACTION } +
+        fadeIn(animationSpec = tween(TRANSITION_MILLIS))
+
+private fun slideOutBack(): ExitTransition =
+    slideOutHorizontally(animationSpec = tween(TRANSITION_MILLIS)) { width -> width / SLIDE_FRACTION } +
+        fadeOut(animationSpec = tween(TRANSITION_MILLIS))
 
 private fun NavController.buildAppNavGraph(): NavGraph =
     createGraph(startDestination = NavigationRoute.FeedList) {
