@@ -624,7 +624,7 @@ style:
     maxJumpCount: 1
   MagicNumber:
     active: true
-    excludes: ['**/[Tt]est/**', '**/*Test.kt']
+    excludes: ['**/[Tt]est/**', '**/*Test.kt', '**/theme/Color.kt']
     ignoreNumbers:
       - '-1'
       - '0'

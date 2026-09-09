@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -42,14 +43,9 @@ internal fun ZoomableImage(
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var scale by remember(imageUrl) { mutableFloatStateOf(1f) }
-    var offsetX by remember(imageUrl) { mutableFloatStateOf(0f) }
-    var offsetY by remember(imageUrl) { mutableFloatStateOf(0f) }
-
-    // Animated so a double-tap eases rather than snapping; a pinch drives scale directly and the
-    // animation simply keeps up.
+    val zoom = remember(imageUrl) { ZoomState() }
     val animatedScale by animateFloatAsState(
-        targetValue = scale,
+        targetValue = zoom.scale,
         animationSpec = tween(durationMillis = ZOOM_ANIMATION_MILLIS),
         label = "imageScale",
     )
@@ -59,73 +55,126 @@ internal fun ZoomableImage(
         contentAlignment = Alignment.Center,
     ) {
         val density = LocalDensity.current
-        val viewportWidth = with(density) { maxWidth.toPx() }
-        val viewportHeight = with(density) { maxHeight.toPx() }
+        val viewport = Offset(with(density) { maxWidth.toPx() }, with(density) { maxHeight.toPx() })
 
-        fun clampOffsets(forScale: Float) {
-            // The image is laid out to fit the viewport, so at scale S the overflow on each axis is
-            // (S - 1) * viewport, split evenly either side of centre.
-            val maxX = ((forScale - 1f) * viewportWidth / 2f).coerceAtLeast(0f)
-            val maxY = ((forScale - 1f) * viewportHeight / 2f).coerceAtLeast(0f)
+        FittedQuestionImage(
+            imageUrl = imageUrl,
+            contentDescription = contentDescription,
+            scale = animatedScale,
+            pan = Offset(zoom.offsetX, zoom.offsetY),
+            modifier =
+                Modifier.fillMaxSize().zoomGestures(
+                    imageUrl = imageUrl,
+                    zoom = zoom,
+                    viewport = viewport,
+                    onTap = onTap,
+                    onLongPress = onLongPress,
+                ),
+        )
+    }
+}
 
-            offsetX = offsetX.coerceIn(-maxX, maxX)
-            offsetY = offsetY.coerceIn(-maxY, maxY)
-        }
-
-        Box(
+@Composable
+private fun FittedQuestionImage(
+    imageUrl: String,
+    contentDescription: String?,
+    scale: Float,
+    pan: Offset,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(imageUrl) {
-                        detectTapGestures(
-                            onTap = { if (scale <= 1f + SCALE_EPSILON) onTap() },
-                            onLongPress = { onLongPress() },
-                            onDoubleTap = { tapOffset ->
-                                if (scale > 1f + SCALE_EPSILON) {
-                                    scale = 1f
-                                    offsetX = 0f
-                                    offsetY = 0f
-                                } else {
-                                    scale = DOUBLE_TAP_SCALE
-                                    // Move the tapped point toward the centre, so the double-tap
-                                    // magnifies what was tapped rather than the middle of the image.
-                                    offsetX = (viewportWidth / 2f - tapOffset.x) * (DOUBLE_TAP_SCALE - 1f)
-                                    offsetY = (viewportHeight / 2f - tapOffset.y) * (DOUBLE_TAP_SCALE - 1f)
-                                    clampOffsets(DOUBLE_TAP_SCALE)
-                                }
-                            },
-                        )
-                    }.pointerInput(imageUrl) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            val newScale = (scale * zoom).coerceIn(1f, MAX_SCALE)
-
-                            // A one-finger drag at 1x is left alone so the pager can use it to move
-                            // between images; a pinch (zoom != 1) is always ours.
-                            if (newScale > 1f + SCALE_EPSILON || abs(zoom - 1f) > SCALE_EPSILON) {
-                                scale = newScale
-                                offsetX += pan.x
-                                offsetY += pan.y
-                                clampOffsets(newScale)
-                            }
-                        }
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = pan.x
+                        translationY = pan.y
                     },
-            contentAlignment = Alignment.Center,
-        ) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = contentDescription,
-                contentScale = ContentScale.Fit,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = animatedScale
-                            scaleY = animatedScale
-                            translationX = offsetX
-                            translationY = offsetY
-                        },
-            )
+        )
+    }
+}
+
+private fun Modifier.zoomGestures(
+    imageUrl: String,
+    zoom: ZoomState,
+    viewport: Offset,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit,
+): Modifier =
+    pointerInput(imageUrl) {
+        detectTapGestures(
+            onTap = { if (zoom.scale <= 1f + SCALE_EPSILON) onTap() },
+            onLongPress = { onLongPress() },
+            onDoubleTap = { tapOffset -> zoom.onDoubleTap(tapOffset = tapOffset, viewport = viewport) },
+        )
+    }.pointerInput(imageUrl) {
+        detectTransformGestures { _, pan, zoomFactor, _ ->
+            zoom.onTransform(pan = pan, zoomFactor = zoomFactor, viewport = viewport)
         }
+    }
+
+/**
+ * Mutable zoom/pan for one image. Recreated when [ZoomableImage] is given a new URL so a swipe
+ * never inherits the previous picture's scale.
+ */
+private class ZoomState {
+    var scale by mutableFloatStateOf(1f)
+    var offsetX by mutableFloatStateOf(0f)
+    var offsetY by mutableFloatStateOf(0f)
+
+    fun onDoubleTap(
+        tapOffset: Offset,
+        viewport: Offset,
+    ) {
+        if (scale > 1f + SCALE_EPSILON) {
+            scale = 1f
+            offsetX = 0f
+            offsetY = 0f
+            return
+        }
+
+        scale = DOUBLE_TAP_SCALE
+        // Move the tapped point toward the centre, so the double-tap magnifies what was tapped
+        // rather than the middle of the image.
+        offsetX = (viewport.x / 2f - tapOffset.x) * (DOUBLE_TAP_SCALE - 1f)
+        offsetY = (viewport.y / 2f - tapOffset.y) * (DOUBLE_TAP_SCALE - 1f)
+        clampOffsets(forScale = DOUBLE_TAP_SCALE, viewport = viewport)
+    }
+
+    fun onTransform(
+        pan: Offset,
+        zoomFactor: Float,
+        viewport: Offset,
+    ) {
+        val newScale = (scale * zoomFactor).coerceIn(1f, MAX_SCALE)
+
+        // A one-finger drag at 1x is left alone so the pager can use it to move between images;
+        // a pinch (zoom != 1) is always ours.
+        if (newScale > 1f + SCALE_EPSILON || abs(zoomFactor - 1f) > SCALE_EPSILON) {
+            scale = newScale
+            offsetX += pan.x
+            offsetY += pan.y
+            clampOffsets(forScale = newScale, viewport = viewport)
+        }
+    }
+
+    private fun clampOffsets(
+        forScale: Float,
+        viewport: Offset,
+    ) {
+        // The image is laid out to fit the viewport, so at scale S the overflow on each axis is
+        // (S - 1) * viewport, split evenly either side of centre.
+        val maxX = ((forScale - 1f) * viewport.x / 2f).coerceAtLeast(0f)
+        val maxY = ((forScale - 1f) * viewport.y / 2f).coerceAtLeast(0f)
+
+        offsetX = offsetX.coerceIn(-maxX, maxX)
+        offsetY = offsetY.coerceIn(-maxY, maxY)
     }
 }
 

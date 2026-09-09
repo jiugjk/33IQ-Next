@@ -26,7 +26,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -40,7 +39,6 @@ import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import org.koin.androidx.compose.koinViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuestionDetailScreen(
     questionId: Long,
@@ -59,50 +57,10 @@ fun QuestionDetailScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
-                title = { },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.feed_navigate_back),
-                        )
-                    }
-                },
-                actions = {
-                    val currentUiState = uiState
-                    if (currentUiState is QuestionDetailUiState.Content) {
-                        val context = LocalContext.current
-
-                        IconButton(onClick = { copyQuestion(context, currentUiState.detail) }) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = stringResource(R.string.feed_copy_content_description),
-                            )
-                        }
-
-                        IconButton(onClick = { shareQuestion(context, currentUiState.detail) }) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = stringResource(R.string.feed_share_content_description),
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { viewModel.onEvent(QuestionDetailEvent.BookmarkToggled) },
-                            enabled = !currentUiState.isBookmarkChanging,
-                        ) {
-                            Icon(
-                                imageVector = if (currentUiState.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                contentDescription = stringResource(R.string.feed_bookmark_content_description),
-                            )
-                        }
-                    }
-                },
+            QuestionDetailTopBar(
+                uiState = uiState,
+                onBackClick = onBackClick,
+                onEvent = viewModel::onEvent,
             )
         },
     ) { innerPadding ->
@@ -121,6 +79,60 @@ fun QuestionDetailScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuestionDetailTopBar(
+    uiState: QuestionDetailUiState,
+    onBackClick: () -> Unit,
+    onEvent: (QuestionDetailEvent) -> Unit,
+) {
+    TopAppBar(
+        title = { },
+        colors =
+            TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        navigationIcon = {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.feed_navigate_back),
+                )
+            }
+        },
+        actions = {
+            val currentUiState = uiState
+            if (currentUiState is QuestionDetailUiState.Content) {
+                val context = LocalContext.current
+
+                IconButton(onClick = { copyQuestion(context, currentUiState.detail) }) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = stringResource(R.string.feed_copy_content_description),
+                    )
+                }
+
+                IconButton(onClick = { shareQuestion(context, currentUiState.detail) }) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = stringResource(R.string.feed_share_content_description),
+                    )
+                }
+
+                IconButton(
+                    onClick = { onEvent(QuestionDetailEvent.BookmarkToggled) },
+                    enabled = !currentUiState.isBookmarkChanging,
+                ) {
+                    Icon(
+                        imageVector = if (currentUiState.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = stringResource(R.string.feed_bookmark_content_description),
+                    )
+                }
+            }
+        },
+    )
 }
 
 @Composable

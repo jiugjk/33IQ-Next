@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -59,6 +60,7 @@ import org.koin.compose.koinInject
  *
  * @param imageUrls every image in the question, so the pager can move between them.
  * @param initialIndex the image that was tapped.
+ * @param onDismiss closes the viewer. Bound to the system back button and a tap at 1x zoom.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,16 +71,94 @@ internal fun ImageViewerDialog(
 ) {
     if (imageUrls.isEmpty()) return
 
+    val pagerState = rememberPagerState(initialPage = initialIndex.coerceIn(imageUrls.indices)) { imageUrls.size }
+    val snackbarHostState = remember { SnackbarHostState() }
+    var sheetOpen by remember { mutableStateOf(false) }
+    val requestSave = rememberImageSaveRequest(imageUrls = imageUrls, pagerState = pagerState, snackbarHostState = snackbarHostState)
+
+    ImageViewerBody(
+        imageUrls = imageUrls,
+        pagerState = pagerState,
+        snackbarHostState = snackbarHostState,
+        onDismiss = onDismiss,
+        onLongPress = { sheetOpen = true },
+    )
+
+    if (sheetOpen) {
+        ImageSaveSheet(
+            onDismissRequest = { sheetOpen = false },
+            onSaveClick = {
+                sheetOpen = false
+                requestSave()
+            },
+        )
+    }
+}
+
+@Composable
+private fun ImageViewerBody(
+    imageUrls: List<String>,
+    pagerState: PagerState,
+    snackbarHostState: SnackbarHostState,
+    onDismiss: () -> Unit,
+    onLongPress: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties =
+            DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    // Opaque black rather than a scrim: this is a photo viewer, and a translucent
+                    // backdrop would leave the question text competing with the image.
+                    .background(Color.Black),
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                ZoomableImage(
+                    imageUrl = imageUrls[page],
+                    contentDescription = stringResource(R.string.feed_question_image_content_description),
+                    onTap = onDismiss,
+                    onLongPress = onLongPress,
+                )
+            }
+
+            ViewerTopBar(
+                pageLabel =
+                    if (imageUrls.size > 1) {
+                        stringResource(R.string.feed_image_page_indicator, pagerState.currentPage + 1, imageUrls.size)
+                    } else {
+                        null
+                    },
+                onClose = onDismiss,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+
+            ViewerSnackbar(
+                snackbarHostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun rememberImageSaveRequest(
+    imageUrls: List<String>,
+    pagerState: PagerState,
+    snackbarHostState: SnackbarHostState,
+): () -> Unit {
     val imageSaver: ImageSaver = koinInject()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
-    val pagerState = rememberPagerState(initialPage = initialIndex.coerceIn(imageUrls.indices)) { imageUrls.size }
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    var sheetOpen by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState()
-
     val savedMessage = stringResource(R.string.feed_image_saved)
     val saveFailedMessage = stringResource(R.string.feed_image_save_failed)
     val permissionDeniedMessage = stringResource(R.string.feed_image_save_permission_denied)
@@ -104,80 +184,37 @@ internal fun ImageViewerDialog(
             }
         }
 
-    fun requestSave() {
-        sheetOpen = false
-
+    return {
         if (needsLegacyStoragePermission(context)) {
             permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         } else {
             saveCurrentImage()
         }
     }
+}
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties =
-            DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ImageSaveSheet(
+    onDismissRequest: () -> Unit,
+    onSaveClick: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(),
     ) {
-        Box(
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.feed_image_save_to_gallery)) },
+            leadingContent = {
+                Icon(imageVector = Icons.Default.Download, contentDescription = null)
+            },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    // Opaque black rather than a scrim: this is a photo viewer, and a translucent
-                    // backdrop would leave the question text competing with the image.
-                    .background(Color.Black),
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-            ) { page ->
-                ZoomableImage(
-                    imageUrl = imageUrls[page],
-                    contentDescription = stringResource(R.string.feed_question_image_content_description),
-                    onTap = onDismiss,
-                    onLongPress = { sheetOpen = true },
-                )
-            }
-
-            ViewerTopBar(
-                pageLabel =
-                    if (imageUrls.size > 1) {
-                        stringResource(R.string.feed_image_page_indicator, pagerState.currentPage + 1, imageUrls.size)
-                    } else {
-                        null
-                    },
-                onClose = onDismiss,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-
-            ViewerSnackbar(
-                snackbarHostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
-        }
-    }
-
-    if (sheetOpen) {
-        ModalBottomSheet(
-            onDismissRequest = { sheetOpen = false },
-            sheetState = sheetState,
-        ) {
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.feed_image_save_to_gallery)) },
-                leadingContent = {
-                    Icon(imageVector = Icons.Default.Download, contentDescription = null)
-                },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = ::requestSave)
-                        .navigationBarsPadding(),
-            )
-        }
+                    .fillMaxWidth()
+                    .clickable(onClick = onSaveClick)
+                    .navigationBarsPadding(),
+        )
     }
 }
 

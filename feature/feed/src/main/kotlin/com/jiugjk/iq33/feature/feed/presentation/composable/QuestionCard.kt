@@ -30,6 +30,9 @@ import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
 /**
  * One question in a list.
  *
+ * @param question the list item to render.
+ * @param onClick opens the question.
+ * @param modifier layout for the card.
  * @param hiddenTag a tag to leave off this card. The feed passes the category being browsed: inside
  *   「对联大全」every question carries the 对联大全 tag, so printing it on all of them is noise. Null
  *   (the default) shows every tag, which is what the bookmark and search lists want - there the tag

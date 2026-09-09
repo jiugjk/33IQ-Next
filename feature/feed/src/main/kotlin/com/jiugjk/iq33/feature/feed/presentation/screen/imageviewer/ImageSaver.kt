@@ -65,16 +65,15 @@ internal class ImageSaver(
             resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
                 ?: throw IOException("MediaStore refused an entry for $displayName")
 
-        try {
+        runCatching {
             openImageStream(context, imageUrl).use { source ->
                 resolver.openOutputStream(uri)?.use { sink -> source.copyTo(sink) }
                     ?: throw IOException("Could not open $uri for writing")
             }
-        } catch (error: Throwable) {
+        }.onFailure {
             // A half-written row would sit in the gallery as a broken thumbnail forever.
             resolver.delete(uri, null, null)
-            throw error
-        }
+        }.getOrThrow()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
