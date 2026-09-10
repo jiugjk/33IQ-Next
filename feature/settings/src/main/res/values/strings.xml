@@ -3,6 +3,8 @@
     <string name="settings_screen_open_source_licenses">开源许可</string>
     <string name="settings_screen_view_licenses_description">查看第三方开源库许可</string>
     <string name="settings_screen_licenses">许可</string>
+    <string name="settings_github_repository">GitHub 仓库</string>
+    <string name="settings_github_repository_id" translatable="false">jiugjk/33IQ-Next</string>
     <string name="settings_screen_navigate">前往</string>
 
     <string name="settings_logged_in">已登录 33IQ</string>

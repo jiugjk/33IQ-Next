@@ -108,7 +108,10 @@ internal fun QuestionBody(
 }
 
 @Composable
-internal fun AuthorRow(detail: QuestionDetail) {
+internal fun AuthorRow(
+    detail: QuestionDetail,
+    modifier: Modifier = Modifier,
+) {
     if (detail.author != null || detail.publishedDate != null) {
         Text(
             text =
@@ -116,7 +119,7 @@ internal fun AuthorRow(detail: QuestionDetail) {
                     .joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Dimen.spaceS),
+            modifier = modifier,
         )
     }
 }
