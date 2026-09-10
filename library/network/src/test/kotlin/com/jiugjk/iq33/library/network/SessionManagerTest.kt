@@ -95,11 +95,37 @@ class SessionManagerTest {
         }
 
     @Test
-    fun `a non-empty JSON array is not evidence of a session`() =
+    fun `a primitive-only JSON array is not evidence of a session`() =
         runTest {
             coEvery { htmlClient.getText(any()) } returns """[null]"""
 
             sut.refreshFromServer().isLoggedIn shouldBeEqualTo false
+        }
+
+    @Test
+    fun `a JSON array of objects is the task list, not a guest`() =
+        runTest {
+            coEvery { htmlClient.getText(any()) } returns """[{"id":"1"}]"""
+
+            sut.refreshFromServer().status shouldBeEqualTo SessionStatus.AUTHENTICATED
+        }
+
+    @Test
+    fun `an object with payload besides status is authenticated even without whitelist fields`() =
+        runTest {
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","data":[]}"""
+
+            sut.refreshFromServer().status shouldBeEqualTo SessionStatus.AUTHENTICATED
+        }
+
+    @Test
+    fun `login succeeds when the probe is a data payload without whitelist fields`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"1","uid":"7"}"""
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","data":[]}"""
+
+            sut.login("account", "password") shouldBeEqualTo LoginResult.Success
+            sut.sessionFlow.value.isLoggedIn shouldBeEqualTo true
         }
 
     @Test

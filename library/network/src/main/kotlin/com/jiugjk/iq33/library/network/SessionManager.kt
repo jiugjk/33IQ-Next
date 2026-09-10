@@ -9,9 +9,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -139,10 +140,7 @@ class SessionManager(
 
             val status =
                 runCatching {
-                    (Json.parseToJsonElement(rawResponse) as? JsonObject)
-                        ?.get(STATUS_FIELD)
-                        ?.jsonPrimitive
-                        ?.contentOrNull
+                    Classifier.scalarContent(Json.parseToJsonElement(rawResponse) as? JsonObject)
                 }.getOrNull()
 
             // A real successful login is confirmed to reply {"status":"1","uid":"<id>"}, but the failure
@@ -208,30 +206,13 @@ class SessionManager(
         runCatching {
             val url = "${IqConstants.GUEST_PROBE_URL}?lang=zh-cn&p=3&time=${System.currentTimeMillis()}"
 
-            classifyProbeResponse(htmlClient.getText(url))
+            Classifier.classify(htmlClient.getText(url))
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
 
             Timber.tag(LOG_TAG).w(throwable, "Failed to refresh session")
             SessionStatus.UNKNOWN
         }
-
-    /**
-     * Classifies a probe reply. The guest marker is the one shape confirmed against the real server;
-     * anything that is not valid JSON, is empty, or is an error envelope proves nothing and stays
-     * [SessionStatus.UNKNOWN] rather than counting as a session.
-     */
-    private fun classifyProbeResponse(body: String): SessionStatus {
-        val payload = runCatching { Json.parseToJsonElement(body) }.getOrNull() ?: return SessionStatus.UNKNOWN
-        val status = (payload as? JsonObject)?.get(STATUS_FIELD)?.jsonPrimitive?.contentOrNull
-
-        return when {
-            status == GUEST_STATUS -> SessionStatus.GUEST
-            status != null && status.lowercase() in ERROR_STATUSES -> SessionStatus.UNKNOWN
-            payload is JsonObject && AUTH_EVIDENCE_FIELDS.any { field -> field in payload } -> SessionStatus.AUTHENTICATED
-            else -> SessionStatus.UNKNOWN
-        }
-    }
 
     /** Applies [probed] only if no login/logout happened while the probe was running. */
     private fun commit(
@@ -294,12 +275,63 @@ class SessionManager(
         }
     }
 
+    /**
+     * Classifies a probe reply.
+     *
+     * The only shape confirmed live is the guest marker `{"status":"guest"}`. A logged-in `/app/taskall`
+     * body has never been captured, but a working login before the evidence-field whitelist showed it is
+     * either a JSON array (the task list) or an object with payload besides `status`. Restricting success
+     * to a handful of guessed field names turned those real replies into unknown: cookies were installed
+     * (answering still worked) while the UI stayed logged out.
+     *
+     * Error envelopes and primitive-only arrays stay unknown - those were review counterexamples, not
+     * 33IQ's guest marker.
+     */
+    private object Classifier {
+        fun classify(body: String): SessionStatus {
+            val payload = runCatching { Json.parseToJsonElement(body) }.getOrNull()
+
+            return when (payload) {
+                is JsonArray -> classifyArray(payload)
+                is JsonObject -> classifyObject(payload)
+                else -> SessionStatus.UNKNOWN
+            }
+        }
+
+        fun scalarContent(obj: JsonObject?): String? {
+            val primitive = obj?.get(STATUS_FIELD) as? JsonPrimitive ?: return null
+
+            return primitive.contentOrNull ?: primitive.content.takeIf { it.isNotEmpty() }
+        }
+
+        private fun classifyArray(payload: JsonArray): SessionStatus =
+            if (payload.isEmpty() || payload.any { it is JsonObject }) {
+                SessionStatus.AUTHENTICATED
+            } else {
+                SessionStatus.UNKNOWN
+            }
+
+        private fun classifyObject(obj: JsonObject): SessionStatus {
+            val status = scalarContent(obj)
+
+            return when {
+                status == GUEST_STATUS -> SessionStatus.GUEST
+                status != null && status.lowercase() in ERROR_STATUSES -> SessionStatus.UNKNOWN
+                AUTH_EVIDENCE_FIELDS.any { field -> field in obj } -> SessionStatus.AUTHENTICATED
+                obj.keys.isNotEmpty() && obj.keys.all { it in NON_ACCOUNT_ENVELOPE_KEYS } -> SessionStatus.UNKNOWN
+                obj.keys.any { it != STATUS_FIELD } -> SessionStatus.AUTHENTICATED
+                else -> SessionStatus.UNKNOWN
+            }
+        }
+    }
+
     private companion object {
         const val LOG_TAG = "Network"
         const val STATUS_FIELD = "status"
         const val GUEST_STATUS = "guest"
         val ERROR_STATUSES = setOf("error", "fail", "failed", "false", "0", "-1")
         val AUTH_EVIDENCE_FIELDS = setOf("uid", "username", "email", "tasks", "userinfo", "score")
+        val NON_ACCOUNT_ENVELOPE_KEYS = setOf("message", "msg", "code", "error", "errno")
         const val PREF_KEY_STATUS = "session_status"
         const val PREF_KEY_SCORE = "score"
         const val PREF_KEY_LEGACY_LOGGED_IN = "is_logged_in"
