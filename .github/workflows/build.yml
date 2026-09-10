@@ -2,16 +2,28 @@ name: Build
 
 # Manually-triggerable build, independent of Check.yml (which only runs on push to main / PRs).
 # Useful for getting installable APKs - and verifying a feature branch really packages - before
-# opening a PR.
+# opening a PR. Tick "Publish GitHub Release" (or push a v* tag) to attach the release APK to
+# GitHub Releases instead of leaving it only as a workflow artifact.
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish the release APK as a GitHub Release'
+        type: boolean
+        default: false
   push:
     branches:
       - 'claude/**'
+    tags:
+      - 'v*'
 
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
+
+# contents:write is required to create/update a GitHub Release. Artifact uploads still work with it.
+permissions:
+  contents: write
 
 jobs:
   compile:
@@ -69,6 +81,40 @@ jobs:
           path: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/mapping/release/mapping.txt
+
+      - name: Publish GitHub Release
+        if: ${{ success() && (github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(app/build/outputs/apk/release/*.apk)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No release APK to publish" >&2
+            exit 1
+          fi
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            version="$(awk -F '"' '/versionName = / { print $2; exit }' app/build.gradle.kts)"
+            if [[ -z "${version}" ]]; then
+              echo "Could not read versionName from app/build.gradle.kts" >&2
+              exit 1
+            fi
+            tag="v${version}"
+          fi
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists; uploading assets."
+            gh release upload "${tag}" "${files[@]}" --clobber
+          else
+            gh release create "${tag}" "${files[@]}" \
+              --title "${tag}" \
+              --generate-notes \
+              --target "${GITHUB_SHA}"
+          fi
 
       - name: Upload build logs on failure
         if: failure()
