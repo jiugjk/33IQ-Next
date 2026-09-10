@@ -20,7 +20,12 @@ class AboutLibrariesConventionPlugin : Plugin<Project> {
                 }
 
                 collect {
-                    all.set(true)
+                    // Runtime/compile classpaths only. `all = true` skips those filters and pulls in
+                    // BOMs, debug tooling and compile-only artifacts that are not what the APK ships,
+                    // which is what made the in-app licence list disagree with the real dependency graph.
+                    all.set(false)
+                    includeTestVariants.set(false)
+                    includePlatform.set(false)
                 }
             }
         }

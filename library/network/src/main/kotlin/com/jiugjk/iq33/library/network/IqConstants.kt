@@ -62,6 +62,13 @@ object IqConstants {
     // `{"status":"success","num":"<new upvote count>"}`.
     const val PRAISE_URL = "$BASE_URL/index/praise"
 
+    // Daily check-in, captured from a logged-in web session (not the official Android app HAR):
+    // POST /member/gettask with tasktype=lottery&reason=, then POST /index/signin with an empty
+    // body. The capture only asserted HTTP 200, so response `status` strings are unconfirmed - see
+    // DailyCheckIn. These are the website's own AJAX URLs; they do not take ACTION_QUERY_SUFFIX.
+    const val DAILY_TASK_URL = "$BASE_URL/member/gettask"
+    const val SIGN_IN_URL = "$BASE_URL/index/signin"
+
     const val USER_AGENT =
         "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) " +
             "Chrome/126.0.0.0 Mobile Safari/537.36 33iqNext/1.0"

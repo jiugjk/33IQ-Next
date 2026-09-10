@@ -40,6 +40,7 @@ An unofficial, third-party Android client for [33IQ](https://www.33iq.com) — a
 - **Answering** — submit a choice or open answer for real scoring (correct/wrong + 学识 gained/lost, both server-reported); pay 学识 to reveal a hint (member/终身会员 discounts shown from 33IQ's own quote)
 - **Favourites** — fully local, on-device bookmark list (Room) — works instantly, no login needed
 - **Login** — logs in through 33IQ's own AJAX endpoint; session cookie is persisted so subsequent requests act as the logged-in user
+- **Daily check-in** — when a verified session is present, claims 33IQ's daily 签到 and lottery task on launch (once per Asia/Shanghai calendar day)
 - **Settings** — session/account status, light/dark/system theme, open-source licenses, disclaimer
 
 ## How data is obtained (no public API)
@@ -51,6 +52,7 @@ An unofficial, third-party Android client for [33IQ](https://www.33iq.com) — a
 - `GET https://www.33iq.com/index/search?k=<gbk-encoded-keyword>&type=question` — search (HTML)
 - `POST https://www.33iq.com/index/login` with `email`/`password`/`ememberme` form fields — login (see [`SessionManager`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/SessionManager.kt)); the `ememberme` field name (not the more obvious `rememberme`) is confirmed from the real app's login request
 - `GET https://www.33iq.com/app/taskall?p=3` — the app's own guest/logged-in probe, replies `{"status":"guest"}` for guests; `SessionManager` uses this instead of scraping the homepage to decide login state
+- `POST https://www.33iq.com/member/gettask` with `tasktype=lottery&reason=` then `POST https://www.33iq.com/index/signin` (empty body) — daily lottery + 签到, captured from a logged-in **web** session (see [`DailyCheckIn`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/DailyCheckIn.kt)). The capture only asserted HTTP 200, so success `status` strings are unconfirmed; the client treats a non-error JSON reply as done, at most once per Asia/Shanghai calendar day
 - `POST https://www.33iq.com/index/commentdeal` with `type=comment&sina_post=0&qq_post=0&context=<answer>&id=<q_id>&isanswer=1&action=comment` — submits an answer; confirmed live to reply `{"status":"success"|"wrong",...}` with a `score`/`myScore` 学识 delta, or `{"status":"repeat"}` if the account already answered that question (see [`AnswerRemoteDataSource`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/data/datasource/remote/AnswerRemoteDataSource.kt))
 - `POST https://www.33iq.com/index/payforshowanswer` then `POST https://www.33iq.com/index/showanswertrue` (both `q_id=<id>`) — the two calls the real app makes, **in that order**, to reveal a question's answer: the first buys the reveal and reports its 学识 cost (`{"status":"success","isPaid":"0","pay":"60",...}`), the second returns the answer and explanation (`{"answer":"A","explanation":"<p>…</p>",...}`). This client mirrors that order and checks the first step's business result before making the second
 - `POST https://www.33iq.com/index/showtipsbuy`, `POST https://www.33iq.com/index/showtips` (both `q_id=<id>`) — hint price quote (with separate normal/member/终身会员 prices) and hint text
@@ -80,6 +82,7 @@ To be transparent about reliability:
 | Pagination beyond page 1 | ⚠️ Uses a `?page=N` query param guess; not present in the HAR capture either. If the site ignores it, the client detects "no new items" and stops loading more rather than looping forever |
 | Favouriting a question on 33IQ's own servers | ❌ Not implemented — no server-side "收藏" endpoint was present in the HAR capture. Favourites are instead a genuine, fully-working **local** bookmark list |
 | Search (`/index/search`) | ⚠️ HTML scraping only; during this round of development the endpoint started returning a login-wall/anti-bot response to repeated automated requests, so this path is untested against a fresh session — the existing implementation is unchanged and best-effort |
+| Daily check-in (`/index/signin`, `/member/gettask`) | ⚠️ URLs and form fields confirmed from a captured web session that only asserted HTTP 200. Success `status` strings are unconfirmed; a non-error JSON reply is treated as done, once per Asia/Shanghai calendar day |
 
 The HAR capture that unlocked the JSON endpoints above was a privacy-scrubbed analysis package (request/response structure and field *names*, without header or body *values*) rather than a raw HAR file, so some fields visible in it (e.g. notification counts, check-in history, feed-update endpoints) are documented as future work in [Roadmap](#roadmap) rather than wired in — they weren't needed for the features this app currently implements. If you can supply more captured traffic (e.g. via Reqable/Charles/Proxyman) for the endpoints still marked best-effort above, the data layer is isolated behind [`QuestionRepository`](feature/feed/src/main/kotlin/com/jiugjk/iq33/feature/feed/domain/repository/QuestionRepository.kt) / [`IqHtmlClient`](library/network/src/main/kotlin/com/jiugjk/iq33/library/network/IqHtmlClient.kt) so it can be swapped for a precise implementation without touching the UI.
 
@@ -115,7 +118,7 @@ The project keeps the modular Clean Architecture skeleton this fork is built on 
 - **`feature-auth`** — login screen
 - **`feature-settings`** — theme, session/account, licenses, disclaimer
 - **`feature-base`** — shared `BaseViewModel`/`Result`/composables used by every feature
-- **`library-network`** — the 33IQ HTTP/scraping layer (`IqHtmlClient`, cookie persistence, `SessionManager`) shared by the features above
+- **`library-network`** — the 33IQ HTTP/scraping layer (`IqHtmlClient`, cookie persistence, `SessionManager`, daily check-in) shared by the features above
 - **`library-test-utils`** — shared test utilities
 
 ```

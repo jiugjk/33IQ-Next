@@ -47,6 +47,9 @@ val networkModule =
         singleOf(::IqHtmlClient)
 
         singleOf(::SessionManager)
+
+        // Clock is a defaulted constructor argument, not a Koin binding - singleOf would look for one.
+        single { DailyCheckIn(htmlClient = get(), preferences = get()) }
     }
 
 private object UserAgentInterceptor : Interceptor {
