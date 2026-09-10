@@ -28,9 +28,6 @@ object Dimen {
     /** 32dp - around a screen-level empty or error state. */
     val spaceXXL = 32.dp
 
-    /** 64dp - reserved for full-screen placeholder artwork. */
-    val spaceHuge = 64.dp
-
     /** Minimum touch target, per the Material accessibility guidance. */
     val touchTarget = 48.dp
 

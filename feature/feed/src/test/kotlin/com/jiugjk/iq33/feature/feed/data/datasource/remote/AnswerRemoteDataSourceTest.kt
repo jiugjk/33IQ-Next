@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeInstanceOf
 import org.junit.jupiter.api.Test
+import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnswerRemoteDataSourceTest {
@@ -65,6 +66,17 @@ class AnswerRemoteDataSourceTest {
             val error = runCatching { sut.revealHint(1) }.exceptionOrNull()
 
             error shouldBeInstanceOf IqResponseException::class
+            (error as IqResponseException).afterSideEffect shouldBeEqualTo true
+        }
+
+    @Test
+    fun `a dropped connection after showtips is an unknown paid outcome`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } throws IOException("broken pipe")
+
+            val error = runCatching { sut.revealHint(1) }.exceptionOrNull() as IqResponseException
+
+            error.afterSideEffect shouldBeEqualTo true
         }
 
     @Test

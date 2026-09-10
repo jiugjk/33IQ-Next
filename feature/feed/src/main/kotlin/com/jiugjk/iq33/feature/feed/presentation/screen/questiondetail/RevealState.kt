@@ -44,11 +44,11 @@ internal sealed interface SubmissionState {
     data object Idle : SubmissionState
 
     data class Submitting(
-        val choiceId: String,
+        val submittedAnswer: String,
     ) : SubmissionState
 
     data class Done(
-        val choiceId: String,
+        val submittedAnswer: String,
         val result: SubmitAnswerResult,
     ) : SubmissionState
 

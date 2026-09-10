@@ -38,6 +38,7 @@ val networkModule =
                 .connectTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .readTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .writeTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .addInterceptor(CookieEpochInterceptor(get()))
                 .addInterceptor(UserAgentInterceptor)
                 .addInterceptor(get<HttpLoggingInterceptor>())
                 .build()

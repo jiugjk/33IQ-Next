@@ -37,6 +37,7 @@ import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.TagChipRow
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.Choice
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.presentation.screen.imageviewer.ImageViewerDialog
 
@@ -57,34 +58,49 @@ import com.jiugjk.iq33.feature.feed.presentation.screen.imageviewer.ImageViewerD
 internal fun QuestionBody(
     bodyText: String,
     imageUrls: List<String>,
+    bodyBlocks: List<QuestionContentBlock> = emptyList(),
 ) {
     var viewerIndex by remember(imageUrls) { mutableStateOf<Int?>(null) }
+    val gallery = imageUrls.ifEmpty { bodyBlocks.filterIsInstance<QuestionContentBlock.Image>().map { it.url }.distinct() }
 
-    if (bodyText.isNotBlank()) {
-        Text(
-            text = bodyText,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(top = Dimen.spaceL),
-        )
-    }
+    val blocks =
+        bodyBlocks.ifEmpty {
+            buildList {
+                if (bodyText.isNotBlank()) add(QuestionContentBlock.Text(bodyText))
+                imageUrls.forEach { add(QuestionContentBlock.Image(it)) }
+            }
+        }
 
-    imageUrls.forEachIndexed { index, imageUrl ->
-        AsyncImage(
-            model = imageUrl,
-            contentDescription = stringResource(R.string.feed_question_image_content_description),
-            contentScale = ContentScale.FillWidth,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = Dimen.spaceM)
-                    .clip(MaterialTheme.shapes.medium)
-                    .clickable { viewerIndex = index },
-        )
+    blocks.forEach { block ->
+        when (block) {
+            is QuestionContentBlock.Text -> {
+                Text(
+                    text = block.text,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = Dimen.spaceL),
+                )
+            }
+            is QuestionContentBlock.Image -> {
+                val index = gallery.indexOf(block.url).takeIf { it >= 0 } ?: 0
+
+                AsyncImage(
+                    model = block.url,
+                    contentDescription = stringResource(R.string.feed_question_image_content_description),
+                    contentScale = ContentScale.FillWidth,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = Dimen.spaceM)
+                            .clip(MaterialTheme.shapes.medium)
+                            .clickable { viewerIndex = index },
+                )
+            }
+        }
     }
 
     viewerIndex?.let { index ->
         ImageViewerDialog(
-            imageUrls = imageUrls,
+            imageUrls = gallery,
             initialIndex = index,
             onDismiss = { viewerIndex = null },
         )

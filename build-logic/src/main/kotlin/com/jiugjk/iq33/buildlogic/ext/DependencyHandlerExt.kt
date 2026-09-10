@@ -1,6 +1,5 @@
 package com.jiugjk.iq33.buildlogic.ext
 
-import org.gradle.accessors.dm.LibrariesForLibs
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
 import org.gradle.kotlin.dsl.DependencyHandlerScope
@@ -17,10 +16,6 @@ fun DependencyHandlerScope.implementation(provider: Provider<out Any>) {
 
 fun DependencyHandlerScope.implementation(project: Project) {
     add(IMPLEMENTATION, project)
-}
-
-fun DependencyHandlerScope.implementation(provider: LibrariesForLibs.KotlinLibraryAccessors) {
-    add(IMPLEMENTATION, provider)
 }
 
 fun DependencyHandlerScope.debugImplementation(provider: Provider<out Any>) {

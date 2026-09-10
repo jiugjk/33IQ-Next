@@ -26,8 +26,10 @@ data class QuestionDetail(
      * is the question as asked, and it is never truncated.
      */
     val bodyText: String,
-    /** Images embedded in the body, in document order - some questions are answerable only from these. */
+    /** Images embedded in the body, in document order of first appearance - used by the gallery. */
     val imageUrls: List<String>,
+    /** Stem as authored: text and images interleaved. Empty means fall back to [bodyText] plus [imageUrls]. */
+    val bodyBlocks: List<QuestionContentBlock> = emptyList(),
     val tags: List<String>,
     val breadcrumb: List<String>,
     val author: String?,

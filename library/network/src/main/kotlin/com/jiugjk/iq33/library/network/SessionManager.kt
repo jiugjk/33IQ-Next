@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -115,32 +114,55 @@ class SessionManager(
     ): LoginResult {
         // A login attempt supersedes anything already in flight, and any state it might commit.
         invalidateInFlightWork()
+        val startGeneration = generation.get()
+        val job = currentCoroutineContext()[Job]
 
-        val rawResponse =
-            runCatching {
-                htmlClient.postFormForText(
-                    IqConstants.LOGIN_URL,
-                    // Field names confirmed from a real captured login request, including the
-                    // "ememberme" (not "rememberme") field name as sent by the real app.
-                    mapOf("email" to account, "password" to password, "ememberme" to "1"),
-                )
-            }.getOrElse { throwable ->
-                if (throwable is CancellationException) throw throwable
+        if (job != null) {
+            synchronized(lock) { inFlightRefreshes += job }
+        }
 
-                Timber.tag(LOG_TAG).w(throwable, "Login request failed")
-                return LoginResult.Failure(LoginError.NetworkUnavailable)
+        try {
+            val rawResponse =
+                runCatching {
+                    htmlClient.postFormForText(
+                        IqConstants.LOGIN_URL,
+                        // Field names confirmed from a real captured login request, including the
+                        // "ememberme" (not "rememberme") field name as sent by the real app.
+                        mapOf("email" to account, "password" to password, "ememberme" to "1"),
+                    )
+                }.getOrElse { throwable ->
+                    if (throwable is CancellationException) throw throwable
+
+                    Timber.tag(LOG_TAG).w(throwable, "Login request failed")
+                    return LoginResult.Failure(LoginError.NetworkUnavailable)
+                }
+
+            val status =
+                runCatching {
+                    (Json.parseToJsonElement(rawResponse) as? JsonObject)
+                        ?.get(STATUS_FIELD)
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                }.getOrNull()
+
+            // A real successful login is confirmed to reply {"status":"1","uid":"<id>"}, but the failure
+            // status strings still aren't (no failed login was ever captured). Success is therefore
+            // decided by the verification probe, which is the only signal confirmed against the real
+            // server - the reported status only distinguishes *why* an unverified attempt failed.
+            val probed = probeSessionStatus()
+            commit(startGeneration, probed)
+
+            // Login success is decided by *this* probe, not by whatever commit() kept on screen when
+            // the probe was UNKNOWN (that path preserves the last verified session for display).
+            return when (probed) {
+                SessionStatus.AUTHENTICATED -> LoginResult.Success
+                SessionStatus.GUEST -> LoginResult.Failure(loginErrorFor(status))
+                SessionStatus.UNKNOWN -> LoginResult.Failure(LoginError.NotVerified)
             }
-
-        val status = Regex(""""status"\s*:\s*"([^"]*)${'"'}""").find(rawResponse)?.groupValues?.get(1)
-
-        // A real successful login is confirmed to reply {"status":"1","uid":"<id>"}, but the failure
-        // status strings still aren't (no failed login was ever captured). Success is therefore
-        // decided by the verification probe, which is the only signal confirmed against the real
-        // server - the reported status only distinguishes *why* an unverified attempt failed.
-        return when (refreshFromServer().status) {
-            SessionStatus.AUTHENTICATED -> LoginResult.Success
-            SessionStatus.GUEST -> LoginResult.Failure(loginErrorFor(status))
-            SessionStatus.UNKNOWN -> LoginResult.Failure(LoginError.NotVerified)
+        } finally {
+            if (job != null) {
+                synchronized(lock) { inFlightRefreshes -= job }
+            }
         }
     }
 
@@ -171,7 +193,7 @@ class SessionManager(
     fun logout() {
         invalidateInFlightWork()
 
-        cookieJar.clear()
+        cookieJar.invalidate()
         // Only the session's own keys - this SharedPreferences file is shared with the theme
         // setting, which a logout must not wipe.
         preferences.edit {
@@ -206,10 +228,7 @@ class SessionManager(
         return when {
             status == GUEST_STATUS -> SessionStatus.GUEST
             status != null && status.lowercase() in ERROR_STATUSES -> SessionStatus.UNKNOWN
-            payload is JsonArray && payload.isNotEmpty() -> SessionStatus.AUTHENTICATED
-            // An object needs real payload next to any status field: a bare {"status":...} or {}
-            // carries no account data and is not evidence of a logged-in session.
-            payload is JsonObject && payload.keys.any { it != STATUS_FIELD } -> SessionStatus.AUTHENTICATED
+            payload is JsonObject && AUTH_EVIDENCE_FIELDS.any { field -> field in payload } -> SessionStatus.AUTHENTICATED
             else -> SessionStatus.UNKNOWN
         }
     }
@@ -280,6 +299,7 @@ class SessionManager(
         const val STATUS_FIELD = "status"
         const val GUEST_STATUS = "guest"
         val ERROR_STATUSES = setOf("error", "fail", "failed", "false", "0", "-1")
+        val AUTH_EVIDENCE_FIELDS = setOf("uid", "username", "email", "tasks", "userinfo", "score")
         const val PREF_KEY_STATUS = "session_status"
         const val PREF_KEY_SCORE = "score"
         const val PREF_KEY_LEGACY_LOGGED_IN = "is_logged_in"

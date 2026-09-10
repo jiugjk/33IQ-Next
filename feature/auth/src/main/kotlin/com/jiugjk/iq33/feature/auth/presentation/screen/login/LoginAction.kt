@@ -21,7 +21,7 @@ internal sealed interface LoginAction : BaseAction<LoginUiState> {
     }
 
     object LoginSuccess : LoginAction {
-        override fun reduce(state: LoginUiState) = state.copy(isLoading = false, isSuccess = true, failureReason = null)
+        override fun reduce(state: LoginUiState) = state.copy(isLoading = false, isSuccess = true, failureReason = null, password = "")
     }
 
     class LoginFailure(

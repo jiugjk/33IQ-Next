@@ -37,7 +37,9 @@ class StateTimeTravelDebugger(
 
         if (stateTimeline.size >= MAX_TIMELINE_ENTRIES) stateTimeline.removeFirst()
 
-        stateTimeline.addLast(StateTransition(oldState, lastViewAction, newState))
+        // Store redacted snapshots only: a LoginUiState with a real password must not live in this
+        // list, even if the printed line later masks the field.
+        stateTimeline.addLast(StateTransition(oldState.forLog(), lastViewAction, newState.forLog()))
         this.lastViewAction = null
     }
 
@@ -101,11 +103,15 @@ class StateTimeTravelDebugger(
         baseState: BaseState,
         propertyName: String,
     ): String {
+        if (propertyName.lowercase() in SENSITIVE_PROPERTY_NAMES) return REDACTED
+
         val property = propertiesOf(baseState).firstOrNull { it.name == propertyName } ?: return ""
         val value = runCatching { property.getter.call(baseState).toString() }.getOrDefault("")
 
         return value.ifBlank { "\"\"" }
     }
+
+    private fun BaseState.forLog(): BaseState = (this as? RedactableState)?.redactedForLog() ?: this
 
     private fun BaseState.propertyNames() = propertiesOf(this).map { it.name }
 
@@ -122,6 +128,10 @@ class StateTimeTravelDebugger(
     private companion object {
         /** Enough recent history to read a flow of actions without pinning whole page loads forever. */
         const val MAX_TIMELINE_ENTRIES = 30
+
+        const val REDACTED = "••••"
+
+        val SENSITIVE_PROPERTY_NAMES = setOf("password", "token", "cookie", "cookies", "authorization")
 
         // Shared by every view model's debugger instance, so it must tolerate concurrent access.
         val propertiesByClass = ConcurrentHashMap<Class<*>, List<KProperty1<out Any, *>>>()

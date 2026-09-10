@@ -10,4 +10,5 @@ dependencies {
     implementation(projects.library.network)
     implementation(projects.feature.favourite)
     implementation(libs.serialization.json)
+    implementation(libs.okhttp)
 }

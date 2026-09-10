@@ -32,7 +32,6 @@ dependencies {
     implementation(libs.detekt.gradlePlugin)
     implementation(libs.test.logger.gradlePlugin)
     implementation(libs.compose.gradlePlugin)
-    implementation(libs.junit5.gradlePlugin)
     implementation(libs.easy.launcher.gradlePlugin)
     implementation(libs.about.libraries.gradlePlugin)
 

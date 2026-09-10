@@ -1,6 +1,7 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.feedlist
 
 import com.jiugjk.iq33.feature.feed.domain.model.Category
+import com.jiugjk.iq33.feature.feed.domain.model.CategorySource
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
 import org.amshove.kluent.shouldBeEqualTo
 import org.junit.jupiter.api.Test
@@ -93,7 +94,7 @@ class FeedListActionTest {
     private fun question(id: Long) = QuestionSummary(id = id, title = "题 $id", tags = emptyList(), upvoteCount = 0, commentCount = 0)
 
     private companion object {
-        val CATEGORY_A = Category("侦探推理", "侦探推理")
-        val CATEGORY_B = Category("逻辑思维", "逻辑思维")
+        val CATEGORY_A = Category("detective", "侦探推理", CategorySource.Tag("侦探推理"))
+        val CATEGORY_B = Category("logic", "逻辑思维", CategorySource.Tag("逻辑思维"))
     }
 }

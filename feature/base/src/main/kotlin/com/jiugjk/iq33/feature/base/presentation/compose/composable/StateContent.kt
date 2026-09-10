@@ -96,7 +96,7 @@ fun ErrorState(
     description: String? = null,
 ) {
     StateColumn(modifier = modifier) {
-        // The bare animation, not ErrorAnim: that one brings its own Card and caption, which
+        // The bare animation, not a separate captioned wrapper: ErrorState already has its own title.
         // would sit right above the title this state already shows. It sizes itself
         // (requiredSize), so passing a size here would be a no-op.
         LottieAssetLoader(assetResId = R.raw.lottie_error_screen)

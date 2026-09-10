@@ -45,7 +45,23 @@ fun SkeletonBlock(
     width: Dp,
     height: Dp,
     modifier: Modifier = Modifier,
+    alpha: Float? = null,
 ) {
+    val resolvedAlpha = alpha ?: localSkeletonAlpha()
+
+    Box(
+        modifier =
+            modifier
+                .width(width)
+                .height(height)
+                .clip(MaterialTheme.shapes.small)
+                .alpha(resolvedAlpha)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+    )
+}
+
+@Composable
+private fun localSkeletonAlpha(): Float {
     val transition = rememberInfiniteTransition(label = "skeleton")
     val alpha by transition.animateFloat(
         initialValue = SKELETON_ALPHA_MIN,
@@ -58,20 +74,15 @@ fun SkeletonBlock(
         label = "skeletonAlpha",
     )
 
-    Box(
-        modifier =
-            modifier
-                .width(width)
-                .height(height)
-                .clip(MaterialTheme.shapes.small)
-                .alpha(alpha)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-    )
+    return alpha
 }
 
 /** A stand-in for one question card, matching its real padding and text rhythm. */
 @Composable
-fun SkeletonCard(modifier: Modifier = Modifier) {
+fun SkeletonCard(
+    modifier: Modifier = Modifier,
+    alpha: Float? = null,
+) {
     Card(
         modifier = modifier.fillMaxWidth().clearAndSetSemantics { },
         shape = MaterialTheme.shapes.large,
@@ -81,12 +92,12 @@ fun SkeletonCard(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(Dimen.spaceL),
             verticalArrangement = Arrangement.spacedBy(Dimen.spaceM),
         ) {
-            SkeletonBlock(width = TitleLineWideWidth, height = TextLineHeight)
-            SkeletonBlock(width = TitleLineNarrowWidth, height = TextLineHeight)
+            SkeletonBlock(width = TitleLineWideWidth, height = TextLineHeight, alpha = alpha)
+            SkeletonBlock(width = TitleLineNarrowWidth, height = TextLineHeight, alpha = alpha)
 
             Row(horizontalArrangement = Arrangement.spacedBy(Dimen.spaceM)) {
-                SkeletonBlock(width = ChipWidth, height = ChipHeight)
-                SkeletonBlock(width = ChipWidth, height = ChipHeight)
+                SkeletonBlock(width = ChipWidth, height = ChipHeight, alpha = alpha)
+                SkeletonBlock(width = ChipWidth, height = ChipHeight, alpha = alpha)
             }
         }
     }
@@ -98,6 +109,8 @@ fun SkeletonList(
     modifier: Modifier = Modifier,
     itemCount: Int = DEFAULT_SKELETON_ITEMS,
 ) {
+    val alpha = localSkeletonAlpha()
+
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(Dimen.spaceL),
@@ -105,7 +118,7 @@ fun SkeletonList(
         // Placeholders must never scroll: there is nothing underneath them to scroll to.
         userScrollEnabled = false,
     ) {
-        items(itemCount) { SkeletonCard() }
+        items(itemCount) { SkeletonCard(alpha = alpha) }
     }
 }
 

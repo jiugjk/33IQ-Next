@@ -1,6 +1,7 @@
 package com.jiugjk.iq33.feature.feed.data.datasource.remote
 
 import com.jiugjk.iq33.feature.feed.domain.model.Choice
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import com.jiugjk.iq33.library.network.IqConstants
@@ -24,6 +25,8 @@ internal class QuestionJsonParser {
     ): QuestionDetail? {
         val question = Json.parseToJsonElement(rawJson).asFirstObjectOrNull() ?: return null
 
+        if (!question.hasQuestionShape()) return null
+
         val tags =
             (
                 question.stringList("tag_micro") +
@@ -41,7 +44,8 @@ internal class QuestionJsonParser {
             }
 
         val bodyHtml = question.stringOrNull("qc_context").orEmpty()
-        val bodyText = htmlToPlainText(bodyHtml)
+        val parsedBody = parseHtmlContent(bodyHtml, IqConstants.BASE_URL)
+        val imageUrls = questionImageUrls(question, parsedBody)
 
         return QuestionDetail(
             id = id,
@@ -50,8 +54,9 @@ internal class QuestionJsonParser {
             // So it stays null here rather than being back-filled with a cut-off copy of the body -
             // see QuestionDetail.title.
             title = question.stringOrNull("qc_title")?.takeIf { it.isNotBlank() },
-            bodyText = bodyText,
-            imageUrls = questionImageUrls(question, bodyHtml),
+            bodyText = parsedBody.plainText,
+            imageUrls = imageUrls,
+            bodyBlocks = parsedBody.blocks.ifEmpty { fallbackBlocks(parsedBody.plainText, imageUrls) },
             tags = tags,
             breadcrumb = emptyList(), // No breadcrumb field has been confirmed on the JSON payload.
             author = question.stringOrNull("username"),
@@ -80,14 +85,31 @@ internal class QuestionJsonParser {
      */
     private fun questionImageUrls(
         question: JsonObject,
-        bodyHtml: String,
+        parsedBody: ParsedHtmlContent,
     ): List<String> {
-        val bodyImages = htmlImageUrls(bodyHtml, IqConstants.BASE_URL)
-
-        if (bodyImages.isNotEmpty()) return bodyImages
+        if (parsedBody.galleryUrls.isNotEmpty()) return parsedBody.galleryUrls
 
         return listOfNotNull(question.stringOrNull("pic")?.takeIf { it.isNotBlank() }?.let(::fullSizeImageUrl))
     }
+
+    private fun fallbackBlocks(
+        plainText: String,
+        imageUrls: List<String>,
+    ): List<QuestionContentBlock> {
+        val blocks = mutableListOf<QuestionContentBlock>()
+
+        if (plainText.isNotBlank()) {
+            blocks += QuestionContentBlock.Text(plainText)
+        }
+        imageUrls.forEach { url ->
+            blocks += QuestionContentBlock.Image(url)
+        }
+
+        return blocks
+    }
+
+    private fun JsonObject.hasQuestionShape(): Boolean =
+        containsKey("qc_context") || containsKey("qc_id") || containsKey("qc_title") || containsKey("pic")
 
     private fun JsonElement.asFirstObjectOrNull(): JsonObject? = (this as? JsonArray)?.firstOrNull() as? JsonObject
 

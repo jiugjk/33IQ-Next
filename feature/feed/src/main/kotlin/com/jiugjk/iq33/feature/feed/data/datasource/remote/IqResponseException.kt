@@ -22,6 +22,7 @@ internal class IqResponseException(
      * failure as "nothing happened".
      */
     val afterSideEffect: Boolean = false,
+    cause: Throwable? = null,
 ) : IOException(
         buildString {
             append("33IQ $endpoint responded with ")
@@ -34,6 +35,7 @@ internal class IqResponseException(
             )
             if (afterSideEffect) append(" after an earlier step of the flow had already succeeded")
         },
+        cause,
     ) {
     enum class Reason {
         /** The server explicitly reported a failure status. */

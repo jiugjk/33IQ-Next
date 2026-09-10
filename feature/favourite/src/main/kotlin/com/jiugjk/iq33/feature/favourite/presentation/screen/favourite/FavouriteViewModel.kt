@@ -6,21 +6,22 @@ import com.jiugjk.iq33.feature.favourite.domain.model.SavedQuestion
 import com.jiugjk.iq33.feature.favourite.domain.repository.BookmarkResult
 import com.jiugjk.iq33.feature.favourite.domain.usecase.ObserveBookmarksUseCase
 import com.jiugjk.iq33.feature.favourite.domain.usecase.RemoveBookmarkUseCase
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal class FavouriteViewModel(
     private val observeBookmarksUseCase: ObserveBookmarksUseCase,
     private val removeBookmarkUseCase: RemoveBookmarkUseCase,
 ) : BaseViewModel<FavouriteUiState, FavouriteAction>(FavouriteUiState.Loading) {
+    private var observeJob: Job? = null
+
     init {
-        viewModelScope.launch {
-            observeBookmarksUseCase().collect { result ->
-                when (result) {
-                    is BookmarkResult.Success -> sendAction(FavouriteAction.BookmarksChanged(result.value))
-                    is BookmarkResult.Failure -> sendAction(FavouriteAction.StorageFailed)
-                }
-            }
-        }
+        observeBookmarks()
+    }
+
+    fun onRetry() {
+        sendAction(FavouriteAction.RetryStarted)
+        observeBookmarks()
     }
 
     /**
@@ -33,5 +34,18 @@ internal class FavouriteViewModel(
                 sendAction(FavouriteAction.StorageFailed)
             }
         }
+    }
+
+    private fun observeBookmarks() {
+        observeJob?.cancel()
+        observeJob =
+            viewModelScope.launch {
+                observeBookmarksUseCase().collect { result ->
+                    when (result) {
+                        is BookmarkResult.Success -> sendAction(FavouriteAction.BookmarksChanged(result.value))
+                        is BookmarkResult.Failure -> sendAction(FavouriteAction.StorageFailed)
+                    }
+                }
+            }
     }
 }

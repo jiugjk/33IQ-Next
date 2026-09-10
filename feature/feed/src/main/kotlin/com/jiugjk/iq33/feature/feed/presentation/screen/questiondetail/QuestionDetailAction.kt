@@ -105,7 +105,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
 
             val submitting = state.submission as? SubmissionState.Submitting ?: return state
 
-            return state.copy(submission = SubmissionState.Done(submitting.choiceId, result))
+            return state.copy(submission = SubmissionState.Done(submitting.submittedAnswer, result))
         }
     }
 

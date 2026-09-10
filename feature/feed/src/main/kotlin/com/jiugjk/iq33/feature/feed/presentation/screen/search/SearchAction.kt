@@ -2,6 +2,7 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.search
 
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
+import com.jiugjk.iq33.feature.feed.presentation.paging.mergeUniqueById
 
 /*
  * Every result-bearing action carries the query it was requested for, so a response that arrives
@@ -18,7 +19,7 @@ internal sealed interface SearchAction : BaseAction<SearchUiState> {
                 results = if (query.isBlank()) SearchResults.Idle else state.results,
                 page = if (query.isBlank()) 1 else state.page,
                 isLoadingMore = false,
-                canLoadMore = if (query.isBlank()) false else state.canLoadMore,
+                canLoadMore = false,
                 loadMoreFailed = false,
             )
     }
@@ -83,15 +84,14 @@ internal sealed interface SearchAction : BaseAction<SearchUiState> {
             val content = state.results as? SearchResults.Content
             if (state.query != query || content == null || state.page != page - 1) return state
 
-            val existingIds = content.questions.map { it.id }.toSet()
-            val actuallyNew = newQuestions.filterNot { it.id in existingIds }
+            val (merged, hasNew) = mergeUniqueById(content.questions, newQuestions) { it.id }
 
             return state.copy(
-                results = SearchResults.Content(content.questions + actuallyNew),
+                results = SearchResults.Content(merged),
                 page = page,
                 isLoadingMore = false,
                 loadMoreFailed = false,
-                canLoadMore = actuallyNew.isNotEmpty(),
+                canLoadMore = hasNew,
             )
         }
     }

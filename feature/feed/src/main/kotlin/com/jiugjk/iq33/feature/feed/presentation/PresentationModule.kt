@@ -25,5 +25,5 @@ internal val presentationModule =
         viewModelOf(::SearchViewModel)
         viewModelOf(::QuestionDetailViewModel)
 
-        single { ImageSaver(ioDispatcher = get(imageIoDispatcherQualifier)) }
+        single { ImageSaver(ioDispatcher = get(imageIoDispatcherQualifier), okHttpClient = get()) }
     }

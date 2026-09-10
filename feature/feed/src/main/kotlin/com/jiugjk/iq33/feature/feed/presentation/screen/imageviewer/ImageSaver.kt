@@ -7,10 +7,12 @@ import android.os.Environment
 import android.provider.MediaStore
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
-import coil3.request.ImageRequest
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import timber.log.Timber
+import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
 
@@ -24,6 +26,7 @@ import java.io.InputStream
  */
 internal class ImageSaver(
     private val ioDispatcher: CoroutineDispatcher,
+    private val okHttpClient: OkHttpClient,
 ) {
     /**
      * @return the display name the image was saved under, or null if it could not be saved. Callers
@@ -93,14 +96,14 @@ internal class ImageSaver(
             ?.openSnapshot(imageUrl)
             ?.use { snapshot -> return snapshot.data.toFile().inputStream() }
 
-        // Not cached (or the cache is disabled): fetching populates it, then it can be read as above.
-        imageLoader.execute(ImageRequest.Builder(context).data(imageUrl).build())
+        val request = Request.Builder().url(imageUrl).build()
+        val response = okHttpClient.newCall(request).execute()
 
-        val snapshot =
-            imageLoader.diskCache?.openSnapshot(imageUrl)
-                ?: throw IOException("Image $imageUrl is not available to save")
+        response.use { body ->
+            if (!body.isSuccessful) throw IOException("HTTP ${body.code} fetching $imageUrl")
 
-        return snapshot.use { it.data.toFile().inputStream() }
+            return ByteArrayInputStream(body.body.bytes())
+        }
     }
 
     private fun displayNameFor(imageUrl: String): String {

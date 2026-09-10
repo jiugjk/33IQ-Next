@@ -9,6 +9,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import java.io.IOException
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Wires 33IQ's real answer-submission / paid-hint endpoints - confirmed from a HAR capture of a real
@@ -82,9 +84,7 @@ internal class AnswerRemoteDataSource(
     }
 
     suspend fun revealHint(questionId: Long): HintReveal {
-        val json =
-            postForJson(SHOW_TIPS, IqConstants.SHOW_TIPS_URL, questionIdParams(questionId))
-                .requireSuccess(SHOW_TIPS)
+        val json = postPaidHint(questionId).requireSuccess(SHOW_TIPS)
 
         // showtips is the call that spends the 学识, so a reply without hint text may still have
         // charged the account - the caller must not present that as "nothing happened".
@@ -106,6 +106,29 @@ internal class AnswerRemoteDataSource(
     }
 
     private fun questionIdParams(questionId: Long) = mapOf("q_id" to questionId.toString())
+
+    /**
+     * [IqConstants.SHOW_TIPS_URL] is the call that spends 学识. Any failure after the request is
+     * attempted is treated as an unknown paid outcome so the UI cannot present it as a safe retry.
+     */
+    private suspend fun postPaidHint(questionId: Long): JsonObject {
+        val result =
+            runCatching {
+                postForJson(SHOW_TIPS, IqConstants.SHOW_TIPS_URL, questionIdParams(questionId))
+            }
+        val error = result.exceptionOrNull() ?: return result.getOrThrow()
+
+        if (error is CancellationException) throw error
+
+        throw when (error) {
+            is IqResponseException ->
+                IqResponseException(error.endpoint, error.reason, error.status, afterSideEffect = true, cause = error)
+            is IOException ->
+                IqResponseException(SHOW_TIPS, IqResponseException.Reason.MALFORMED, afterSideEffect = true, cause = error)
+            else ->
+                IqResponseException(SHOW_TIPS, IqResponseException.Reason.MALFORMED, afterSideEffect = true, cause = error)
+        }
+    }
 
     /** Every one of this class's endpoints requires [IqConstants.ACTION_QUERY_SUFFIX] - see its doc. */
     private suspend fun postForJson(

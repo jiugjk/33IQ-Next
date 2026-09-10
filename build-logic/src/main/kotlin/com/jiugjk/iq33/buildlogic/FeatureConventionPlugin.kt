@@ -98,6 +98,7 @@ class FeatureConventionPlugin : Plugin<Project> {
                 testImplementation(project(":library:test-utils"))
                 testImplementation(libs.bundles.test)
                 testRuntimeOnly(libs.junit.jupiter.engine)
+                testRuntimeOnly(libs.junit.platform.launcher)
             }
         }
     }

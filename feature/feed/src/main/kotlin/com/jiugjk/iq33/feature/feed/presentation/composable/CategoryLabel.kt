@@ -13,25 +13,25 @@ import com.jiugjk.iq33.feature.feed.domain.model.Category
  */
 private val CATEGORY_LABELS: Map<String, Int> =
     mapOf(
-        "" to R.string.feed_category_all,
-        "精选" to R.string.feed_category_featured,
-        "恐怖推理" to R.string.feed_category_horror,
-        "侦探推理" to R.string.feed_category_detective,
-        "逻辑思维" to R.string.feed_category_logic,
-        "谜语大全" to R.string.feed_category_riddle,
-        "脑筋急转弯" to R.string.feed_category_lateral,
-        "趣味益智" to R.string.feed_category_fun,
-        "图形视觉" to R.string.feed_category_visual,
-        "数学天地" to R.string.feed_category_math,
-        "知识百科" to R.string.feed_category_knowledge,
-        "决策判断" to R.string.feed_category_decision,
-        "棋牌世界" to R.string.feed_category_board,
-        "对联大全" to R.string.feed_category_couplet,
+        "all" to R.string.feed_category_all,
+        "featured" to R.string.feed_category_featured,
+        "horror" to R.string.feed_category_horror,
+        "detective" to R.string.feed_category_detective,
+        "logic" to R.string.feed_category_logic,
+        "riddle" to R.string.feed_category_riddle,
+        "lateral" to R.string.feed_category_lateral,
+        "fun" to R.string.feed_category_fun,
+        "visual" to R.string.feed_category_visual,
+        "math" to R.string.feed_category_math,
+        "knowledge" to R.string.feed_category_knowledge,
+        "decision" to R.string.feed_category_decision,
+        "board" to R.string.feed_category_board,
+        "couplet" to R.string.feed_category_couplet,
     )
 
 @Composable
 internal fun Category.label(): String {
-    val resource = CATEGORY_LABELS[tagName]
+    val resource = CATEGORY_LABELS[id]
 
     return if (resource != null) stringResource(resource) else displayName
 }

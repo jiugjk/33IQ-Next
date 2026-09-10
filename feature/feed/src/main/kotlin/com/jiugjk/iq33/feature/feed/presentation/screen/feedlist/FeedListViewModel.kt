@@ -25,8 +25,10 @@ internal class FeedListViewModel(
     }
 
     fun onInit() {
-        if (uiStateFlow.value is FeedListUiState.Loading) {
-            selectCategory(Category.ALL)
+        val state = uiStateFlow.value
+
+        if (state is FeedListUiState.Loading && loadJob?.isActive != true) {
+            selectCategory(state.selectedCategory)
         }
     }
 

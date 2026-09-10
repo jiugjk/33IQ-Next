@@ -3,6 +3,10 @@ package com.jiugjk.iq33.feature.feed.data.datasource.remote
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
+
+/** 33IQ returned HTML that is neither a question list nor a confirmed empty list. */
+internal class UnexpectedPageException : IOException("33IQ served a page that is not a question list")
 
 /**
  * Parses the server-rendered HTML question list/search/tag pages of https://www.33iq.com.
@@ -11,11 +15,25 @@ import org.jsoup.nodes.Element
  * real app-facing JSON endpoint discovered from a captured app session.
  */
 internal class QuestionHtmlParser {
-    fun parseQuestionSummaries(document: Document): List<QuestionSummary> =
-        document
-            .select("div.linktopic[itemtype*=Question]")
-            .mapNotNull { element -> parseSummary(element) }
-            .distinctBy { it.id }
+    fun parseQuestionSummaries(document: Document): List<QuestionSummary> {
+        val nodes = document.select("div.linktopic[itemtype*=Question]")
+        val questions = nodes.mapNotNull { element -> parseSummary(element) }.distinctBy { it.id }
+
+        if (questions.isEmpty() && !looksLikeQuestionList(document)) {
+            throw UnexpectedPageException()
+        }
+
+        return questions
+    }
+
+    private fun looksLikeQuestionList(document: Document): Boolean {
+        if (document.selectFirst("div.linktopic") != null) return true
+        if (document.selectFirst(".pagination") != null) return true
+
+        val title = document.title()
+
+        return title.contains("题目") || title.contains("搜索")
+    }
 
     private fun parseSummary(element: Element): QuestionSummary? {
         val link = element.selectFirst(".title a") ?: return null

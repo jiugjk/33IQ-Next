@@ -46,7 +46,7 @@ class QuestionDetailActionTest {
                 .SubmissionFinished(1, SubmitAnswerResult.Correct(scoreDelta = 2, myScore = 20))
                 .reduce(submitting) as QuestionDetailUiState.Content
 
-        (reduced.submission as SubmissionState.Done).choiceId shouldBeEqualTo "A"
+        (reduced.submission as SubmissionState.Done).submittedAnswer shouldBeEqualTo "A"
     }
 
     @Test

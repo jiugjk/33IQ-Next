@@ -12,4 +12,5 @@ dependencies {
     implementation(libs.bundles.test)
 
     runtimeOnly(libs.junit.jupiter.engine)
+    runtimeOnly(libs.junit.platform.launcher)
 }
