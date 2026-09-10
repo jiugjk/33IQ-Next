@@ -2,6 +2,7 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -56,6 +57,10 @@ fun QuestionDetailScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        // MainScreen's NavHost is already padded for system bars. Leaving Scaffold's default
+        // contentWindowInsets in place stacked another status-bar gap between this top bar and the
+        // author row - leftover-looking blank that used to sit under the (wrong) title heading.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             QuestionDetailTopBar(
                 uiState = uiState,
@@ -90,6 +95,7 @@ private fun QuestionDetailTopBar(
 ) {
     TopAppBar(
         title = { },
+        windowInsets = WindowInsets(0, 0, 0, 0),
         colors =
             TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -141,34 +147,41 @@ private fun QuestionDetailContent(
     onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     val detail = uiState.detail
+    val title = detail.title?.takeIf { it.isNotBlank() }
+    val hasHeading = detail.breadcrumb.isNotEmpty() || title != null
 
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(Dimen.spaceL),
+                .padding(horizontal = Dimen.spaceL)
+                .padding(bottom = Dimen.spaceL),
     ) {
         if (detail.breadcrumb.isNotEmpty()) {
             Text(
                 text = detail.breadcrumb.joinToString(" · "),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Dimen.spaceL),
             )
         }
 
         // Only the rare question that really has a 33IQ title gets a heading. Ordinary ones have
         // none, and the truncated body that used to stand in for it just repeated the question -
         // cut off mid-sentence - directly above the full text. See QuestionDetail.title.
-        detail.title?.let { title ->
+        title?.let { heading ->
             Text(
-                text = title,
+                text = heading,
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(top = Dimen.spaceM),
+                modifier = Modifier.padding(top = if (detail.breadcrumb.isNotEmpty()) Dimen.spaceM else Dimen.spaceL),
             )
         }
 
-        AuthorRow(detail)
+        AuthorRow(
+            detail = detail,
+            modifier = Modifier.padding(top = if (hasHeading) Dimen.spaceS else Dimen.spaceM),
+        )
 
         if (detail.tags.isNotEmpty()) {
             TagRow(tags = detail.tags)

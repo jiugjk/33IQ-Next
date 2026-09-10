@@ -1,5 +1,8 @@
 package com.jiugjk.iq33.feature.settings.presentation.screen.settings
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -28,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -82,6 +87,8 @@ private fun SettingsContent(
 
         ThemeCard(themeMode = uiState.themeMode, onThemeModeSelect = onThemeModeSelect)
 
+        val context = LocalContext.current
+
         Card(
             modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
             shape = MaterialTheme.shapes.large,
@@ -99,6 +106,19 @@ private fun SettingsContent(
                     )
                 },
                 onClick = onNavigateToAboutLibraries,
+            )
+
+            SettingsItem(
+                title = stringResource(R.string.settings_github_repository),
+                subtitle = stringResource(R.string.settings_github_repository_id),
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Code,
+                        contentDescription = stringResource(R.string.settings_github_repository),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                onClick = { openGithubRepository(context) },
             )
         }
 
@@ -243,6 +263,12 @@ private fun SettingsItem(
                 null
             },
     )
+}
+
+private const val GITHUB_REPOSITORY_URL = "https://github.com/jiugjk/33IQ-Next"
+
+private fun openGithubRepository(context: Context) {
+    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_REPOSITORY_URL)))
 }
 
 @Preview

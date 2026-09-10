@@ -12,6 +12,14 @@
             android:name="android.permission.WRITE_EXTERNAL_STORAGE"
             android:maxSdkVersion="28" />
 
+    <!-- Resolving ACTION_VIEW https intents on targetSdk 30+ (the GitHub repo row on 我的). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <!--
     Data backup:
     dataExtractionRules - API 31+

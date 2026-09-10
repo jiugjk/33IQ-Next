@@ -89,64 +89,59 @@ fun FeedListScreen(
             )
         },
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        FeedListBody(
+            uiState = uiState,
+            onEvent = viewModel::onEvent,
+            onQuestionClick = onNavigateToQuestionDetail,
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+        )
+    }
+}
+
+/**
+ * Category chips live here, outside the loading/error/content `when`, so switching category only
+ * replaces the list below. Putting a [CategoryChipRow] in each branch used to dispose the row (and
+ * its [LazyRow] scroll) every time [FeedListAction.LoadStart] moved the state to Loading.
+ */
+@Composable
+private fun FeedListBody(
+    uiState: FeedListUiState,
+    onEvent: (FeedListEvent) -> Unit,
+    onQuestionClick: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        CategoryChipRow(
+            categories = chipCategories(uiState),
+            selectedCategory = uiState.selectedCategory,
+            onEvent = onEvent,
+        )
+
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (val currentUiState = uiState) {
-                is FeedListUiState.Loading -> LoadingContent(selectedCategory = currentUiState.selectedCategory)
-                // The category is kept on failure, so the chips stay usable and a retry reloads the
-                // category the user was actually browsing rather than starting over from "全部".
+                is FeedListUiState.Loading -> SkeletonList()
+                // The category is kept on failure, so a retry reloads the category the user was
+                // actually browsing rather than starting over from "全部".
                 is FeedListUiState.Error ->
-                    FeedListError(selectedCategory = currentUiState.selectedCategory, onEvent = viewModel::onEvent)
+                    ErrorState(
+                        title = stringResource(R.string.feed_load_failed_title),
+                        description = stringResource(R.string.feed_load_failed_description),
+                        retryLabel = stringResource(R.string.feed_retry),
+                        onRetry = { onEvent(FeedListEvent.Refreshed) },
+                    )
                 is FeedListUiState.Content ->
                     FeedListContent(
                         uiState = currentUiState,
-                        onEvent = viewModel::onEvent,
-                        onQuestionClick = onNavigateToQuestionDetail,
+                        onEvent = onEvent,
+                        onQuestionClick = onQuestionClick,
                     )
             }
         }
     }
 }
 
-/**
- * The first load, with the category row already usable above the placeholders.
- *
- * Skeleton cards rather than a spinner: the shape of what is coming is known, so the layout does not
- * jump when the questions land.
- */
-@Composable
-private fun LoadingContent(selectedCategory: Category) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        CategoryChipRow(
-            categories = Category.DEFAULT_CATEGORIES,
-            selectedCategory = selectedCategory,
-            onEvent = { },
-            enabled = false,
-        )
-
-        SkeletonList()
-    }
-}
-
-@Composable
-private fun FeedListError(
-    selectedCategory: Category,
-    onEvent: (FeedListEvent) -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        CategoryChipRow(
-            categories = Category.DEFAULT_CATEGORIES,
-            selectedCategory = selectedCategory,
-            onEvent = onEvent,
-        )
-
-        ErrorState(
-            title = stringResource(R.string.feed_load_failed_title),
-            description = stringResource(R.string.feed_load_failed_description),
-            retryLabel = stringResource(R.string.feed_retry),
-            onRetry = { onEvent(FeedListEvent.Refreshed) },
-        )
-    }
-}
+private fun chipCategories(uiState: FeedListUiState): List<Category> =
+    (uiState as? FeedListUiState.Content)?.categories ?: Category.DEFAULT_CATEGORIES
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,31 +150,23 @@ private fun FeedListContent(
     onEvent: (FeedListEvent) -> Unit,
     onQuestionClick: (Long) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        CategoryChipRow(
-            categories = uiState.categories,
-            selectedCategory = uiState.selectedCategory,
-            onEvent = onEvent,
-        )
-
-        PullToRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = { onEvent(FeedListEvent.Refreshed) },
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            if (uiState.questions.isEmpty() && !uiState.isRefreshing) {
-                // 33IQ answered with nothing rather than failing - a retry is still offered, since
-                // an empty tag page is usually transient.
-                EmptyState(
-                    icon = Icons.Outlined.Inbox,
-                    title = stringResource(R.string.feed_empty_title),
-                    description = stringResource(R.string.feed_empty_description),
-                    actionLabel = stringResource(R.string.feed_retry),
-                    action = { onEvent(FeedListEvent.Refreshed) },
-                )
-            } else {
-                QuestionList(uiState = uiState, onEvent = onEvent, onQuestionClick = onQuestionClick)
-            }
+    PullToRefreshBox(
+        isRefreshing = uiState.isRefreshing,
+        onRefresh = { onEvent(FeedListEvent.Refreshed) },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        if (uiState.questions.isEmpty() && !uiState.isRefreshing) {
+            // 33IQ answered with nothing rather than failing - a retry is still offered, since
+            // an empty tag page is usually transient.
+            EmptyState(
+                icon = Icons.Outlined.Inbox,
+                title = stringResource(R.string.feed_empty_title),
+                description = stringResource(R.string.feed_empty_description),
+                actionLabel = stringResource(R.string.feed_retry),
+                action = { onEvent(FeedListEvent.Refreshed) },
+            )
+        } else {
+            QuestionList(uiState = uiState, onEvent = onEvent, onQuestionClick = onQuestionClick)
         }
     }
 }
@@ -191,7 +178,11 @@ private fun CategoryChipRow(
     onEvent: (FeedListEvent) -> Unit,
     enabled: Boolean = true,
 ) {
+    // Not keyed on the selected category: a click must not recreate this state or scrollToItem(0).
+    val listState = rememberLazyListState()
+
     LazyRow(
+        state = listState,
         contentPadding = PaddingValues(horizontal = Dimen.spaceL, vertical = Dimen.spaceM),
         horizontalArrangement = Arrangement.spacedBy(Dimen.spaceM),
     ) {
