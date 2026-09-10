@@ -1,6 +1,7 @@
 package com.jiugjk.iq33.feature.feed.data.datasource.remote
 
 import com.jiugjk.iq33.feature.feed.domain.model.Category
+import com.jiugjk.iq33.feature.feed.domain.model.CategorySource
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
 import com.jiugjk.iq33.library.network.IqConstants
@@ -69,11 +70,14 @@ internal class QuestionRemoteDataSource(
         page: Int,
     ): String {
         val base =
-            if (category.tagName.isEmpty()) {
-                IqConstants.QUESTION_LIST_URL
-            } else {
-                val encodedTag = URLEncoder.encode(category.tagName, IqConstants.PAGE_CHARSET)
-                "${IqConstants.BASE_URL}/tag/$encodedTag.html"
+            when (val source = category.source) {
+                CategorySource.QuestionList -> {
+                    IqConstants.QUESTION_LIST_URL
+                }
+                is CategorySource.Tag -> {
+                    val encodedTag = URLEncoder.encode(source.path, IqConstants.PAGE_CHARSET)
+                    "${IqConstants.BASE_URL}/tag/$encodedTag.html"
+                }
             }
 
         return if (page > 1) "$base?page=$page" else base

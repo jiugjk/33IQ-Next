@@ -1,5 +1,7 @@
 package com.jiugjk.iq33.feature.feed.data.datasource.remote
 
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
@@ -16,10 +18,45 @@ import org.jsoup.select.NodeVisitor
  * text. Walking emits a hard break for each `<br>` and a paragraph break at every block boundary,
  * which is then normalised - so text is never squashed into one line by whitespace normalisation.
  */
-internal fun htmlToPlainText(html: String): String {
-    if (html.isBlank()) return ""
+internal fun htmlToPlainText(html: String): String = parseHtmlContent(html, baseUrl = "").plainText
 
-    val builder = StringBuilder()
+/**
+ * Extracts the absolute `src` of every image in [html], in document order, each upgraded to the
+ * original upload by [fullSizeImageUrl]. Duplicate URLs collapse to the first occurrence: the image
+ * viewer uses this list as a gallery. Body rendering uses [parseHtmlContent] blocks so a repeated
+ * image in the stem still appears twice.
+ */
+internal fun htmlImageUrls(
+    html: String,
+    baseUrl: String,
+): List<String> = parseHtmlContent(html, baseUrl).galleryUrls
+
+internal data class ParsedHtmlContent(
+    val plainText: String,
+    val blocks: List<QuestionContentBlock>,
+    val galleryUrls: List<String>,
+)
+
+/**
+ * One walk of the body DOM: ordered text/image blocks for rendering, concatenated plain text, and a
+ * de-duplicated gallery list for the image viewer.
+ */
+internal fun parseHtmlContent(
+    html: String,
+    baseUrl: String,
+): ParsedHtmlContent {
+    if (html.isBlank()) return ParsedHtmlContent(plainText = "", blocks = emptyList(), galleryUrls = emptyList())
+
+    val root = Jsoup.parse(html, baseUrl).body()
+    val textBuilder = StringBuilder()
+    val blocks = mutableListOf<QuestionContentBlock>()
+    val imageUrls = mutableListOf<String>()
+
+    fun flushText() {
+        val text = textBuilder.toString().toParagraphs()
+        textBuilder.setLength(0)
+        if (text.isNotBlank()) blocks += QuestionContentBlock.Text(text)
+    }
 
     NodeTraversor.traverse(
         object : NodeVisitor {
@@ -28,9 +65,24 @@ internal fun htmlToPlainText(html: String): String {
                 depth: Int,
             ) {
                 when {
-                    node is TextNode -> builder.append(node.text())
-                    node is Element && node.normalName() == "br" -> builder.append('\n')
-                    node is Element && node.isBlock -> builder.append(BLOCK_BREAK)
+                    node is TextNode -> {
+                        textBuilder.append(node.text())
+                    }
+                    node is Element && node.normalName() == "br" -> {
+                        textBuilder.append('\n')
+                    }
+                    node is Element && node.normalName() == "img" -> {
+                        val url = node.absUrl("src").ifBlank { node.attr("src") }
+                        if (url.isNotBlank()) {
+                            val fullSize = fullSizeImageUrl(url)
+                            flushText()
+                            imageUrls += fullSize
+                            blocks += QuestionContentBlock.Image(fullSize)
+                        }
+                    }
+                    node is Element && node.isBlock -> {
+                        textBuilder.append(BLOCK_BREAK)
+                    }
                 }
             }
 
@@ -38,32 +90,21 @@ internal fun htmlToPlainText(html: String): String {
                 node: Node,
                 depth: Int,
             ) {
-                if (node is Element && node.isBlock) builder.append(BLOCK_BREAK)
+                if (node is Element && node.isBlock) textBuilder.append(BLOCK_BREAK)
             }
         },
-        Jsoup.parse(html).body(),
+        root,
     )
 
-    return builder.toString().toParagraphs()
-}
+    flushText()
 
-/**
- * Extracts the absolute `src` of every image in [html], in document order, each upgraded to the
- * original upload by [fullSizeImageUrl].
- */
-internal fun htmlImageUrls(
-    html: String,
-    baseUrl: String,
-): List<String> {
-    if (html.isBlank()) return emptyList()
+    val plainText =
+        blocks
+            .filterIsInstance<QuestionContentBlock.Text>()
+            .joinToString("\n\n") { it.text }
+    val galleryUrls = imageUrls.distinct()
 
-    return Jsoup
-        .parse(html, baseUrl)
-        .select("img[src]")
-        .map { image -> image.absUrl("src").ifBlank { image.attr("src") } }
-        .filter { it.isNotBlank() }
-        .map(::fullSizeImageUrl)
-        .distinct()
+    return ParsedHtmlContent(plainText = plainText, blocks = blocks, galleryUrls = galleryUrls)
 }
 
 /**
@@ -85,18 +126,36 @@ internal fun htmlImageUrls(
  * | `images/<name>.jpg`          | 1776x1327 | <- the original, and what the JSON's `pic` points at
  *
  * So the `_thumbs[/big]` directory picks a stored rendition and the `!<style>` suffix picks a
- * CDN-resized one; dropping both yields the original. A URL matching neither is returned untouched,
- * so a differently-shaped (or already full-size) address is never mangled.
+ * CDN-resized one; dropping both yields the original. Query and fragment are left untouched: a
+ * `!` inside a token must not be treated as a rendition suffix.
  */
-internal fun fullSizeImageUrl(url: String): String =
-    url
-        .replace(RENDITION_STYLE_SUFFIX, "")
-        .replace(BIG_THUMBS_SEGMENT, ORIGINALS_SEGMENT)
-        .replace(THUMBS_SEGMENT, ORIGINALS_SEGMENT)
+internal fun fullSizeImageUrl(url: String): String {
+    val httpUrl = url.toHttpUrlOrNull()
+
+    if (httpUrl == null) return rewritePath(url)
+
+    return httpUrl
+        .newBuilder()
+        .encodedPath(rewritePath(httpUrl.encodedPath))
+        .build()
+        .toString()
+}
+
+private fun rewritePath(path: String): String {
+    val withoutThumbs =
+        path
+            .replace(BIG_THUMBS_SEGMENT, ORIGINALS_SEGMENT)
+            .replace(THUMBS_SEGMENT, ORIGINALS_SEGMENT)
+    val lastSlash = withoutThumbs.lastIndexOf('/')
+    val directory = if (lastSlash >= 0) withoutThumbs.substring(0, lastSlash + 1) else ""
+    val fileName = if (lastSlash >= 0) withoutThumbs.substring(lastSlash + 1) else withoutThumbs
+
+    return directory + fileName.replace(RENDITION_STYLE_SUFFIX, "")
+}
 
 /**
- * The CDN's "render this at style X" suffix, e.g. `...jpg!33.jpg`. Anchored past the last `/` so a
- * `!` inside a directory name - or a query string - is left alone.
+ * The CDN's "render this at style X" suffix, e.g. `jpg!33.jpg`. Applied only to a path's last
+ * segment so a `!` in a query string or directory name is left alone.
  */
 private val RENDITION_STYLE_SUFFIX = Regex("""![^/?#]*$""")
 

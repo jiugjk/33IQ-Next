@@ -5,6 +5,7 @@ import androidx.core.content.edit
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import java.util.concurrent.atomic.AtomicInteger
 
 /*
  * A [CookieJar] that persists cookies (session id, remember-me token, ...) to [SharedPreferences] so
@@ -24,6 +25,7 @@ class PersistentCookieJar(
     private val preferences: SharedPreferences,
 ) : CookieJar {
     private val lock = Any()
+    private val epoch = AtomicInteger(0)
 
     // Guarded by lock.
     private val cookies = mutableMapOf<CookieKey, Cookie>()
@@ -32,13 +34,28 @@ class PersistentCookieJar(
         synchronized(lock) { restore() }
     }
 
+    fun currentEpoch(): Int = epoch.get()
+
+    /**
+     * Drops every cookie and rejects in-flight responses whose [CookieEpochInterceptor] captured an
+     * older epoch, so a logout cannot be undone by a late Set-Cookie.
+     */
+    fun invalidate() {
+        epoch.incrementAndGet()
+        clear()
+    }
+
     override fun saveFromResponse(
         url: HttpUrl,
         cookies: List<Cookie>,
     ) {
         if (cookies.isEmpty()) return
 
+        val requestEpoch = CookieEpochInterceptor.epochForCurrentCall()
+
         synchronized(lock) {
+            if (requestEpoch != null && requestEpoch != epoch.get()) return
+
             cookies.forEach { cookie ->
                 if (cookie.expiresAt <= System.currentTimeMillis()) {
                     this.cookies.remove(cookie.key())

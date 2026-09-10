@@ -79,6 +79,11 @@ class QuestionJsonParserTest {
         sut.parseQuestionDetail("""{"status":"error"}""", id = 1).shouldBeNull()
     }
 
+    @Test
+    fun `an empty object in the detail array is not a blank question`() {
+        sut.parseQuestionDetail("""[{}]""", id = 1).shouldBeNull()
+    }
+
     private fun payload(
         title: String,
         context: String,

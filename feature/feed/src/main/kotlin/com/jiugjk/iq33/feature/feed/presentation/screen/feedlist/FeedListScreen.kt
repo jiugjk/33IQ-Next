@@ -47,6 +47,7 @@ import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorState
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.SkeletonList
 import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.Category
+import com.jiugjk.iq33.feature.feed.domain.model.redundantCardTag
 import com.jiugjk.iq33.feature.feed.presentation.composable.QuestionCard
 import com.jiugjk.iq33.feature.feed.presentation.composable.label
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -194,7 +195,7 @@ private fun CategoryChipRow(
         contentPadding = PaddingValues(horizontal = Dimen.spaceL, vertical = Dimen.spaceM),
         horizontalArrangement = Arrangement.spacedBy(Dimen.spaceM),
     ) {
-        items(items = categories, key = { it.tagName }) { category ->
+        items(items = categories, key = { it.id }) { category ->
             val selected = category == selectedCategory
 
             // Selected chips carry a little elevation on top of their container colour, so the
@@ -251,9 +252,7 @@ private fun QuestionList(
             QuestionCard(
                 question = question,
                 onClick = { onQuestionClick(question.id) },
-                // Inside a category every question carries that category's own tag, so repeating it
-                // on every card says nothing. "全部" has an empty tagName and hides nothing.
-                hiddenTag = uiState.selectedCategory.tagName.takeIf { it.isNotEmpty() },
+                hiddenTag = uiState.selectedCategory.redundantCardTag(),
                 modifier = Modifier.animateItem(),
             )
         }

@@ -49,7 +49,7 @@ fun FavouriteScreen(
         when (val currentUiState = uiState) {
             FavouriteUiState.Loading -> LoadingIndicator()
             FavouriteUiState.Empty -> EmptyFavourites()
-            FavouriteUiState.Error -> FavouritesUnavailable()
+            FavouriteUiState.Error -> FavouritesUnavailable(onRetry = viewModel::onRetry)
             is FavouriteUiState.Content ->
                 FavouriteList(
                     savedQuestions = currentUiState.savedQuestions,
@@ -72,16 +72,19 @@ private fun EmptyFavourites(modifier: Modifier = Modifier) {
 }
 
 /**
- * The local database could not be read.
- *
- * No retry: bookmarks live in Room on this device, so a read that failed will fail again until the
- * app is restarted. Offering a button that cannot help would be worse than saying so plainly.
+ * The local database could not be read. Retry re-subscribes to the observation flow rather than
+ * assuming the process has to be restarted.
  */
 @Composable
-private fun FavouritesUnavailable(modifier: Modifier = Modifier) {
+private fun FavouritesUnavailable(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     EmptyState(
         icon = Icons.Outlined.ErrorOutline,
         title = stringResource(R.string.favourite_storage_error),
+        actionLabel = stringResource(R.string.favourite_retry),
+        action = onRetry,
         modifier = modifier,
     )
 }

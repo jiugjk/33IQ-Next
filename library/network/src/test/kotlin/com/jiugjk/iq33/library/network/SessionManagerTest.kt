@@ -83,6 +83,42 @@ class SessionManagerTest {
         }
 
     @Test
+    fun `a failed probe after a previous session does not count the new login as success`() =
+        runTest {
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","tasks":[{"id":"1"}]}"""
+            sut.refreshFromServer()
+
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"1","uid":"7"}"""
+            coEvery { htmlClient.getText(any()) } throws IOException("probe timed out")
+
+            sut.login("account", "password") shouldBeEqualTo LoginResult.Failure(LoginError.NotVerified)
+        }
+
+    @Test
+    fun `a non-empty JSON array is not evidence of a session`() =
+        runTest {
+            coEvery { htmlClient.getText(any()) } returns """[null]"""
+
+            sut.refreshFromServer().isLoggedIn shouldBeEqualTo false
+        }
+
+    @Test
+    fun `an object with only a message is not evidence of a session`() =
+        runTest {
+            coEvery { htmlClient.getText(any()) } returns """{"message":"maintenance"}"""
+
+            sut.refreshFromServer().isLoggedIn shouldBeEqualTo false
+        }
+
+    @Test
+    fun `an HTTP error envelope is not evidence of a session`() =
+        runTest {
+            coEvery { htmlClient.getText(any()) } returns """{"code":500,"message":"temporarily unavailable"}"""
+
+            sut.refreshFromServer().isLoggedIn shouldBeEqualTo false
+        }
+
+    @Test
     fun `a rejected password is reported as a wrong password, not a session`() =
         runTest {
             coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"passworderror"}"""

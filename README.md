@@ -4,7 +4,7 @@
 [![AGP](https://img.shields.io/badge/AGP-8.x-blue?style=flat)](https://developer.android.com/studio/releases/gradle-plugin)
 [![Gradle](https://img.shields.io/badge/Gradle-9.x-blue?style=flat)](https://gradle.org)
 
-An unofficial, third-party Android client for [33IQ](https://www.33iq.com) — a Chinese "thinking training" / riddle community (智力题库). **Built for personal learning and technical research only.** 33IQ has no public API, so this app talks to the same server-rendered HTML pages a mobile browser would get and parses them with [Jsoup](https://jsoup.org/); this is documented in detail below and in code comments so the reverse-engineering approach and its limits stay visible.
+An unofficial, third-party Android client for [33IQ](https://www.33iq.com) — a Chinese "thinking training" / riddle community (智力题库). **Built for personal learning and technical research only.** 33IQ has no public, documented third-party API. This app talks to the same server-rendered HTML pages a mobile browser would get (parsed with [Jsoup](https://jsoup.org/)) and to a handful of JSON endpoints the official Android app uses (same URLs, with a `p` query parameter). This is documented in detail below and in code comments so the reverse-engineering approach and its limits stay visible.
 
 > **Disclaimer**: This project is not affiliated with, endorsed by, or connected to 33IQ in any way. Question content, images and account data all belong to 33IQ and its users/authors. Do not use this app to scrape at scale, bypass paywalls, or redistribute content — see [Project Scope & Limitations](#project-scope--limitations).
 
@@ -37,7 +37,7 @@ An unofficial, third-party Android client for [33IQ](https://www.33iq.com) — a
 - **题库 Feed** — browse questions by category (侦探推理 / 逻辑思维 / 脑筋急转弯 / 知识百科 / ...), infinite scroll
 - **Search** — keyword search against 33IQ's own search page
 - **Question Detail** — title, tags, author, stats, multiple-choice options (where present), best-effort answer analysis, comments
-- **Answering** — submit a choice answer for real scoring (correct/wrong + 学识 gained/lost, both server-reported), pay 学识 to reveal the real answer or a hint (member/终身会员 discounts shown from 33IQ's own quote), submission disabled once the answer has been revealed
+- **Answering** — submit a choice or open answer for real scoring (correct/wrong + 学识 gained/lost, both server-reported); pay 学识 to reveal a hint (member/终身会员 discounts shown from 33IQ's own quote)
 - **Favourites** — fully local, on-device bookmark list (Room) — works instantly, no login needed
 - **Login** — logs in through 33IQ's own AJAX endpoint; session cookie is persisted so subsequent requests act as the logged-in user
 - **Settings** — session/account status, light/dark/system theme, open-source licenses, disclaimer
@@ -72,10 +72,10 @@ To be transparent about reliability:
 | Login success detection | ✅ A real successful login's `{"status":"1",...}` reply is confirmed live; login state is still re-derived from the guest-probe endpoint rather than trusted from `status` alone (more robust, and error `status` strings are still unconfirmed - see next row) |
 | Login failure detection | ⚠️ No failed login was ever captured, so the exact error `status` string values (wrong password, locked account, ...) are still unconfirmed guesses; they are mapped to a typed `LoginError` and only ever *explain* a failure the guest probe already established. A login whose state cannot be verified is reported as `NotVerified`, never as success |
 | Submitting an answer (`/index/commentdeal`) | ✅ Confirmed live for choice questions: correct/wrong/already-answered are all distinct, real server responses with a real 学识 delta. Open-ended (non-choice) question submission is unconfirmed - every captured example was a choice question |
-| Revealing the real answer (`payforshowanswer` -> `showanswertrue`) | ✅ Confirmed from a HAR capture of the official app (3.6.3) revealing one question: exactly these two calls, in this order, 534ms apart on one connection, with nothing between them. `payforshowanswer` is the call that buys the reveal and reports the cost; `showanswertrue` returns the answer afterwards. An earlier `showanswernew` endpoint, once believed to be part of the sequence, is never called by the app and is no longer called here. Still **not** confirmed: whether a reveal is genuinely free after answering correctly - the client displays whatever cost the server reports |
-| Hint price + reveal (`showtipsbuy` / `showtips`) | ✅ Confirmed live, including 33IQ's own normal/member/终身会员 price breakdown - shown as-is rather than recomputed client-side |
-| `isLimit` flag on submission/reveal responses | ⚠️ Seen as `"0"` in every capture; its meaning when set (a daily cap of some kind, presumably) is unconfirmed |
-| Answer analysis / 汤底 | ⚠️ 33IQ hides this from guests entirely, and the HAR capture didn't include a logged-in session that could see it either. The question-detail parser therefore leaves it unset rather than guessing at a field, and the UI offers the paid reveal instead — a genuine content limitation of the source, not a client bug |
+|| Revealing the real answer (`payforshowanswer` -> `showanswertrue`) | 📜 Confirmed from a HAR capture of the official app, **not wired in this client**. The paid-answer flow was removed; only hint quote/reveal remains. Historical protocol notes stay here so they are not mistaken for a current feature |
+|| Hint price + reveal (`showtipsbuy` / `showtips`) | ✅ Confirmed live, including 33IQ's own normal/member/终身会员 price breakdown - shown as-is rather than recomputed client-side. A transport/parse failure after `showtips` is treated as an unknown paid outcome, not a safe retry |
+|| `isLimit` flag on submission/reveal responses | ⚠️ Seen as `"0"` in every capture; its meaning when set (a daily cap of some kind, presumably) is unconfirmed |
+|| Answer analysis / 汤底 | ⚠️ 33IQ hides this from guests entirely, and the HAR capture didn't include a logged-in session that could see it either. The question-detail parser therefore leaves it unset rather than guessing at a field |
 | Comments on a question | ❌ Not loaded. No comments-list endpoint was present in the HAR capture, so the parser leaves the list empty and the UI says so; only the comment *count* from the detail payload is shown |
 | Pagination beyond page 1 | ⚠️ Uses a `?page=N` query param guess; not present in the HAR capture either. If the site ignores it, the client detects "no new items" and stops loading more rather than looping forever |
 | Favouriting a question on 33IQ's own servers | ❌ Not implemented — no server-side "收藏" endpoint was present in the HAR capture. Favourites are instead a genuine, fully-working **local** bookmark list |
@@ -87,7 +87,7 @@ The HAR capture that unlocked the JSON endpoints above was a privacy-scrubbed an
 
 **Core Technologies:**
 - **[Kotlin 2.x](https://kotlinlang.org/)** — Coroutines, Flow, KSP, Serialization
-- **[Jsoup](https://jsoup.org/)** — HTML parsing (33IQ has no JSON API)
+- **[Jsoup](https://jsoup.org/)** — HTML parsing (33IQ has no public documented API; some official-app JSON endpoints are used where confirmed)
 
 **Android Jetpack:**
 - **[Compose](https://developer.android.com/jetpack/compose)** + **[Navigation Compose](https://developer.android.com/jetpack/compose/navigation)** (type-safe routes)

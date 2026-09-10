@@ -2,6 +2,7 @@ package com.jiugjk.iq33.feature.auth.presentation.screen.login
 
 import androidx.compose.runtime.Immutable
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseState
+import com.jiugjk.iq33.feature.base.presentation.viewmodel.RedactableState
 
 /**
  * Why a login attempt failed, as a category rather than a ready-made sentence - the wording lives in
@@ -28,4 +29,11 @@ internal data class LoginUiState(
     val isSuccess: Boolean = false,
     val failureReason: LoginFailureReason? = null,
     val serverStatus: String? = null,
-) : BaseState
+) : BaseState,
+    RedactableState {
+    override fun redactedForLog(): BaseState = copy(password = REDACTED_PASSWORD)
+
+    private companion object {
+        const val REDACTED_PASSWORD = "••••"
+    }
+}

@@ -176,7 +176,7 @@ private fun QuestionDetailContent(
 
         StatsRow(detail = detail, isPraising = uiState.isPraising, onPraiseClick = { onEvent(QuestionDetailEvent.PraiseClicked) })
 
-        QuestionBody(bodyText = detail.bodyText, imageUrls = detail.imageUrls)
+        QuestionBody(bodyText = detail.bodyText, imageUrls = detail.imageUrls, bodyBlocks = detail.bodyBlocks)
 
         if (uiState.bookmarkFailed) {
             Text(

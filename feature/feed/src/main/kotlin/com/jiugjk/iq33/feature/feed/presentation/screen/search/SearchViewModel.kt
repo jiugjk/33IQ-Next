@@ -65,6 +65,7 @@ internal class SearchViewModel(
         }
 
     private suspend fun performSearch(query: String) {
+        loadMoreJob?.cancel()
         sendAction(SearchAction.SearchStart(query))
 
         when (val result = searchQuestionsUseCase(query, PAGE_FIRST)) {

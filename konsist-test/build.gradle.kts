@@ -13,4 +13,6 @@ dependencies {
     testImplementation(libs.bundles.test)
     testImplementation(libs.konsist)
     testImplementation(libs.viewmodel.ktx)
+    testRuntimeOnly(libs.junit.jupiter.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }

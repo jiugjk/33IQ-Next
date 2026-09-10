@@ -19,4 +19,9 @@ internal sealed interface FavouriteAction : BaseAction<FavouriteUiState> {
         override fun reduce(state: FavouriteUiState): FavouriteUiState =
             if (state is FavouriteUiState.Content) state.copy(actionFailed = true) else FavouriteUiState.Error
     }
+
+    object RetryStarted : FavouriteAction {
+        override fun reduce(state: FavouriteUiState): FavouriteUiState =
+            if (state is FavouriteUiState.Error) FavouriteUiState.Loading else state
+    }
 }

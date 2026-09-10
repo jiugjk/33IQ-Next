@@ -1,10 +1,13 @@
 package com.jiugjk.iq33.library.network
 
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,6 +18,8 @@ import org.jsoup.nodes.Document
 import java.io.IOException
 import java.net.URLEncoder
 import kotlin.coroutines.coroutineContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Thrown when 33IQ redirects a request to its login page instead of serving the requested content.
@@ -79,7 +84,7 @@ class IqHtmlClient(
     /**
      * Raw text response for 33IQ's app-facing JSON endpoints (e.g. `/question/<id>.html?p=3`,
      * `/app/taskall`). These are the *same* URLs the public website serves as HTML, but adding the
-     * right `p` query parameter (confirmed from a real captured app session, value differs per
+     * right `p` query parameter (confirmed from a captured app session, value differs per
      * endpoint) flips the response to plain JSON.
      */
     suspend fun getText(url: String): String {
@@ -99,6 +104,11 @@ class IqHtmlClient(
         }
     }
 
+    /**
+     * Enqueues the call and cancels it from [CancellableContinuation.invokeOnCancellation], which
+     * runs as soon as the coroutine enters Cancelling - unlike [Job.invokeOnCompletion], which waits
+     * until a blocking [Call.execute] has already finished reading the body.
+     */
     private suspend fun <T> execute(
         request: Request,
         readResponse: (Response) -> T,
@@ -106,23 +116,51 @@ class IqHtmlClient(
         coroutineContext.ensureActive()
 
         return withContext(Dispatchers.IO) {
-            val call = okHttpClient.newCall(request)
-            val cancellation = coroutineContext[Job]?.bindCancellationTo(call)
+            suspendCancellableCoroutine { continuation ->
+                val call = okHttpClient.newCall(request)
 
-            try {
-                call.execute().use { response ->
-                    response.checkSuccessful()
+                continuation.invokeOnCancellation { call.cancel() }
 
-                    readResponse(response)
-                }
-            } finally {
-                cancellation?.dispose()
+                call.enqueue(ResponseCallback(continuation, readResponse))
             }
         }
     }
 
-    /** Cancels [call] as soon as this job completes; cancelling a finished call is a no-op. */
-    private fun Job.bindCancellationTo(call: Call) = invokeOnCompletion { call.cancel() }
+    private inner class ResponseCallback<T>(
+        private val continuation: CancellableContinuation<T>,
+        private val readResponse: (Response) -> T,
+    ) : Callback {
+        override fun onFailure(
+            call: Call,
+            e: IOException,
+        ) {
+            continuation.resumeIfActive(
+                if (call.isCanceled()) CancellationException("HTTP call cancelled", e) else e,
+            )
+        }
+
+        override fun onResponse(
+            call: Call,
+            response: Response,
+        ) {
+            response.use { body ->
+                val outcome =
+                    runCatching {
+                        check(continuation.isActive)
+                        body.checkSuccessful()
+                        readResponse(body)
+                    }
+                outcome.fold(
+                    onSuccess = { value -> if (continuation.isActive) continuation.resume(value) },
+                    onFailure = { error -> continuation.resumeIfActive(error) },
+                )
+            }
+        }
+    }
+
+    private fun <T> CancellableContinuation<T>.resumeIfActive(error: Throwable) {
+        if (isActive) resumeWithException(error)
+    }
 
     private fun isLoginWall(document: Document): Boolean = document.title().contains("用户登录") || document.selectFirst(".login-card") != null
 

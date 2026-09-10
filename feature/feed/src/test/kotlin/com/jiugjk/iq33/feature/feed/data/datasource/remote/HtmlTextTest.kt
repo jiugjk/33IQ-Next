@@ -1,5 +1,6 @@
 package com.jiugjk.iq33.feature.feed.data.datasource.remote
 
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock
 import org.amshove.kluent.shouldBeEmpty
 import org.amshove.kluent.shouldBeEqualTo
 import org.junit.jupiter.api.Test
@@ -83,6 +84,38 @@ class HtmlTextTest {
         val url = "https://www.33iq.com/upload/a/plain.png"
 
         fullSizeImageUrl(url) shouldBeEqualTo url
+    }
+
+    @Test
+    fun `a bang inside a query string is not treated as a rendition suffix`() {
+        val url = "https://img.example/a.jpg?token=abc!def"
+
+        fullSizeImageUrl(url) shouldBeEqualTo url
+    }
+
+    @Test
+    fun `a rendition suffix before a query string is stripped from the path only`() {
+        val url = "https://img.example/a.jpg!33.jpg?token=abc"
+
+        fullSizeImageUrl(url) shouldBeEqualTo "https://img.example/a.jpg?token=abc"
+    }
+
+    @Test
+    fun `interleaved text and images keep document order including repeats`() {
+        val parsed =
+            parseHtmlContent(
+                """<p>看图一</p><img src="/a.png"><p>再看图二</p><img src="/a.png">""",
+                "https://www.33iq.com",
+            )
+
+        parsed.blocks shouldBeEqualTo
+            listOf(
+                QuestionContentBlock.Text("看图一"),
+                QuestionContentBlock.Image("https://www.33iq.com/a.png"),
+                QuestionContentBlock.Text("再看图二"),
+                QuestionContentBlock.Image("https://www.33iq.com/a.png"),
+            )
+        parsed.galleryUrls shouldBeEqualTo listOf("https://www.33iq.com/a.png")
     }
 
     private companion object {

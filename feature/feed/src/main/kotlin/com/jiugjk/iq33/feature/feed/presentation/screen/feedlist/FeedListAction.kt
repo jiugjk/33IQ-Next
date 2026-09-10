@@ -3,6 +3,7 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.feedlist
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
 import com.jiugjk.iq33.feature.feed.domain.model.Category
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
+import com.jiugjk.iq33.feature.feed.presentation.paging.mergeUniqueById
 
 /*
  * Paging results carry the category and page they were requested for. A response that arrives after
@@ -78,17 +79,16 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
             // Stale: the category changed, or a refresh reset paging back past this page.
             if (state.selectedCategory != category || state.page != page - 1) return state
 
-            val existingIds = state.questions.map { it.id }.toSet()
-            val actuallyNewQuestions = newQuestions.filterNot { it.id in existingIds }
+            val (merged, hasNew) = mergeUniqueById(state.questions, newQuestions) { it.id }
 
             return state.copy(
-                questions = state.questions + actuallyNewQuestions,
+                questions = merged,
                 page = page,
                 isLoadingMore = false,
                 loadMoreFailed = false,
                 // If the "next page" came back empty, or turned out to be the same content the site
                 // returned for page 1 (see the pagination caveat in QuestionRemoteDataSource), stop.
-                canLoadMore = actuallyNewQuestions.isNotEmpty(),
+                canLoadMore = hasNew,
             )
         }
     }
