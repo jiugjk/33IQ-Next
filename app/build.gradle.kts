@@ -32,8 +32,8 @@ android {
     defaultConfig {
         applicationId = "com.jiugjk.iq33"
 
-        versionCode = 1
-        versionName = "0.0.1" // SemVer (Major.Minor.Patch)
+        versionCode = 2
+        versionName = "0.0.2" // SemVer (Major.Minor.Patch)
     }
 
     signingConfigs {
