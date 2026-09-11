@@ -55,8 +55,8 @@ import org.koin.compose.koinInject
  *
  * A [Dialog] with `usePlatformDefaultWidth = false` and `decorFitsSystemWindows = false` is what
  * makes this cover the whole screen including under the system bars. It also gives back-button
- * dismissal for free, which is what the requirement asks for and what a hand-rolled overlay would
- * have to reimplement.
+ * dismissal for free - including the predictive-back animation once the activity has opted in -
+ * which is what a hand-rolled overlay would have to reimplement.
  *
  * @param imageUrls every image in the question, so the pager can move between them.
  * @param initialIndex the image that was tapped.

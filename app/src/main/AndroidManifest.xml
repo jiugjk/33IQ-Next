@@ -25,11 +25,17 @@
     dataExtractionRules - API 31+
     allowBackup and fullBackupContent - API < 31
     -->
+    <!--
+    Predictive back: targetSdk is 35, and the system only turns this on by default from targetSdk 36.
+    Navigation Compose 2.8+ seeks the NavHost pop transitions against the gesture once the activity
+    has opted in; without the flag the back swipe still pops, it just jumps.
+    -->
     <application
             android:name=".IqApplication"
             android:allowBackup="false"
             android:fullBackupContent="false"
             android:dataExtractionRules="@xml/data_extraction_rules"
+            android:enableOnBackInvokedCallback="true"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
             android:roundIcon="@mipmap/ic_launcher_round"
