@@ -1,16 +1,11 @@
 name: Build
 
 # Manually-triggerable build, independent of Check.yml (which only runs on push to main / PRs).
-# Useful for getting installable APKs - and verifying a feature branch really packages - before
-# opening a PR. Tick "Publish GitHub Release" (or push a v* tag) to attach the release APK to
-# GitHub Releases instead of leaving it only as a workflow artifact.
+# Every workflow_dispatch run publishes a NEW GitHub Release (next v* patch), so you do not
+# have to tick a box or push a tag. Pushing a v* tag still builds and publishes that tag.
+# Feature branches matching claude/** only upload workflow artifacts.
 on:
   workflow_dispatch:
-    inputs:
-      publish_release:
-        description: 'Publish the release APK as a GitHub Release'
-        type: boolean
-        default: false
   push:
     branches:
       - 'claude/**'
@@ -26,7 +21,29 @@ permissions:
   contents: write
 
 jobs:
+  # gh release create from workflow_dispatch also pushes a v* tag, which would otherwise
+  # start a second full build. Skip that duplicate if the release is already there.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.decide.outputs.should_build }}
+    steps:
+      - name: Decide whether to build
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]] && gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists; skipping duplicate tag build."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   compile:
+    needs: gate
+    if: needs.gate.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     # Passed straight through to Gradle, which reads them in app/build.gradle.kts. Secrets that are
     # not configured arrive as empty strings, and the build treats that as "no signing material".
@@ -57,6 +74,48 @@ jobs:
           echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-keystore.jks"
           echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_ENV"
 
+      - name: Resolve release version
+        if: github.event_name == 'workflow_dispatch' || github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME}"
+            version="${tag#v}"
+          else
+            latest="$(
+              gh release list --limit 100 --json tagName --jq '.[].tagName' \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+                | sort -V \
+                | tail -1 || true
+            )"
+            if [[ -z "${latest}" ]]; then
+              version="0.0.1"
+            else
+              IFS=. read -r maj min pat <<< "${latest#v}"
+              version="${maj}.${min}.$((pat + 1))"
+            fi
+            tag="v${version}"
+          fi
+
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Refusing non-semver version '${version}'" >&2
+            exit 1
+          fi
+
+          IFS=. read -r maj min pat <<< "${version}"
+          version_code=$((maj * 10000 + min * 100 + pat))
+
+          {
+            echo "RELEASE_TAG=${tag}"
+            echo "VERSION_NAME=${version}"
+            echo "VERSION_CODE=${version_code}"
+          } >> "$GITHUB_ENV"
+
+          echo "Publishing as ${tag} (versionName=${version}, versionCode=${version_code})"
+
       - name: Compile all source sets (fast fail, no packaging)
         run: ./gradlew compileDebugKotlin compileDebugUnitTestKotlin --stacktrace
 
@@ -83,7 +142,7 @@ jobs:
             app/build/outputs/mapping/release/mapping.txt
 
       - name: Publish GitHub Release
-        if: ${{ success() && (github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
+        if: ${{ success() && (github.event_name == 'workflow_dispatch' || github.ref_type == 'tag') }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -95,22 +154,33 @@ jobs:
             exit 1
           fi
 
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            tag="${GITHUB_REF_NAME}"
-          else
-            version="$(awk -F '"' '/versionName = / { print $2; exit }' app/build.gradle.kts)"
-            if [[ -z "${version}" ]]; then
-              echo "Could not read versionName from app/build.gradle.kts" >&2
-              exit 1
-            fi
-            tag="v${version}"
-          fi
+          tag="${RELEASE_TAG:?}"
+          published=()
+          for f in "${files[@]}"; do
+            base="$(basename "$f")"
+            dir="$(dirname "$f")"
+            case "$base" in
+              app-release-unsigned.apk)
+                dest="${dir}/33IQ-Next-${VERSION_NAME}-unsigned.apk"
+                mv "$f" "$dest"
+                published+=("$dest")
+                ;;
+              app-release.apk)
+                dest="${dir}/33IQ-Next-${VERSION_NAME}.apk"
+                mv "$f" "$dest"
+                published+=("$dest")
+                ;;
+              *)
+                published+=("$f")
+                ;;
+            esac
+          done
 
           if gh release view "${tag}" >/dev/null 2>&1; then
             echo "Release ${tag} already exists; uploading assets."
-            gh release upload "${tag}" "${files[@]}" --clobber
+            gh release upload "${tag}" "${published[@]}" --clobber
           else
-            gh release create "${tag}" "${files[@]}" \
+            gh release create "${tag}" "${published[@]}" \
               --title "${tag}" \
               --generate-notes \
               --target "${GITHUB_SHA}"
