@@ -79,10 +79,12 @@ fun MainScreen(modifier: Modifier = Modifier) {
 /*
  * Page transitions.
  *
- * A forward navigation slides the incoming screen in from the trailing edge while the outgoing one
- * fades and drifts a little the same way, which reads as "further in"; going back mirrors it. The
- * distance is a fraction of the screen rather than the whole width, so the motion stays quick and
- * the outgoing screen never fully clears the frame - restrained, per the design brief.
+ * Forward navigation still slides by a fraction of the width: the motion stays quick and the
+ * outgoing screen never fully clears the frame - restrained, per the design brief.
+ *
+ * Back is different. Navigation Compose seeks [popExitTransition] / [popEnterTransition] against
+ * the predictive-back gesture, so the outgoing screen has to travel the full width or the image
+ * lags behind the finger. The incoming screen keeps the smaller parallax drift.
  *
  * These are explicit specs rather than MaterialTheme.motionScheme: material3 1.4.0 compiles the
  * Expressive motion API internal, so it cannot be read here yet. See Iq33Theme.
@@ -103,7 +105,7 @@ private fun slideInBack(): EnterTransition =
         fadeIn(animationSpec = tween(TRANSITION_MILLIS))
 
 private fun slideOutBack(): ExitTransition =
-    slideOutHorizontally(animationSpec = tween(TRANSITION_MILLIS)) { width -> width / SLIDE_FRACTION } +
+    slideOutHorizontally(animationSpec = tween(TRANSITION_MILLIS)) { width -> width } +
         fadeOut(animationSpec = tween(TRANSITION_MILLIS))
 
 private fun NavController.buildAppNavGraph(): NavGraph =
