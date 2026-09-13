@@ -4,7 +4,7 @@ import com.jiugjk.iq33.library.network.IqConstants
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 
-/** Prefer advertised links, with the legacy page-number protocol for lists without navigation. */
+/** Prefer advertised same-list links; otherwise the old client's `?page=N` on the current URL. */
 internal object QuestionListLinks {
     private val NEXT_LABELS = setOf("下一页", "下一页 »", "下页", "next", ">", ">>", "›", "»")
     private val DETAIL_PATH = Regex("/question/\\d+\\.html")
@@ -48,14 +48,13 @@ internal object QuestionListLinks {
     }
 
     /**
-     * The list can support ?page=N without displaying a next-page control. Preserve the old client's
-     * protocol in that case, but never override explicit navigation or invent a cursor-based URL.
-     * Call only for a non-empty question page; the caller also stops on duplicate-only responses.
+     * Old client always requested `$listUrl?page=N`. Keep that when the HTML has no usable next
+     * link — including pages whose pagination points off-list (e.g. `/24h/2.html`) or only has a
+     * last-page arrow. Do not invent cursor parameters. Caller must skip empty pages and stop on
+     * duplicate-only replies.
      */
-    @Suppress("ReturnCount") // Fail closed at each URL/navigation validation boundary.
+    @Suppress("ReturnCount") // Fail closed at each URL/page-number validation boundary.
     fun legacyNextPage(document: Document): String? {
-        val navigation = "a[rel=next], link[rel=next], a[rel=prev], link[rel=prev], .pagination, .pager, .page"
-        if (document.select(navigation).isNotEmpty()) return null
         val current = document.location().toHttpUrlOrNull() ?: return null
         if (!isSafeListUrl(current.toString()) || current.queryParameterNames.any { it != "page" }) return null
         val values = current.queryParameterValues("page")

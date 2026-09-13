@@ -68,6 +68,19 @@ class QuestionListLinksTest {
     }
 
     @Test
+    fun `off-list pagination does not count as a next page`() {
+        // Archived /question/ points at /24h/N.html, which is a different feed, not ?page=N.
+        next(
+            "<div class='pagination pagination-right'><ul>" +
+                "<li class='disabled'><a href='/24h.html'>&lt;</a></li>" +
+                "<li class='active'><a href='#'>1</a></li>" +
+                "<li><a href='/24h/2.html'>2</a></li>" +
+                "<li><a href='/24h/7169.html'>&gt;</a></li></ul></div>",
+        ) shouldBeEqualTo null
+        QuestionListLinks.isSafeListUrl("https://www.33iq.com/24h/2.html") shouldBeEqualTo false
+    }
+
+    @Test
     fun `declared next link has priority over a numbered sibling`() {
         next(
             "<link rel='next' href='?cursor=next'>" +
@@ -76,7 +89,7 @@ class QuestionListLinksTest {
     }
 
     @Test
-    fun `legacy lists without navigation advance page numbers on the same path`() {
+    fun `legacy page numbers stay on the current list path`() {
         legacy("https://www.33iq.com/question/") shouldBeEqualTo "https://www.33iq.com/question/?page=2"
         legacy("https://www.33iq.com/question/?page=2") shouldBeEqualTo "https://www.33iq.com/question/?page=3"
         legacy("https://www.33iq.com/tag/logic.html?page=39#list") shouldBeEqualTo
@@ -84,15 +97,14 @@ class QuestionListLinksTest {
     }
 
     @Test
-    fun `explicit pagination never falls back including disabled or unsafe next links`() {
-        listOf(
-            "<div class='pagination'><a href='?page=1'>上一页</a></div>",
-            "<a rel='next' class='disabled' href='?page=2'>Next</a>",
-            "<link rel='next' href='https://evil.example/question/'>",
-            "<div class='pager'></div>",
-        ).forEach { html ->
-            QuestionListLinks.legacyNextPage(Jsoup.parse(html, "https://www.33iq.com/question/")) shouldBeEqualTo null
-        }
+    fun `unusable pagination still falls back to the old page-number protocol`() {
+        val html =
+            "<div class='pagination pagination-right'><ul>" +
+                "<li class='active'><a href='#'>1</a></li>" +
+                "<li><a href='/24h/2.html'>2</a></li></ul></div>"
+        val document = Jsoup.parse(html, "https://www.33iq.com/question/")
+        QuestionListLinks.nextPage(document) shouldBeEqualTo null
+        QuestionListLinks.legacyNextPage(document) shouldBeEqualTo "https://www.33iq.com/question/?page=2"
     }
 
     @Test

@@ -3,7 +3,6 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.feedlist
 import androidx.lifecycle.ViewModelStore
 import com.jiugjk.iq33.feature.base.domain.result.Result
 import com.jiugjk.iq33.feature.feed.domain.model.Category
-import com.jiugjk.iq33.feature.feed.domain.model.FeedPosition
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionPage
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
@@ -36,7 +35,7 @@ class FeedListViewModelTest {
     fun clearModels() = models.clear()
 
     @Test
-    fun `refresh and cold reopen show the first page even with a saved exhausted position`() =
+    fun `refresh and cold reopen show the first page`() =
         runTest {
             coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
             coEvery { getList(Category.ALL, NEXT) } returns page(2, THIRD)
@@ -45,7 +44,6 @@ class FeedListViewModelTest {
             sut.onInit()
             advanceUntilIdle()
             content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
-            progress.saveFeedPosition(Category.ALL.id, FeedPosition(null, setOf(1, 2, 3)), "uid:1")
             // Previously displayed questions must not disappear on refresh or reopen.
             sut.onEvent(FeedListEvent.Refreshed)
             advanceUntilIdle()
@@ -69,7 +67,6 @@ class FeedListViewModelTest {
             advanceUntilIdle()
             content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
             content(sut).refreshFailed shouldBeEqualTo true
-            progress.feedPosition(Category.ALL.id) shouldBeEqualTo FeedPosition()
             coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
             coEvery { getList(Category.ALL, NEXT) } returns page(2, null)
             sut.onEvent(FeedListEvent.Refreshed)
@@ -94,9 +91,8 @@ class FeedListViewModelTest {
         }
 
     @Test
-    fun `saved cursor and recent ids are ignored on initial load`() =
+    fun `initial load and refresh request the first page`() =
         runTest {
-            progress.saveFeedPosition(Category.ALL.id, FeedPosition("cursor0", setOf(1)), "uid:1")
             var requests = 0
             coEvery { getList(any(), any()) } coAnswers {
                 requests++
@@ -165,7 +161,6 @@ class FeedListViewModelTest {
             advanceUntilIdle()
             content(sut).selectedCategory shouldBeEqualTo other
             content(sut).questions.map { it.id } shouldBeEqualTo listOf(2L)
-            progress.feedPosition(Category.ALL.id) shouldBeEqualTo FeedPosition()
         }
 
     @Test
@@ -204,7 +199,6 @@ class FeedListViewModelTest {
             content(sut).questions.map { it.id } shouldBeEqualTo listOf(3L)
             content(sut).progress.accountKey shouldBeEqualTo "uid:2"
             progress.progress.value = QuestionProgress(accountKey = "uid:1")
-            progress.feedPosition(Category.ALL.id) shouldBeEqualTo FeedPosition()
         }
 
     @Test
@@ -511,7 +505,6 @@ class FeedListViewModelTest {
     private class MemoryProgress : QuestionProgressRepository {
         override val progress = MutableStateFlow(QuestionProgress(accountKey = "uid:1"))
         override val current get() = progress.value
-        private val positions = mutableMapOf<Pair<String?, String>, FeedPosition>()
 
         fun markAnswered(questionId: Long) {
             progress.value = current.copy(answeredIds = current.answeredIds + questionId)
@@ -534,23 +527,6 @@ class FeedListViewModelTest {
 
         override fun setHideAnswered(hide: Boolean) {
             progress.value = current.copy(hideAnswered = hide)
-        }
-
-        override fun feedPosition(categoryId: String) = positions[current.accountKey to categoryId] ?: FeedPosition()
-
-        override fun saveFeedPosition(
-            categoryId: String,
-            position: FeedPosition,
-            accountKey: String?,
-        ) {
-            if (current.accountKey == accountKey) positions[accountKey to categoryId] = position
-        }
-
-        override fun clearFeedPosition(
-            categoryId: String,
-            accountKey: String?,
-        ) {
-            if (current.accountKey == accountKey) positions.remove(accountKey to categoryId)
         }
     }
 

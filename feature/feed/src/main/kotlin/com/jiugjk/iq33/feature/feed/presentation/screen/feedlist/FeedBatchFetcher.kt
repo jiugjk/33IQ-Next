@@ -2,7 +2,6 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.feedlist
 
 import com.jiugjk.iq33.feature.base.domain.result.Result
 import com.jiugjk.iq33.feature.feed.domain.model.Category
-import com.jiugjk.iq33.feature.feed.domain.model.FeedPosition
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionPage
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
@@ -75,7 +74,7 @@ internal class FeedWalk(
 }
 
 /**
- * Walks forward from [position] until it has at least one visible question, or the feed ends.
+ * Walks forward from [nextPageUrl] until it has at least one visible question, or the feed ends.
  *
  * Follows the data source's continuation (advertised links or legacy page numbers), stops at any
  * cursor already seen in [walk] - including one from an earlier batch - and gives up after [maxRequests] requests
@@ -90,12 +89,12 @@ internal suspend fun fetchUnseenBatch(
     getQuestionListUseCase: GetQuestionListUseCase,
     progress: QuestionProgress,
     category: Category,
-    position: FeedPosition,
+    nextPageUrl: String?,
     displayedIds: Set<Long>,
     walk: FeedWalk = FeedWalk(),
     maxRequests: Int = MAX_BATCH_REQUESTS,
 ): Result<QuestionPage> {
-    var cursor = position.nextPageUrl
+    var cursor = nextPageUrl
     val excluded = displayedIds
     val collected = linkedMapOf<Long, QuestionSummary>()
 

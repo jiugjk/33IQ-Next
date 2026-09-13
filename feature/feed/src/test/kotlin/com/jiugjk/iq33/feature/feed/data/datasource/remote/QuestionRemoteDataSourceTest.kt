@@ -52,11 +52,31 @@ class QuestionRemoteDataSourceTest {
         }
 
     @Test
-    fun `an explicit last page does not use legacy paging`() =
+    fun `all and featured keep the old page protocol when pagination points off the list`() =
+        runTest {
+            val nav =
+                "<div class='pagination'><ul>" +
+                    "<li class='active'><a href='#'>1</a></li>" +
+                    "<li><a href='/24h/2.html'>2</a></li></ul></div>"
+            coEvery { htmlClient.get(LIST_URL) } returns Jsoup.parse(listHtml(1) + nav, LIST_URL)
+            coEvery { htmlClient.get("$LIST_URL?page=2") } returns Jsoup.parse(listHtml(2), "$LIST_URL?page=2")
+            val first = sut.fetchQuestionList(Category.ALL, null)
+            first.nextPageUrl shouldBeEqualTo "$LIST_URL?page=2"
+            first.isNextPageInferred shouldBeEqualTo true
+            val second = sut.fetchQuestionList(Category.FEATURED, first.nextPageUrl)
+            second.questions.single().id shouldBeEqualTo 2L
+            second.nextPageUrl shouldBeEqualTo "$LIST_URL?page=3"
+            second.isNextPageInferred shouldBeEqualTo true
+        }
+
+    @Test
+    fun `an empty page ends paging even if navigation is present`() =
         runTest {
             coEvery { htmlClient.get(LIST_URL) } returns
-                Jsoup.parse(listHtml(1) + "<div class='pagination'><span class='disabled'>下一页</span></div>", LIST_URL)
-            sut.fetchQuestionList(Category.ALL, null).nextPageUrl shouldBeEqualTo null
+                Jsoup.parse("<title>题目</title><div class='pagination'><span class='disabled'>下一页</span></div>", LIST_URL)
+            val page = sut.fetchQuestionList(Category.ALL, null)
+            page.questions shouldBeEqualTo emptyList()
+            page.nextPageUrl shouldBeEqualTo null
         }
 
     @Test
