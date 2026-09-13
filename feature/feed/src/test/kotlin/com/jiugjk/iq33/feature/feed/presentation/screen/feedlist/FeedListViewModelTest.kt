@@ -220,6 +220,7 @@ class FeedListViewModelTest {
         }
 
     @Test
+    @Test
     fun `auto-continues load more when the filter hides the whole batch`() =
         runTest {
             progress.setHideAnswered(true)
@@ -235,6 +236,42 @@ class FeedListViewModelTest {
             content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(3L)
         }
 
+    @Test
+    fun `after a full hidden batch with a next cursor, auto loadMore finds a visible card`() =
+        runTest {
+            progress.setHideAnswered(true)
+            // Five hidden-only pages fill MAX_BATCH_REQUESTS with no visible card, leaving a next cursor.
+            progress.markAnswered(1)
+            progress.markAnswered(2)
+            progress.markAnswered(3)
+            progress.markAnswered(4)
+            progress.markAnswered(5)
+            var requests = 0
+            coEvery { getList(any(), any()) } coAnswers {
+                requests++
+                val id = requests.toLong()
+                if (requests <= 5) {
+                    page(id, "cursor$requests")
+                } else {
+                    // loadMore continuation finally returns a visible question
+                    Result.Success(
+                        com.jiugjk.iq33.feature.feed.domain.model.QuestionPage(
+                            listOf(question(99)),
+                            null,
+                        ),
+                    )
+                }
+            }
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+            content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(99L)
+            content(sut).canLoadMore shouldBeEqualTo false
+            // Initial walk (5) + at least one auto loadMore
+            (requests >= 6) shouldBeEqualTo true
+        }
+
+    @Test
     fun `load more also walks filtered pages instead of stopping on a hidden-only reply`() =
         runTest {
             progress.setHideAnswered(true)

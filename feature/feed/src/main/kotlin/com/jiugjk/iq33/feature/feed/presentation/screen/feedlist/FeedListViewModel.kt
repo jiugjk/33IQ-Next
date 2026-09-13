@@ -226,6 +226,19 @@ internal class FeedListViewModel(
         questionProgressRepository.saveFeedPosition(category.id, FeedPosition(page.nextPageUrl, recentIds), owner)
     }
 
+    /**
+     * When the hide-filter leaves the screen empty but more pages exist, keep walking automatically.
+     * Guarded by canStartLoadMore (cursor present, idle, not failed) so a stuck cursor cannot loop.
+     */
+    private fun maybeContinueFilteredPaging() {
+        val state = uiStateFlow.value as? FeedListUiState.Content ?: return
+        if (state.visibleQuestions.isNotEmpty()) return
+        if (!state.canStartLoadMore) return
+        if (state.nextPageUrl == null) return
+        if (state.loadMoreFailed) return
+        loadMore(retry = false)
+    }
+
     private data class LoadMoreRequest(
         val category: Category,
         val position: FeedPosition,
