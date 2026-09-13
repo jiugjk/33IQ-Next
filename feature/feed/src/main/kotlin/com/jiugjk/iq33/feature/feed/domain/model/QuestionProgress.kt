@@ -17,8 +17,3 @@ internal data class QuestionProgress(
             isAnswerRevealPending = id in pendingAnswerRevealIds,
         )
 }
-
-internal data class FeedPosition(
-    val nextPageUrl: String? = null,
-    val lastQuestionIds: Set<Long> = emptySet(),
-)

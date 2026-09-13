@@ -1,7 +1,6 @@
 package com.jiugjk.iq33.feature.feed.data.repository
 
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerRecord
-import com.jiugjk.iq33.feature.feed.domain.model.FeedPosition
 import com.jiugjk.iq33.library.network.IqSession
 import com.jiugjk.iq33.library.network.SessionManager
 import com.jiugjk.iq33.library.network.SessionStatus
@@ -96,27 +95,6 @@ class QuestionProgressRepositoryTest {
         sut.current.answeredIds shouldBeEqualTo emptySet()
         session.value = IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:1")
         sut.current.answeredIds shouldBeEqualTo setOf(42L)
-    }
-
-    @Test
-    fun `cursor and ordered recent IDs survive restart and are isolated by category and account`() {
-        val position = FeedPosition("https://www.33iq.com/question/?cursor=abc", linkedSetOf(30, 2, 11))
-        sut.saveFeedPosition("all", position, "uid:1")
-        val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
-        restored.feedPosition("all") shouldBeEqualTo position
-        restored.feedPosition("all").lastQuestionIds.toList() shouldBeEqualTo listOf(30L, 2L, 11L)
-        restored.feedPosition("logic") shouldBeEqualTo FeedPosition()
-        session.value = IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:2")
-        restored.feedPosition("all") shouldBeEqualTo FeedPosition()
-        restored.saveFeedPosition("all", position, "uid:1")
-        restored.feedPosition("all") shouldBeEqualTo FeedPosition()
-    }
-
-    @Test
-    fun `clearFeedPosition drops cursor and recent ids`() {
-        sut.saveFeedPosition("all", FeedPosition("https://next", linkedSetOf(1, 2)), "uid:1")
-        sut.clearFeedPosition("all", "uid:1")
-        sut.feedPosition("all") shouldBeEqualTo FeedPosition()
     }
 
     @Test

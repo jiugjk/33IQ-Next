@@ -4,7 +4,6 @@ import androidx.lifecycle.viewModelScope
 import com.jiugjk.iq33.feature.base.domain.result.Result
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseViewModel
 import com.jiugjk.iq33.feature.feed.domain.model.Category
-import com.jiugjk.iq33.feature.feed.domain.model.FeedPosition
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionPage
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionListUseCase
@@ -104,7 +103,6 @@ internal class FeedListViewModel(
         walk.reset()
         val owner = questionProgressRepository.current.accountKey
         // Refresh and reopen always start at the first page; previously seen cards are not hidden.
-        val position = FeedPosition()
         loadJob =
             viewModelScope
                 .launch {
@@ -113,7 +111,7 @@ internal class FeedListViewModel(
                             getQuestionListUseCase = getQuestionListUseCase,
                             progress = questionProgressRepository.current,
                             category = category,
-                            position = position,
+                            nextPageUrl = null,
                             displayedIds = emptySet(),
                             walk = walk,
                         )
@@ -176,7 +174,7 @@ internal class FeedListViewModel(
                             getQuestionListUseCase = getQuestionListUseCase,
                             progress = questionProgressRepository.current,
                             category = category,
-                            position = FeedPosition(nextPageUrl = cursor),
+                            nextPageUrl = cursor,
                             displayedIds = alreadyListed,
                             walk = walk,
                         )
