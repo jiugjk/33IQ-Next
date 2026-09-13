@@ -75,6 +75,7 @@ fun SettingsScreen(
                     onThemeModeSelect = viewModel::onThemeModeSelected,
                     onAnimationsChanged = viewModel::onAnimationsChanged,
                     onHapticsChanged = viewModel::onHapticsChanged,
+                    onHideAnsweredChanged = viewModel::onHideAnsweredChanged,
                     onLogoutClick = viewModel::onLogoutClick,
                 )
         }
@@ -89,6 +90,7 @@ private fun SettingsContent(
     onThemeModeSelect: (ThemeMode) -> Unit,
     onAnimationsChanged: (Boolean) -> Unit,
     onHapticsChanged: (Boolean) -> Unit,
+    onHideAnsweredChanged: (Boolean) -> Unit,
     onLogoutClick: () -> Unit,
 ) {
     Column(
@@ -103,6 +105,11 @@ private fun SettingsContent(
             hapticsEnabled = uiState.hapticsEnabled,
             onAnimationsChanged = onAnimationsChanged,
             onHapticsChanged = onHapticsChanged,
+        )
+
+        QuizPrefsCard(
+            hideAnswered = uiState.hideAnswered,
+            onHideAnsweredChanged = onHideAnsweredChanged,
         )
 
         val context = LocalContext.current
@@ -219,6 +226,37 @@ private fun AccountCard(
                 Button(onClick = onNavigateToLogin) {
                     Text(stringResource(R.string.settings_login))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuizPrefsCard(
+    hideAnswered: Boolean,
+    onHideAnsweredChanged: (Boolean) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(Dimen.spaceL)) {
+            Text(text = stringResource(R.string.settings_quiz_prefs_title), style = MaterialTheme.typography.bodyLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = Dimen.spaceM)) {
+                    Text(stringResource(R.string.settings_hide_answered))
+                    Text(
+                        text = stringResource(R.string.settings_hide_answered_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = hideAnswered, onCheckedChange = onHideAnsweredChanged)
             }
         }
     }
@@ -355,6 +393,7 @@ private fun SettingsScreenPreview() {
         onThemeModeSelect = { },
         onAnimationsChanged = { },
         onHapticsChanged = { },
+        onHideAnsweredChanged = { },
         onLogoutClick = { },
     )
 }

@@ -17,12 +17,12 @@
     <string name="feed_analysis_title">解析</string>
     <string name="feed_reveal_answer_button">查看解析</string>
     <string name="feed_answer_content_title">答案</string>
-    <string name="feed_answer_quote_cost">服务器报价：%1$d 学识（0 表示无需支付学识）</string>
+    <string name="feed_answer_quote_cost">服务器报价：%1$d 学识</string>
     <string name="feed_answer_reveal_warning">查看解析后将无法再答题，未作答时还可能计入错题。是否确认查看？</string>
     <string name="feed_answer_confirm">确认查看</string>
     <string name="feed_answer_loading">正在请求，请稍候…</string>
     <string name="feed_answer_pending_label">解析请求结果待确认</string>
-    <string name="feed_answer_recover">恢复获取解析（不重复支付）</string>
+    <string name="feed_answer_recover">恢复获取解析</string>
     <string name="feed_answer_pending_notice">上次请求可能已支付学识或记录查看。恢复只读取解析，不会再次支付；若仍失败，请先在官网核实。</string>
     <string name="feed_answer_flow_failed">未能完成请求。请检查登录、学识余额或服务器限制，也可能是报价已变化；可重新获取报价。</string>
     <string name="feed_analysis_missing">服务器未提供解析内容</string>
@@ -37,9 +37,6 @@
     <string name="feed_answered_label">已答</string>
     <string name="feed_answer_viewed_label">已看解析</string>
     <string name="feed_answered_and_viewed_label">已答 · 已看解析</string>
-    <string name="feed_hide_answered">隐藏已答或已看解析的题目</string>
-    <string name="feed_answered_local_notice">仅标记本机已确认的答题及看解析记录；网页、其他设备及旧版历史暂未同步。</string>
-    <string name="feed_answered_unknown_notice">本机暂无该题答题或看解析记录，服务器历史状态尚未同步。</string>
     <string name="feed_refresh_failed">刷新失败，已保留当前题目，请下拉重试。</string>
     <string name="feed_no_new_title">已经刷完了</string>
     <string name="feed_no_new_content">这个分类暂时没有更多未作答题目了。</string>
@@ -68,7 +65,7 @@
     <string name="feed_submission_limit_reached">已达到今日答题上限</string>
     <string name="feed_submission_failed">提交失败，请检查网络或登录状态后重试</string>
 
-    <string name="feed_reveal_hint_button">获取提示（消耗学识）</string>
+    <string name="feed_reveal_hint_button">获取提示</string>
     <string name="feed_reveal_hint_confirm_title">获取提示</string>
     <string name="feed_reveal_hint_confirm_message">普通用户 %1$d 学识 / 会员 %2$d 学识 / 终身会员 %3$d 学识，本次将花费 %4$d 学识，是否继续？</string>
     <string name="feed_reveal_hint_confirm_message_simple">本次将花费 %1$d 学识，是否继续？</string>

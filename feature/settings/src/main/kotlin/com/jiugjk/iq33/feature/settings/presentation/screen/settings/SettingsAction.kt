@@ -31,4 +31,11 @@ internal sealed interface SettingsAction : BaseAction<SettingsUiState> {
         override fun reduce(state: SettingsUiState): SettingsUiState =
             (state as? SettingsUiState.Content)?.copy(hapticsEnabled = enabled) ?: state
     }
+
+    class HideAnsweredChanged(
+        private val hide: Boolean,
+    ) : SettingsAction {
+        override fun reduce(state: SettingsUiState): SettingsUiState =
+            (state as? SettingsUiState.Content)?.copy(hideAnswered = hide) ?: state
+    }
 }

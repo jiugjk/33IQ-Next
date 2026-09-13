@@ -118,7 +118,6 @@ private fun FeedListBody(
             onEvent = onEvent,
         )
 
-        HideAnsweredRow(uiState = uiState, onEvent = onEvent)
 
         BatchNotice(uiState = uiState)
 

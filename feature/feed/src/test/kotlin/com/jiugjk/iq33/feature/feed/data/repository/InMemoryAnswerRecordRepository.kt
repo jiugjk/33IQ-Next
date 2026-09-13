@@ -68,6 +68,7 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
         questionId: Long,
         title: String,
         categoryId: String,
+        correctOption: String?,
     ) {
         if (accountKey == null) return
         val existing = get(accountKey, questionId)
@@ -76,6 +77,7 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
                 title = title.ifBlank { existing?.title.orEmpty() },
                 categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
                 viewedExplanation = true,
+                correctOption = correctOption?.takeIf { it.isNotBlank() } ?: existing?.correctOption,
                 answeredAt = existing?.answeredAt,
                 updatedAt = System.currentTimeMillis(),
             ),

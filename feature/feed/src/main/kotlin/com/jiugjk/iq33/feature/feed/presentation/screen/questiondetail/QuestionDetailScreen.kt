@@ -152,15 +152,7 @@ private fun QuestionDetailTopBar(
  */
 @Composable
 private fun RestrictionNotice(detail: QuestionDetail) {
-    if (!detail.isSubmissionBlocked) {
-        Text(
-            text = stringResource(R.string.feed_answered_unknown_notice),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = Dimen.spaceM),
-        )
-        return
-    }
+    if (!detail.isSubmissionBlocked) return
 
     val label =
         when {

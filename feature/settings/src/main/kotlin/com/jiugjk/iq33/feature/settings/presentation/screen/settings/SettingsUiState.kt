@@ -13,5 +13,6 @@ internal sealed interface SettingsUiState : BaseState {
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
         val animationsEnabled: Boolean = true,
         val hapticsEnabled: Boolean = true,
+        val hideAnswered: Boolean = false,
     ) : SettingsUiState
 }

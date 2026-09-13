@@ -23,6 +23,15 @@ internal class QuestionProgressRepositoryImpl(
 ) : QuestionProgressRepository {
     private val revision = MutableStateFlow(0L)
 
+    private val prefsListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == HIDE_ANSWERED) revision.update { it + 1 }
+        }
+
+    init {
+        preferences.registerOnSharedPreferenceChangeListener(prefsListener)
+    }
+
     override val current: QuestionProgress
         get() = readProgress(sessionManager.sessionFlow.value.accountKey)
 
