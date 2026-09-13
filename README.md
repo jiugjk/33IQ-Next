@@ -90,13 +90,13 @@ The HAR capture that unlocked the JSON endpoints above was a privacy-scrubbed an
 
 ### Feed refresh and local progress
 
-- Pull-to-refresh replaces the batch using the saved next link. A cold reopen resumes that position; returning to the feed after 30 minutes without a successful batch load refreshes automatically.
-- Cursor and the latest 300 loaded question IDs are stored separately by account and category. A refresh skips recent/displayed IDs and scans at most three pages to avoid duplicate-only or answered-only loops. Reaching that bound preserves the next cursor for another manual refresh.
+- Pull-to-refresh reloads the first page. Reopening or switching category also starts at the first page, ignoring legacy saved cursors/recent IDs. Returning from the background does not automatically replace the list.
+- Scrolling appends pages using the site's next links and deduplicates only against the current list. Visible progress resets the automatic scan budget, so normal scrolling is not limited to 20 pages. Duplicate/hidden-only scans remain bounded and offer a continue action; repeated cursors stop paging.
 - The hide-answered/viewed-analysis switch is a persistent device preference. Hidden cards are retained in the current batch so switching it off can show them again. Empty/fully hidden batches offer a next-batch or retry action.
 - Correct, wrong and repeated submissions all confirm an answered ID. `seeanswer` confirms a **separate** viewed-analysis restriction, not that an answer was submitted. The official App's capture plus the user's on-screen message confirmed “看过解析无法再答题”. Both restrictions may coexist. Network errors, unrecognised replies and answer limits do not confirm either. Only IDs/preferences/cursors are saved here, not submitted answers.
 - `isDone` / `uqr_type` are not treated as historical answer flags: captured details showed both as `0` even before a `seeanswer` rejection. Previously unknown server history still cannot be blocked in advance until a reliable read-only history signal is confirmed.
 - Verified logins use the server UID for account isolation. Existing sessions without a UID receive a persistent opaque namespace; a later login cannot safely associate that anonymous legacy namespace with a UID. Web/other-device/old-version history is not imported. A missing local record is labelled unknown in detail.
-- Automated tests cover cursor persistence, refresh retries, duplicate bounds, filtering, account isolation and submission outcomes. Actual server pagination and historical status still require a sanitised capture from a working session; do not use answer submissions or paid endpoints to probe history.
+- Automated tests cover legacy-position recovery, first-page refresh/reopen, refresh retries, scrolling beyond 40 pages, duplicate bounds, filtering, account isolation and submission outcomes. Actual server pagination and historical status still require a sanitised capture from a working session; do not use answer submissions or paid endpoints to probe history.
 
 ### Word-bank input
 

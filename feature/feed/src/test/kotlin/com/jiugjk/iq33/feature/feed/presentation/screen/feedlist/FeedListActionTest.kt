@@ -60,6 +60,26 @@ class FeedListActionTest {
     }
 
     @Test
+    fun `an empty or duplicate page with a next link does not end paging`() {
+        val state = FeedListUiState.Content(selectedCategory = CATEGORY_A, questions = listOf(question(10)))
+        for (questions in listOf(emptyList(), listOf(question(10)))) {
+            val reduced =
+                FeedListAction
+                    .LoadMoreSuccess(
+                        CATEGORY_A,
+                        page = 2,
+                        newQuestions = questions,
+                        nextPageUrl = "next",
+                        hasMore = true,
+                    ).reduce(state) as FeedListUiState.Content
+
+            reduced.questions shouldBeEqualTo state.questions
+            reduced.canLoadMore shouldBeEqualTo true
+            reduced.nextPageUrl shouldBeEqualTo "next"
+        }
+    }
+
+    @Test
     fun `a failed first load keeps the category so it can be retried`() {
         val reduced = FeedListAction.LoadFailure(CATEGORY_B).reduce(FeedListUiState.Loading(CATEGORY_B))
 

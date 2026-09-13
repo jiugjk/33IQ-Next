@@ -40,8 +40,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.lifecycle.Lifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorState
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.SkeletonList
@@ -67,7 +65,6 @@ fun FeedListScreen(
     LaunchedEffect(Unit) {
         viewModel.onInit()
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onForeground() }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),

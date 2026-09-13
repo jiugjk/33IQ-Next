@@ -33,7 +33,6 @@ internal sealed interface FeedListUiState : BaseState {
         override val progress: QuestionProgress = QuestionProgress(),
         val nextPageUrl: String? = null,
         val refreshFailed: Boolean = false,
-        val noNewContent: Boolean = false,
         val batchRevision: Int = 0,
         val isRefreshing: Boolean = false,
         val isLoadingMore: Boolean = false,
@@ -70,7 +69,7 @@ internal sealed interface FeedListUiState : BaseState {
          * stays there.
          */
         val canStartLoadMore: Boolean
-            get() = isPagingIdle && canLoadMore
+            get() = isPagingIdle && canLoadMore && !autoPagingPaused
 
         /** The failed page can be asked for again, without discarding what is already listed. */
         val canRetryLoadMore: Boolean
