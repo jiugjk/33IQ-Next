@@ -2,6 +2,8 @@
     <string name="app_name">33IQ Next</string>
 
     <string name="bottom_navigation_feed">题库</string>
-    <string name="bottom_navigation_favorites">收藏</string>
+    <string name="bottom_navigation_library">库</string>
     <string name="bottom_navigation_settings">我的</string>
+    <string name="library_segment_favourite">收藏</string>
+    <string name="library_segment_history">历史</string>
 </resources>

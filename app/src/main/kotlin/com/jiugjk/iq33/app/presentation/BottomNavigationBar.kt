@@ -82,7 +82,7 @@ private fun getBottomNavigationItems() =
             NavigationRoute.FeedList,
         ),
         NavigationBarItem(
-            R.string.bottom_navigation_favorites,
+            R.string.bottom_navigation_library,
             Icons.Default.Bookmark,
             NavigationRoute.Favourites,
         ),

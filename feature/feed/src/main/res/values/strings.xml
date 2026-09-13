@@ -98,4 +98,22 @@
     <string name="feed_category_decision">决策判断</string>
     <string name="feed_category_board">棋牌世界</string>
     <string name="feed_category_couplet">对联大全</string>
+
+    <string name="feed_history_empty">还没有答题历史</string>
+    <string name="feed_history_empty_description">答过题或看过解析后会出现在这里</string>
+    <string name="feed_history_search">搜索历史</string>
+    <string name="feed_history_clear">清空历史</string>
+    <string name="feed_history_clear_title">清空答题历史？</string>
+    <string name="feed_history_clear_message">将删除本机全部答题与看解析记录，不可恢复。</string>
+    <string name="feed_history_clear_confirm">清空</string>
+    <string name="feed_history_clear_cancel">取消</string>
+    <string name="feed_history_delete">删除这条记录</string>
+    <string name="feed_history_filter_all">全部</string>
+    <string name="feed_history_filter_correct">答对</string>
+    <string name="feed_history_filter_wrong">答错</string>
+    <string name="feed_history_filter_viewed">仅看解析</string>
+    <string name="feed_history_result_correct">✓ 答对</string>
+    <string name="feed_history_result_wrong">✗ 答错</string>
+    <string name="feed_history_result_viewed">👁 仅看过解析</string>
+    <string name="feed_history_result_answered">已答</string>
 </resources>
