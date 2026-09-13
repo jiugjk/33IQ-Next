@@ -1,17 +1,21 @@
 package com.jiugjk.iq33.feature.feed.data
 
+import androidx.room.Room
+import com.jiugjk.iq33.feature.feed.data.datasource.database.AnswerRecordDatabase
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRevealRemoteDataSource
-import com.jiugjk.iq33.feature.feed.data.repository.AnswerRevealRepositoryImpl
-import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRevealRepository
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionHtmlParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionJsonParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionRemoteDataSource
+import com.jiugjk.iq33.feature.feed.data.repository.AnswerRecordRepositoryImpl
+import com.jiugjk.iq33.feature.feed.data.repository.AnswerRevealRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.AnswerRepositoryImpl
-import com.jiugjk.iq33.feature.feed.data.repository.QuestionRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.QuestionProgressRepositoryImpl
-import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
+import com.jiugjk.iq33.feature.feed.data.repository.QuestionRepositoryImpl
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRevealRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
+import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +34,14 @@ internal val parsingDispatcherQualifier = named("feedParsingDispatcher")
 internal val dataModule =
     module {
         single<CoroutineDispatcher>(parsingDispatcherQualifier) { Dispatchers.Default }
+
+        single {
+            Room
+                .databaseBuilder(get(), AnswerRecordDatabase::class.java, "AnswerRecords.db")
+                .build()
+        }
+        single { get<AnswerRecordDatabase>().answerRecordDao() }
+        singleOf(::AnswerRecordRepositoryImpl) { bind<AnswerRecordRepository>() }
 
         singleOf(::QuestionProgressRepositoryImpl) { bind<QuestionProgressRepository>() }
         singleOf(::QuestionRepositoryImpl) { bind<QuestionRepository>() }

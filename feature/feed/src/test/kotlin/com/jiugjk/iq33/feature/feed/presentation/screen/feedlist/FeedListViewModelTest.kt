@@ -112,7 +112,7 @@ class FeedListViewModelTest {
     @Test
     fun `filter skips an answered-only page but switching it off restores those cards`() =
         runTest {
-            progress.recordAnswered(1, "uid:1")
+            progress.markAnswered(1)
             progress.setHideAnswered(true)
             coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
             coEvery { getList(Category.ALL, NEXT) } returns page(2, null)
@@ -123,7 +123,7 @@ class FeedListViewModelTest {
             sut.onEvent(FeedListEvent.HideAnsweredChanged(false))
             advanceUntilIdle()
             content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(1L, 2L)
-            progress.recordAnswered(2, "uid:1")
+            progress.markAnswered(2)
             advanceUntilIdle()
             content(sut).progress.answeredIds shouldBeEqualTo setOf(1L, 2L)
         }
@@ -205,7 +205,7 @@ class FeedListViewModelTest {
             val sut = createViewModel()
             sut.onInit()
             advanceUntilIdle()
-            progress.recordAnswerViewed(1, "uid:1")
+            progress.markViewed(1)
             advanceUntilIdle()
             content(sut).progress.viewedAnswerIds shouldBeEqualTo setOf(1L)
             content(sut).progress.answeredIds shouldBeEqualTo emptySet()
@@ -233,18 +233,12 @@ class FeedListViewModelTest {
         override val current get() = progress.value
         private val positions = mutableMapOf<Pair<String?, String>, FeedPosition>()
 
-        override fun recordAnswered(
-            questionId: Long,
-            accountKey: String?,
-        ) {
-            if (current.accountKey == accountKey) progress.value = current.copy(answeredIds = current.answeredIds + questionId)
+        fun markAnswered(questionId: Long) {
+            progress.value = current.copy(answeredIds = current.answeredIds + questionId)
         }
 
-        override fun recordAnswerViewed(
-            questionId: Long,
-            accountKey: String?,
-        ) {
-            if (current.accountKey == accountKey) progress.value = current.copy(viewedAnswerIds = current.viewedAnswerIds + questionId)
+        fun markViewed(questionId: Long) {
+            progress.value = current.copy(viewedAnswerIds = current.viewedAnswerIds + questionId)
         }
 
         override fun setAnswerRevealPending(
@@ -270,6 +264,13 @@ class FeedListViewModelTest {
             accountKey: String?,
         ) {
             if (current.accountKey == accountKey) positions[accountKey to categoryId] = position
+        }
+
+        override fun clearFeedPosition(
+            categoryId: String,
+            accountKey: String?,
+        ) {
+            if (current.accountKey == accountKey) positions.remove(accountKey to categoryId)
         }
     }
 

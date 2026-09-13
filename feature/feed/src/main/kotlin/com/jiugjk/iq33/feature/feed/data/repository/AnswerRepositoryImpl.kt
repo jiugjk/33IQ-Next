@@ -8,12 +8,14 @@ import com.jiugjk.iq33.feature.feed.data.datasource.remote.IqResponseException
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 
 internal class AnswerRepositoryImpl(
     private val remoteDataSource: AnswerRemoteDataSource,
     private val progressRepository: QuestionProgressRepository,
+    private val answerRecords: AnswerRecordRepository,
 ) : AnswerRepository {
     override suspend fun submitAnswer(
         questionId: Long,
@@ -23,9 +25,31 @@ internal class AnswerRepositoryImpl(
             val accountKey = progressRepository.current.accountKey
             remoteDataSource.submitAnswer(questionId, answer).also { result ->
                 when (result) {
-                    is SubmitAnswerResult.Correct, is SubmitAnswerResult.Wrong, SubmitAnswerResult.AlreadyAnswered ->
-                        progressRepository.recordAnswered(questionId, accountKey)
-                    SubmitAnswerResult.AnswerAlreadyViewed -> progressRepository.recordAnswerViewed(questionId, accountKey)
+                    is SubmitAnswerResult.Correct ->
+                        answerRecords.recordAnswer(
+                            accountKey = accountKey,
+                            questionId = questionId,
+                            selectedOption = answer,
+                            isCorrect = true,
+                            knowledgeDelta = result.scoreDelta,
+                        )
+                    is SubmitAnswerResult.Wrong ->
+                        answerRecords.recordAnswer(
+                            accountKey = accountKey,
+                            questionId = questionId,
+                            selectedOption = answer,
+                            isCorrect = false,
+                            knowledgeDelta = result.scoreDelta,
+                        )
+                    SubmitAnswerResult.AlreadyAnswered ->
+                        answerRecords.recordAnswer(
+                            accountKey = accountKey,
+                            questionId = questionId,
+                            selectedOption = answer,
+                            isCorrect = null,
+                        )
+                    SubmitAnswerResult.AnswerAlreadyViewed ->
+                        answerRecords.recordExplanationViewed(accountKey, questionId)
                     SubmitAnswerResult.LimitReached -> Unit
                 }
             }
@@ -38,7 +62,10 @@ internal class AnswerRepositoryImpl(
 
     override suspend fun revealHint(questionId: Long): Result<HintReveal> =
         resultOf(TimberLogTags.NETWORK, "Failed to reveal hint for $questionId") {
-            remoteDataSource.revealHint(questionId)
+            val accountKey = progressRepository.current.accountKey
+            remoteDataSource.revealHint(questionId).also {
+                answerRecords.recordHintViewed(accountKey, questionId)
+            }
         }.withSideEffectFlag()
 
     override suspend fun praiseQuestion(questionId: Long): Result<Int> =

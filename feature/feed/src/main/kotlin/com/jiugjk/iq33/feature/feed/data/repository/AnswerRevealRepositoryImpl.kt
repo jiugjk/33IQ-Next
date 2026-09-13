@@ -8,6 +8,7 @@ import com.jiugjk.iq33.feature.feed.data.datasource.remote.IqResponseException
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRevealRepository
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ import kotlin.coroutines.coroutineContext
 internal class AnswerRevealRepositoryImpl(
     private val remote: AnswerRevealRemoteDataSource,
     private val progress: QuestionProgressRepository,
+    private val answerRecords: AnswerRecordRepository,
 ) : AnswerRevealRepository {
     private val paymentLock = Mutex()
 
@@ -118,7 +120,7 @@ internal class AnswerRevealRepositoryImpl(
         ensureOwner(owner)
         val reveal = remote.fetch(questionId)
         ensureOwner(owner)
-        progress.recordAnswerViewed(questionId, owner)
+        answerRecords.recordExplanationViewed(owner, questionId)
 
         // Clearing the latch is best effort. Content that was already fetched (and possibly paid for)
         // must still be shown; a stale latch only ever offers another fetch-only recovery.

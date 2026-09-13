@@ -8,16 +8,6 @@ internal interface QuestionProgressRepository {
     val progress: Flow<QuestionProgress>
     val current: QuestionProgress
 
-    fun recordAnswered(
-        questionId: Long,
-        accountKey: String?,
-    )
-
-    fun recordAnswerViewed(
-        questionId: Long,
-        accountKey: String?,
-    )
-
     /** Durable before a potentially charged request. Call off the main thread; false means do not send. */
     fun setAnswerRevealPending(
         questionId: Long,
@@ -35,6 +25,12 @@ internal interface QuestionProgressRepository {
     fun saveFeedPosition(
         categoryId: String,
         position: FeedPosition,
+        accountKey: String?,
+    )
+
+    /** Clear persisted cursor and recent IDs for a category (pull-to-refresh). */
+    fun clearFeedPosition(
+        categoryId: String,
         accountKey: String?,
     )
 }

@@ -27,9 +27,10 @@ class AnswerRevealRepositoryTest {
     private val preferences = FakeSharedPreferences()
     private val session = MutableStateFlow(IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:1"))
     private val manager = mockk<SessionManager> { every { sessionFlow } returns session }
-    private val progress = QuestionProgressRepositoryImpl(preferences, manager)
+    private val answerRecords = InMemoryAnswerRecordRepository()
+    private val progress = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
     private val remote = mockk<AnswerRevealRemoteDataSource>()
-    private val sut = AnswerRevealRepositoryImpl(remote, progress)
+    private val sut = AnswerRevealRepositoryImpl(remote, progress, answerRecords)
     private val quote = AnswerQuote(1, 60, true)
     private val reveal = AnswerReveal("A", "解析")
 
@@ -104,8 +105,8 @@ class AnswerRevealRepositoryTest {
             (sut.reveal(quote) as Result.Failure).afterSideEffect shouldBeEqualTo true
             progress.current.pendingAnswerRevealIds shouldBeEqualTo setOf(1L)
             progress.current.viewedAnswerIds shouldBeEqualTo emptySet()
-            val restoredProgress = QuestionProgressRepositoryImpl(preferences, manager)
-            val restored = AnswerRevealRepositoryImpl(remote, restoredProgress)
+            val restoredProgress = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
+            val restored = AnswerRevealRepositoryImpl(remote, restoredProgress, answerRecords)
             coEvery { remote.fetch(1) } returns reveal
             restored.recover(1) shouldBeEqualTo Result.Success(reveal)
             coVerify(exactly = 1) { remote.pay(1) }
@@ -138,7 +139,7 @@ class AnswerRevealRepositoryTest {
             val job = launch { sut.reveal(quote) }
             started.await()
             job.cancelAndJoin()
-            val restored = QuestionProgressRepositoryImpl(preferences, manager)
+            val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
             restored.current.pendingAnswerRevealIds shouldBeEqualTo setOf(1L)
             restored.current.isSubmissionBlocked(1) shouldBeEqualTo true
             coVerify(exactly = 0) { remote.fetch(any()) }
