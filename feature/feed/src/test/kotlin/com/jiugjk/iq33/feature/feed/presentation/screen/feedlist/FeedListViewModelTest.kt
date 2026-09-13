@@ -220,7 +220,6 @@ class FeedListViewModelTest {
         }
 
     @Test
-    @Test
     fun `auto-continues load more when the filter hides the whole batch`() =
         runTest {
             progress.setHideAnswered(true)
