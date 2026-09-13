@@ -8,15 +8,21 @@ import com.jiugjk.iq33.feature.favourite.domain.repository.BookmarkResult
 import com.jiugjk.iq33.feature.favourite.domain.usecase.IsBookmarkedUseCase
 import com.jiugjk.iq33.feature.favourite.domain.usecase.ToggleBookmarkUseCase
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
+import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.AnswerRevealUseCases
 import com.jiugjk.iq33.feature.feed.domain.usecase.QuestionAnswerUseCases
+import com.jiugjk.iq33.library.network.KnowledgeChangeLog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
 
+@Suppress("LongParameterList", "TooManyFunctions")
 internal class QuestionDetailViewModel(
     private val getQuestionDetailUseCase: GetQuestionDetailUseCase,
     private val isBookmarkedUseCase: IsBookmarkedUseCase,
@@ -24,10 +30,13 @@ internal class QuestionDetailViewModel(
     private val questionAnswerUseCases: QuestionAnswerUseCases,
     private val questionProgressRepository: QuestionProgressRepository,
     private val answerRevealUseCases: AnswerRevealUseCases,
+    private val answerRecordRepository: AnswerRecordRepository,
+    private val knowledgeChangeLog: KnowledgeChangeLog,
 ) : BaseViewModel<QuestionDetailUiState, QuestionDetailAction>(QuestionDetailUiState.Loading) {
     private var loadJob: Job? = null
     private var loadedQuestionId: Long? = null
     private var accountKey = questionProgressRepository.current.accountKey
+    private val completionTokens = AtomicLong(0)
 
     private val currentState: () -> QuestionDetailUiState = { uiStateFlow.value }
 
@@ -44,6 +53,7 @@ internal class QuestionDetailViewModel(
             answerRevealUseCases = answerRevealUseCases,
             questionProgressRepository = questionProgressRepository,
             sendAction = ::sendAction,
+            onRevealed = ::rememberQuestionMetadata,
         )
 
     /** Everything a fresh load has to abandon - all of it belongs to the question being replaced. */
@@ -134,6 +144,7 @@ internal class QuestionDetailViewModel(
     }
 
     /** The parameterless events, split out so [onEvent] stays within one screen of branching. */
+    @Suppress("CyclomaticComplexMethod")
     private fun onSimpleEvent(
         event: QuestionDetailEvent,
         content: QuestionDetailUiState.Content?,
@@ -149,6 +160,7 @@ internal class QuestionDetailViewModel(
             QuestionDetailEvent.HintQuoteRequested -> requestHintQuote(content)
             QuestionDetailEvent.HintRevealConfirmed -> confirmHintReveal(content)
             QuestionDetailEvent.PraiseClicked -> praise(content)
+            QuestionDetailEvent.RedoRequested -> redo(content)
             QuestionDetailEvent.HintFlowDismissed -> sendAction(QuestionDetailAction.HintFlowDismissed)
             else -> Unit
         }
@@ -159,6 +171,8 @@ internal class QuestionDetailViewModel(
         content: QuestionDetailUiState.Content?,
         answer: String,
     ) {
+        // Echoed Done means we already have a local result — never re-hit the server for 学识.
+        if (content?.submission is SubmissionState.Done) return
         if (content?.canSubmitAnswer(answer) != true || submission.isActive) return
 
         val questionId = content.detail.id
@@ -181,9 +195,24 @@ internal class QuestionDetailViewModel(
             // The reducer is what decides whether the submission really started; if it refused, no
             // request may be sent.
             if (submission.isEligible(questionId) { it.isSubmitting }) {
-                when (val result = questionAnswerUseCases.submitAnswer(questionId, answer)) {
-                    is Result.Success -> sendAction(QuestionDetailAction.SubmissionFinished(questionId, result.value))
-                    is Result.Failure -> sendAction(QuestionDetailAction.SubmissionFailed(questionId))
+                // The title travels with the submission: the history row and the 学识 change log are
+                // both written inside it, before rememberQuestionMetadata below could fill one in.
+                when (val result = questionAnswerUseCases.submitAnswer(questionId, answer, content.detail.shortLabel)) {
+                    is Result.Success -> {
+                        // A live completion carries a fresh token, which is what lets the screen play
+                        // feedback exactly once; restored history never has one.
+                        sendAction(
+                            QuestionDetailAction.SubmissionFinished(
+                                questionId = questionId,
+                                result = result.value,
+                                completionToken = completionTokens.incrementAndGet(),
+                            ),
+                        )
+                        rememberQuestionMetadata(questionId)
+                    }
+                    is Result.Failure -> {
+                        sendAction(QuestionDetailAction.SubmissionFailed(questionId))
+                    }
                 }
             }
         }
@@ -239,8 +268,13 @@ internal class QuestionDetailViewModel(
 
             if (hintRevealing.isEligible(questionId) { it.hintReveal is RevealState.Revealing }) {
                 when (val result = questionAnswerUseCases.revealHint(questionId)) {
-                    is Result.Success -> sendAction(QuestionDetailAction.HintRevealFinished(questionId, result.value))
-                    is Result.Failure -> sendAction(QuestionDetailAction.HintFlowFailed(questionId, result.afterSideEffect))
+                    is Result.Success -> {
+                        sendAction(QuestionDetailAction.HintRevealFinished(questionId, result.value))
+                        rememberQuestionMetadata(questionId)
+                    }
+                    is Result.Failure -> {
+                        sendAction(QuestionDetailAction.HintFlowFailed(questionId, result.afterSideEffect))
+                    }
                 }
             }
         }
@@ -261,13 +295,130 @@ internal class QuestionDetailViewModel(
         }
     }
 
+    /**
+     * Clears this account's stored answer so the question can be attempted again.
+     *
+     * Refused once the analysis has been viewed: the correct answer is already known, so a redo
+     * there would only turn a revealed answer into a fresh "correct" in the history - and 33IQ
+     * refuses the submission anyway.
+     */
+    private fun redo(content: QuestionDetailUiState.Content?) {
+        if (content == null) return
+        val questionId = content.detail.id
+        val progress = questionProgressRepository.current
+        if (questionId in progress.viewedAnswerIds) return
+        answerRecordRepository.clearAnswerState(progress.accountKey, questionId)
+        sendAction(QuestionDetailAction.AnswerEchoCleared(questionId))
+    }
+
+    /**
+     * Stores the question's display metadata on an existing history record.
+     *
+     * History search has nothing to match without it: the write paths (submit / hint / analysis)
+     * only know the question id, so the screen - which does know the title and category - fills it
+     * in right after a record is created. It never creates one.
+     *
+     * The 学识 change log is backfilled from the same call: its entry is appended inside the
+     * submission, so on the very first answer it is written before this screen ever reports a title.
+     */
+    private fun rememberQuestionMetadata(
+        questionId: Long,
+        loaded: QuestionDetail? = null,
+    ) {
+        val detail = loaded ?: (uiStateFlow.value as? QuestionDetailUiState.Content)?.detail ?: return
+        if (detail.id != questionId) return
+        val owner = questionProgressRepository.current.accountKey
+        answerRecordRepository.updateMetadata(
+            accountKey = owner,
+            questionId = questionId,
+            title = detail.shortLabel,
+            categoryId = detail.categoryLabel,
+        )
+        knowledgeChangeLog.backfillTitle(owner, questionId, detail.shortLabel)
+    }
+
     /** A failed bookmark lookup must not take the loaded question down with it - it is a side note. */
     private suspend fun loadSuccessAction(
         detail: QuestionDetail,
         id: Long,
-    ): QuestionDetailAction.LoadSuccess =
-        when (val bookmarked = isBookmarkedUseCase(id)) {
-            is BookmarkResult.Success -> QuestionDetailAction.LoadSuccess(detail, bookmarked.value)
-            is BookmarkResult.Failure -> QuestionDetailAction.LoadSuccess(detail, isBookmarked = false, bookmarkFailed = true)
-        }
+    ): QuestionDetailAction.LoadSuccess {
+        val record = answerRecordRepository.get(questionProgressRepository.current.accountKey, id)
+        val echoedSubmission =
+            when {
+                record?.answeredAt == null && record?.selectedOption == null && record?.isCorrect == null ->
+                    SubmissionState.Idle
+                record.isCorrect == true ->
+                    SubmissionState.Done(
+                        record.selectedOption.orEmpty(),
+                        SubmitAnswerResult.Correct(record.knowledgeDelta, null),
+                    )
+                record.isCorrect == false ->
+                    SubmissionState.Done(
+                        record.selectedOption.orEmpty(),
+                        SubmitAnswerResult.Wrong(record.knowledgeDelta, null),
+                    )
+                else ->
+                    SubmissionState.Done(
+                        record.selectedOption.orEmpty(),
+                        SubmitAnswerResult.AlreadyAnswered,
+                    )
+            }
+        val selected = if (detail.questionType == QuestionType.CHOICE) record?.selectedOption else null
+        val draft = if (detail.questionType == QuestionType.OPEN) record?.selectedOption.orEmpty() else ""
+        val storedAnswer = record?.selectedOption.orEmpty()
+        // Word bank: map the stored text back onto tile *indices* (duplicates are distinct tiles).
+        // If the server's candidate array changed, the answer is echoed read-only instead.
+        val isWordBank = detail.questionType == QuestionType.WORD_BANK
+        val tiles = if (isWordBank) matchCandidateIndices(detail.answerCandidates, storedAnswer) else null
+        val echo = if (isWordBank && tiles == null) storedAnswer else ""
+        // Backfills history rows written before the screen knew (or stored) the question's metadata.
+        if (record != null) rememberQuestionMetadata(id, detail)
+        val bookmarked = isBookmarkedUseCase(id)
+        return QuestionDetailAction.LoadSuccess(
+            detail = detail,
+            isBookmarked = (bookmarked as? BookmarkResult.Success)?.value == true,
+            bookmarkFailed = bookmarked is BookmarkResult.Failure,
+            selectedChoiceId = selected,
+            draftAnswer = draft,
+            selectedCandidateIndices = tiles.orEmpty(),
+            answerEcho = echo,
+            submission = echoedSubmission,
+            explanationAlreadyViewed = record?.viewedExplanation == true,
+            hintAlreadyViewed = record?.viewedHint == true,
+            correctOption = record?.correctOption,
+            explanationText = record?.explanationText,
+            hintText = record?.hintText,
+        )
+    }
+}
+
+/**
+ * Maps a stored word-bank answer back onto the indices of the tiles that spell it.
+ *
+ * Tiles are matched by position, never by text: a bank that repeats the same character has several
+ * distinct tiles and each may be used once. Returns null when the answer cannot be spelled from the
+ * current tiles - the candidate array the server returns is not guaranteed to be stable.
+ */
+internal fun matchCandidateIndices(
+    candidates: List<String>,
+    answer: String,
+): List<Int>? {
+    if (answer.isEmpty() || candidates.isEmpty()) return null
+    val used = BooleanArray(candidates.size)
+    val picked = mutableListOf<Int>()
+    var cursor = 0
+
+    while (cursor < answer.length) {
+        // Longest tile first: a two-character tile must win over a one-character prefix of it.
+        val available =
+            candidates.indices.filter {
+                !used[it] && candidates[it].isNotEmpty() && answer.startsWith(candidates[it], cursor)
+            }
+        val index = available.maxByOrNull { candidates[it].length } ?: return null
+        used[index] = true
+        picked += index
+        cursor += candidates[index].length
+    }
+
+    return picked
 }

@@ -1,17 +1,25 @@
 package com.jiugjk.iq33.feature.feed.data
 
+import androidx.room.Room
+import com.jiugjk.iq33.feature.feed.data.datasource.database.AnswerRecordDatabase
+import com.jiugjk.iq33.feature.feed.data.datasource.database.MIGRATION_1_2
+import com.jiugjk.iq33.feature.feed.data.datasource.database.MIGRATION_2_3
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRevealRemoteDataSource
-import com.jiugjk.iq33.feature.feed.data.repository.AnswerRevealRepositoryImpl
-import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRevealRepository
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionHtmlParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionJsonParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionRemoteDataSource
+import com.jiugjk.iq33.feature.feed.data.repository.AnswerFeedbackPreferencesImpl
+import com.jiugjk.iq33.feature.feed.data.repository.AnswerRecordRepositoryImpl
+import com.jiugjk.iq33.feature.feed.data.repository.AnswerRevealRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.AnswerRepositoryImpl
-import com.jiugjk.iq33.feature.feed.data.repository.QuestionRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.QuestionProgressRepositoryImpl
-import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
+import com.jiugjk.iq33.feature.feed.data.repository.QuestionRepositoryImpl
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRevealRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
+import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +38,28 @@ internal val parsingDispatcherQualifier = named("feedParsingDispatcher")
 internal val dataModule =
     module {
         single<CoroutineDispatcher>(parsingDispatcherQualifier) { Dispatchers.Default }
+
+        single {
+            Room
+                .databaseBuilder(get(), AnswerRecordDatabase::class.java, "AnswerRecords.db")
+                // Every version step has a real migration, so there is deliberately no destructive
+                // fallback: this table *is* the answer history, and dropping it is never the right
+                // answer to a schema the app itself shipped.
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .build()
+        }
+        single { get<AnswerRecordDatabase>().answerRecordDao() }
+        // Constructor DSL (singleOf) resolves *every* constructor parameter, including the ones that
+        // have Kotlin defaults - it would look for a CoroutineScope binding that the graph does not
+        // have and fail at first resolution. Calling the constructor explicitly keeps the default.
+        single<AnswerRecordRepository> {
+            AnswerRecordRepositoryImpl(
+                dao = get(),
+                preferences = get(),
+                sessionManager = get(),
+            )
+        }
+        singleOf(::AnswerFeedbackPreferencesImpl) { bind<AnswerFeedbackPreferences>() }
 
         singleOf(::QuestionProgressRepositoryImpl) { bind<QuestionProgressRepository>() }
         singleOf(::QuestionRepositoryImpl) { bind<QuestionRepository>() }

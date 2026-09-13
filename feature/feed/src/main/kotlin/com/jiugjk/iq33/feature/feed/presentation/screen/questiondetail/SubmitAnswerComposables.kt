@@ -11,6 +11,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ internal fun SubmitAnswerSection(
     submission: SubmissionState,
     enabled: Boolean,
     onSubmitAnswerClick: (String) -> Unit,
+    onRedoClick: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceS)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -39,12 +41,19 @@ internal fun SubmitAnswerSection(
             if (submission is SubmissionState.Submitting) {
                 CircularProgressIndicator(modifier = Modifier.padding(start = Dimen.spaceM).size(20.dp))
             }
+
+            if (submission is SubmissionState.Done && onRedoClick != null) {
+                TextButton(onClick = onRedoClick, modifier = Modifier.padding(start = Dimen.spaceM)) {
+                    Text(stringResource(R.string.feed_redo_question))
+                }
+            }
         }
 
         SubmissionResultText(submission)
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 internal fun OpenAnswerSection(
     draftAnswer: String,
@@ -52,6 +61,7 @@ internal fun OpenAnswerSection(
     enabled: Boolean,
     onDraftChange: (String) -> Unit,
     onSubmitAnswerClick: (String) -> Unit,
+    onRedoClick: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
         OutlinedTextField(
@@ -68,6 +78,7 @@ internal fun OpenAnswerSection(
             submission = submission,
             enabled = enabled,
             onSubmitAnswerClick = onSubmitAnswerClick,
+            onRedoClick = onRedoClick,
         )
     }
 }
@@ -75,7 +86,7 @@ internal fun OpenAnswerSection(
 @Composable
 private fun SubmissionResultText(submission: SubmissionState) {
     when (submission) {
-        is SubmissionState.Done -> SubmissionDoneText(submission.result)
+        is SubmissionState.Done -> SubmissionDoneText(submission.submittedAnswer, submission.result)
         SubmissionState.Failed ->
             Text(
                 text = stringResource(R.string.feed_submission_failed),
@@ -88,7 +99,10 @@ private fun SubmissionResultText(submission: SubmissionState) {
 }
 
 @Composable
-private fun SubmissionDoneText(result: SubmitAnswerResult) {
+private fun SubmissionDoneText(
+    submittedAnswer: String,
+    result: SubmitAnswerResult,
+) {
     when (result) {
         is SubmitAnswerResult.Correct ->
             Text(
@@ -106,12 +120,18 @@ private fun SubmissionDoneText(result: SubmitAnswerResult) {
         is SubmitAnswerResult.Wrong ->
             Text(
                 text =
-                    scoreText(
-                        R.string.feed_submission_wrong,
-                        R.string.feed_submission_wrong_no_score,
-                        result.scoreDelta,
-                        result.myScore,
-                    ),
+                    if (result.scoreDelta != null && result.myScore != null) {
+                        scoreText(
+                            R.string.feed_submission_wrong,
+                            R.string.feed_submission_wrong_no_score,
+                            result.scoreDelta,
+                            result.myScore,
+                        )
+                    } else if (submittedAnswer.isNotBlank()) {
+                        stringResource(R.string.feed_submission_wrong_choice, submittedAnswer)
+                    } else {
+                        stringResource(R.string.feed_submission_wrong_no_score)
+                    },
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),

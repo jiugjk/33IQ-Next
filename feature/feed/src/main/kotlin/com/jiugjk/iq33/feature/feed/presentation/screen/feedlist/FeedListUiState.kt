@@ -43,9 +43,20 @@ internal sealed interface FeedListUiState : BaseState {
          * there is nothing more - a failure here is retryable, the end of the list is not.
          */
         val loadMoreFailed: Boolean = false,
+        /**
+         * Automatic paging stopped because one continuous walk spent its request budget without
+         * finding anything visible. Not an error and not the end of the feed - the user decides
+         * whether to keep going.
+         */
+        val autoPagingPaused: Boolean = false,
     ) : FeedListUiState {
+        /**
+         * "隐藏已答" hides answered questions and nothing else. Viewing the analysis or leaving a
+         * reveal pending also blocks a submission, but the user never answered those - hiding them
+         * would quietly take questions out of the feed that were only ever looked at.
+         */
         val visibleQuestions: List<QuestionSummary>
-            get() = if (progress.hideAnswered) questions.filterNot { progress.isSubmissionBlocked(it.id) } else questions
+            get() = if (progress.hideAnswered) questions.filterNot { it.id in progress.answeredIds } else questions
 
         /** No page request is in flight, and none is sitting unretried. */
         private val isPagingIdle: Boolean
@@ -64,5 +75,9 @@ internal sealed interface FeedListUiState : BaseState {
         /** The failed page can be asked for again, without discarding what is already listed. */
         val canRetryLoadMore: Boolean
             get() = loadMoreFailed && !isLoadingMore && !isRefreshing
+
+        /** The user may extend a paused automatic walk; this bypasses [canLoadMore] on purpose. */
+        val canContinuePaging: Boolean
+            get() = autoPagingPaused && nextPageUrl != null && !isLoadingMore && !isRefreshing
     }
 }

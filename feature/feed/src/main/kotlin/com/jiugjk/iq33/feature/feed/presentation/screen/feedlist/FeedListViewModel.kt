@@ -13,6 +13,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 
+@Suppress("TooManyFunctions")
 internal class FeedListViewModel(
     private val getQuestionListUseCase: GetQuestionListUseCase,
     private val questionProgressRepository: QuestionProgressRepository,
@@ -22,24 +23,56 @@ internal class FeedListViewModel(
     private var lastLoadedAt = 0L
     private var accountKey = questionProgressRepository.current.accountKey
 
+    /**
+     * Cursors and request budget of the current continuous automatic load.
+     *
+     * Shared by every batch of one chain, so a page cycle longer than a single batch is detected and
+     * an endless "filtered everything away, fetch the next page" loop is bounded.
+     */
+    private val walk = FeedWalk()
+
     init {
         viewModelScope.launch {
             questionProgressRepository.progress.collect { progress ->
                 val accountChanged = accountKey != progress.accountKey
                 accountKey = progress.accountKey
                 sendAction(FeedListAction.ProgressChanged(progress))
-                if (accountChanged) selectCategory(uiStateFlow.value.selectedCategory)
+                if (accountChanged) {
+                    selectCategory(uiStateFlow.value.selectedCategory)
+                } else {
+                    maybeContinueFilteredPaging()
+                }
             }
         }
     }
 
     fun onEvent(event: FeedListEvent) {
         when (event) {
-            is FeedListEvent.CategorySelected -> selectCategory(event.category)
-            is FeedListEvent.HideAnsweredChanged -> questionProgressRepository.setHideAnswered(event.hide)
-            FeedListEvent.Refreshed -> refresh()
-            FeedListEvent.EndReached -> loadMore(retry = false)
-            FeedListEvent.LoadMoreRetried -> loadMore(retry = true)
+            is FeedListEvent.CategorySelected -> {
+                selectCategory(event.category)
+            }
+            is FeedListEvent.HideAnsweredChanged -> {
+                questionProgressRepository.setHideAnswered(event.hide)
+            }
+            FeedListEvent.Refreshed -> {
+                refresh()
+            }
+            FeedListEvent.EndReached -> {
+                loadMore(retry = false)
+            }
+            FeedListEvent.LoadMoreRetried -> {
+                loadMore(retry = true)
+            }
+            FeedListEvent.ContinuePagingRequested -> {
+                // The user explicitly asked for more, so the chain gets a fresh budget. The paused
+                // flag is cleared by the load itself, so it is still set while eligibility is checked.
+                walk.reset()
+                loadMore(retry = false, userRequested = true)
+            }
+            FeedListEvent.ShowAllQuestions -> {
+                questionProgressRepository.setHideAnswered(false)
+                refresh()
+            }
         }
     }
 
@@ -57,7 +90,8 @@ internal class FeedListViewModel(
         loadJob?.cancel()
         loadMoreJob?.cancel()
         sendAction(FeedListAction.LoadStart(category))
-        startFreshBatch(category)
+        // Category switch resumes the persisted cursor for that account/category.
+        startFreshBatch(category, resetCursor = false)
     }
 
     private fun refresh() {
@@ -69,33 +103,52 @@ internal class FeedListViewModel(
         }
         loadMoreJob?.cancel()
         sendAction(FeedListAction.RefreshStart(current.selectedCategory))
-        startFreshBatch(current.selectedCategory)
+        startFreshBatch(current.selectedCategory, resetCursor = true)
     }
 
-    private fun startFreshBatch(category: Category) {
+    private fun startFreshBatch(
+        category: Category,
+        resetCursor: Boolean,
+    ) {
+        // A refresh, a category switch and an account change all start a new chain.
+        walk.reset()
         val owner = questionProgressRepository.current.accountKey
-        val position = questionProgressRepository.feedPosition(category.id)
         val displayedIds =
             (uiStateFlow.value as? FeedListUiState.Content)
                 ?.questions
                 .orEmpty()
                 .map { it.id }
                 .toSet()
-        loadJob =
-            viewModelScope.launch {
-                val result =
-                    fetchUnseenBatch(
-                        getQuestionListUseCase = getQuestionListUseCase,
-                        progress = questionProgressRepository.current,
-                        category = category,
-                        position = position,
-                        displayedIds = displayedIds,
-                    )
-                coroutineContext.ensureActive()
-                if (owner == questionProgressRepository.current.accountKey) {
-                    applyBatch(category, position, owner, result)
-                }
+        // Pull-to-refresh clears the persisted cursor + recent window immediately (agreed T2 rule).
+        val position =
+            if (resetCursor) {
+                questionProgressRepository.clearFeedPosition(category.id, owner)
+                FeedPosition(nextPageUrl = null, lastQuestionIds = emptySet())
+            } else {
+                questionProgressRepository.feedPosition(category.id)
             }
+        val excludeIds = if (resetCursor) displayedIds else emptySet()
+        loadJob =
+            viewModelScope
+                .launch {
+                    val result =
+                        fetchUnseenBatch(
+                            getQuestionListUseCase = getQuestionListUseCase,
+                            progress = questionProgressRepository.current,
+                            category = category,
+                            position = position,
+                            displayedIds = excludeIds,
+                            walk = walk,
+                        )
+                    coroutineContext.ensureActive()
+                    if (owner == questionProgressRepository.current.accountKey) {
+                        applyBatch(category, position, owner, result, replace = true)
+                    }
+                }.also { job ->
+                    job.invokeOnCompletion { error ->
+                        if (error == null) maybeContinueFilteredPaging()
+                    }
+                }
     }
 
     private fun applyBatch(
@@ -103,11 +156,12 @@ internal class FeedListViewModel(
         position: FeedPosition,
         owner: String?,
         result: Result<QuestionPage>,
+        replace: Boolean,
     ) {
         when (result) {
             is Result.Success -> {
                 val page = result.value
-                savePosition(category, page, position, owner)
+                savePosition(category, page, if (replace) FeedPosition() else position, owner)
                 lastLoadedAt = System.currentTimeMillis()
                 sendAction(
                     if (page.questions.isEmpty()) {
@@ -129,23 +183,45 @@ internal class FeedListViewModel(
         }
     }
 
-    private fun loadMore(retry: Boolean) {
+    private fun loadMore(
+        retry: Boolean,
+        userRequested: Boolean = false,
+    ) {
         val state = uiStateFlow.value as? FeedListUiState.Content ?: return
         val busy = loadMoreJob?.isActive == true || loadJob?.isActive == true
-        val allowed = if (retry) state.canRetryLoadMore else state.canStartLoadMore
+        val allowed =
+            when {
+                userRequested -> state.canContinuePaging
+                retry -> state.canRetryLoadMore
+                else -> state.canStartLoadMore
+            }
         val cursor = state.nextPageUrl
         if (busy || !allowed || cursor == null) return
         val category = state.selectedCategory
         val owner = questionProgressRepository.current.accountKey
         val position = questionProgressRepository.feedPosition(category.id)
         val request = LoadMoreRequest(category, position, owner, cursor, state.page + 1)
+        val alreadyListed = state.questions.map { it.id }.toSet()
         sendAction(FeedListAction.LoadMoreStart(category))
         loadMoreJob =
-            viewModelScope.launch {
-                val result = getQuestionListUseCase(category, cursor)
-                coroutineContext.ensureActive()
-                if (owner == questionProgressRepository.current.accountKey) applyLoadMore(request, result)
-            }
+            viewModelScope
+                .launch {
+                    val result =
+                        fetchUnseenBatch(
+                            getQuestionListUseCase = getQuestionListUseCase,
+                            progress = questionProgressRepository.current,
+                            category = category,
+                            position = FeedPosition(nextPageUrl = cursor, lastQuestionIds = position.lastQuestionIds),
+                            displayedIds = alreadyListed,
+                            walk = walk,
+                        )
+                    coroutineContext.ensureActive()
+                    if (owner == questionProgressRepository.current.accountKey) applyLoadMore(request, result)
+                }.also { job ->
+                    job.invokeOnCompletion { error ->
+                        if (error == null) maybeContinueFilteredPaging()
+                    }
+                }
     }
 
     private fun applyLoadMore(
@@ -154,7 +230,6 @@ internal class FeedListViewModel(
     ) {
         when (result) {
             is Result.Success -> {
-                // A next link identical to the cursor just used would page in place forever.
                 val page = result.value.let { it.copy(nextPageUrl = it.nextPageUrl?.takeUnless { url -> url == request.cursor }) }
                 savePosition(request.category, page, request.position, request.owner)
                 sendAction(
@@ -183,7 +258,30 @@ internal class FeedListViewModel(
         questionProgressRepository.saveFeedPosition(category.id, FeedPosition(page.nextPageUrl, recentIds), owner)
     }
 
-    /** One "load more" in flight, captured so a late reply cannot be applied to a newer cursor. */
+    /**
+     * When the hide-filter leaves the screen empty but more pages exist, keep walking automatically.
+     *
+     * Guarded by canStartLoadMore (cursor present, idle, not failed) *and* by the chain budget: a
+     * feed whose next-page links cycle can otherwise keep this going forever without ever producing
+     * a visible question. When the budget is spent the loop stops and hands the decision to the user
+     * instead of silently continuing or silently giving up.
+     */
+    private fun maybeContinueFilteredPaging() {
+        val state = uiStateFlow.value as? FeedListUiState.Content ?: return
+        val shouldContinue =
+            state.visibleQuestions.isEmpty() &&
+                state.canStartLoadMore &&
+                state.nextPageUrl != null &&
+                !state.loadMoreFailed
+        if (!shouldContinue) return
+
+        if (walk.isExhausted) {
+            sendAction(FeedListAction.AutoPagingPaused(state.selectedCategory))
+        } else {
+            loadMore(retry = false)
+        }
+    }
+
     private data class LoadMoreRequest(
         val category: Category,
         val position: FeedPosition,

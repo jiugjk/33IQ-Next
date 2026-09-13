@@ -1,6 +1,7 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
+import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
@@ -18,13 +19,89 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         override fun reduce(state: QuestionDetailUiState) = QuestionDetailUiState.Loading
     }
 
+    /**
+     * Restores what this device knows about the question.
+     *
+     * "Already viewed" and "content available" are restored as two different things: cached text
+     * becomes [RevealState.Revealed], an entitlement without text becomes [RevealState.Entitled]
+     * (which keeps a re-read entry point open), and neither is ever presented as loaded-but-empty.
+     */
+    @Suppress("LongParameterList")
     class LoadSuccess(
         private val detail: QuestionDetail,
         private val isBookmarked: Boolean,
         private val bookmarkFailed: Boolean = false,
+        private val selectedChoiceId: String? = null,
+        private val draftAnswer: String = "",
+        private val selectedCandidateIndices: List<Int> = emptyList(),
+        private val answerEcho: String = "",
+        private val submission: SubmissionState = SubmissionState.Idle,
+        private val explanationAlreadyViewed: Boolean = false,
+        private val hintAlreadyViewed: Boolean = false,
+        private val correctOption: String? = null,
+        private val explanationText: String? = null,
+        private val hintText: String? = null,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState) =
-            QuestionDetailUiState.Content(detail = detail, isBookmarked = isBookmarked, bookmarkFailed = bookmarkFailed)
+            QuestionDetailUiState.Content(
+                detail = detail,
+                isBookmarked = isBookmarked,
+                bookmarkFailed = bookmarkFailed,
+                selectedChoiceId = selectedChoiceId,
+                draftAnswer = draftAnswer,
+                selectedCandidateIndices = selectedCandidateIndices,
+                answerEcho = answerEcho,
+                submission = submission,
+                knownCorrectOption = correctOption?.takeIf { it.isNotBlank() },
+                answerReveal = restoredAnswerReveal(),
+                hintReveal = restoredHintReveal(),
+            )
+
+        private fun restoredAnswerReveal(): RevealState<Nothing, AnswerReveal> =
+            when {
+                !explanationAlreadyViewed -> RevealState.Idle
+                !explanationText.isNullOrBlank() ->
+                    RevealState.Revealed(
+                        AnswerReveal(
+                            answerText = correctOption.orEmpty(),
+                            explanationText = explanationText,
+                        ),
+                    )
+                else -> RevealState.Entitled
+            }
+
+        private fun restoredHintReveal(): RevealState<Nothing, HintReveal> =
+            when {
+                !hintAlreadyViewed -> RevealState.Idle
+                !hintText.isNullOrBlank() -> RevealState.Revealed(HintReveal(hintText))
+                else -> RevealState.Entitled
+            }
+    }
+
+    /**
+     * Redo: drops everything the previous attempt left behind.
+     *
+     * [QuestionDetailUiState.Content.knownCorrectOption] goes with it - it is the answer remembered
+     * from this account's own history, and leaving it would mark the right choice green on a
+     * question the user just asked to try again.
+     */
+    class AnswerEchoCleared(
+        private val questionId: Long,
+    ) : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId) {
+                state.copy(
+                    selectedChoiceId = null,
+                    draftAnswer = "",
+                    selectedCandidateIndices = emptyList(),
+                    answerEcho = "",
+                    submission = SubmissionState.Idle,
+                    knownCorrectOption = null,
+                    detail = state.detail.copy(isAnswered = false),
+                )
+            } else {
+                state
+            }
     }
 
     object LoadFailure : QuestionDetailAction {
@@ -148,6 +225,8 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
     class SubmissionFinished(
         private val questionId: Long,
         private val result: SubmitAnswerResult,
+        /** Identifies this completion so feedback plays exactly once - see [SubmissionState.Done]. */
+        private val completionToken: Long,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState {
             if (state !is QuestionDetailUiState.Content || state.detail.id != questionId) return state
@@ -155,7 +234,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
             val submitting = state.submission as? SubmissionState.Submitting ?: return state
 
             return state.copy(
-                submission = SubmissionState.Done(submitting.submittedAnswer, result),
+                submission = SubmissionState.Done(submitting.submittedAnswer, result, completionToken),
                 detail =
                     state.detail.copy(
                         isAnswered =

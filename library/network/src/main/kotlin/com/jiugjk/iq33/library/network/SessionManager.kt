@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -39,8 +41,9 @@ enum class SessionStatus {
 data class IqSession(
     val status: SessionStatus = SessionStatus.UNKNOWN,
     /**
-     * 学识 score shown by 33IQ next to a logged-in user's name. Always null for now: a real
-     * logged-in response was never available to confirm which field carries it.
+     * 学识 shown next to a logged-in user. Null means "unknown yet" — UI shows a skeleton, never 0.
+     * Server values (probe / submit myScore) replace this unconditionally; local deltas only adjust
+     * an already-known score.
      */
     val score: String? = null,
     /** Stable local-data namespace. A confirmed login UID is preferred; legacy sessions use an opaque ID. */
@@ -97,6 +100,7 @@ sealed interface LoginError {
  * that was already in flight when the user logged out cannot install its now-stale result - and its
  * HTTP call is cancelled, so its response cannot re-install authentication cookies either.
  */
+@Suppress("TooManyFunctions")
 class SessionManager(
     private val preferences: SharedPreferences,
     private val cookieJar: PersistentCookieJar,
@@ -107,6 +111,16 @@ class SessionManager(
 
     private val generation = AtomicInteger(0)
     private val lock = Any()
+
+    /**
+     * The session generation a background request started under.
+     *
+     * A caller that produces account-scoped side effects (a submitted answer's 学识, a streak, a log
+     * entry) reads this *before* the request and hands it back to [applyServerScore] /
+     * [applyOptimisticDelta]. A login or logout bumps the generation, so a reply that lands after
+     * the account changed can be dropped instead of being applied to whoever is logged in now.
+     */
+    val sessionEpoch: Int get() = generation.get()
 
     // Jobs of the currently running refreshFromServer calls. Guarded by lock.
     private val inFlightRefreshes = mutableSetOf<Job>()
@@ -159,7 +173,7 @@ class SessionManager(
 
             // Login success is decided by *this* probe, not by whatever commit() kept on screen when
             // the probe was UNKNOWN (that path preserves the last verified session for display).
-            return when (probed) {
+            return when (probed.status) {
                 SessionStatus.AUTHENTICATED -> LoginResult.Success
                 SessionStatus.GUEST -> LoginResult.Failure(loginErrorFor(status))
                 SessionStatus.UNKNOWN -> LoginResult.Failure(LoginError.NotVerified)
@@ -210,22 +224,88 @@ class SessionManager(
         _sessionFlow.value = IqSession(status = SessionStatus.GUEST)
     }
 
-    private suspend fun probeSessionStatus(): SessionStatus =
+    /**
+     * Unconditional server truth. Replaces any optimistic local score.
+     * Pass the raw display string (usually digits from myScore / probe).
+     *
+     * [accountKey] and [epoch] describe the session the value was fetched for; both are re-checked
+     * inside the same lock that commits the state, so a late reply for account A can never move
+     * account B's 学识. Returns whether the value was applied.
+     */
+    fun applyServerScore(
+        score: String,
+        accountKey: String? = null,
+        epoch: Int? = null,
+    ): Boolean =
+        synchronized(lock) {
+            val current = _sessionFlow.value
+            if (!isStillCurrent(current, accountKey, epoch)) return false
+            val session = current.copy(score = score)
+            _sessionFlow.value = session
+            persist(session)
+            true
+        }
+
+    fun applyServerScore(
+        score: Int,
+        accountKey: String? = null,
+        epoch: Int? = null,
+    ): Boolean = applyServerScore(score.toString(), accountKey, epoch)
+
+    /**
+     * Optimistic only: adjusts an already-known score by [delta]. Does nothing when score is unknown
+     * (keeps skeleton — never invents 0).
+     */
+    fun applyOptimisticDelta(
+        delta: Int,
+        accountKey: String? = null,
+        epoch: Int? = null,
+    ): Boolean =
+        synchronized(lock) {
+            val current = _sessionFlow.value
+            val base = current.score?.toIntOrNull()
+
+            if (delta == 0 || base == null || !isStillCurrent(current, accountKey, epoch)) {
+                false
+            } else {
+                val session = current.copy(score = (base + delta).toString())
+                _sessionFlow.value = session
+                persist(session)
+                true
+            }
+        }
+
+    /**
+     * Whether a side effect captured under [accountKey] / [epoch] still belongs to the live session.
+     *
+     * A null [accountKey] or [epoch] means the caller could not name an owner (legacy call sites);
+     * those keep the previous "logged in is enough" rule rather than silently widening it.
+     */
+    private fun isStillCurrent(
+        current: IqSession,
+        accountKey: String?,
+        epoch: Int?,
+    ): Boolean {
+        if (!current.isLoggedIn) return false
+        if (epoch != null && epoch != generation.get()) return false
+        return accountKey == null || accountKey == current.accountKey
+    }
+
+    private suspend fun probeSessionStatus(): ProbeOutcome =
         runCatching {
             val url = "${IqConstants.GUEST_PROBE_URL}?lang=zh-cn&p=3&time=${System.currentTimeMillis()}"
-
-            Classifier.classify(htmlClient.getText(url))
+            Classifier.classifyWithScore(htmlClient.getText(url))
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
 
             Timber.tag(LOG_TAG).w(throwable, "Failed to refresh session")
-            SessionStatus.UNKNOWN
+            ProbeOutcome(SessionStatus.UNKNOWN)
         }
 
     /** Applies [probed] only if no login/logout happened while the probe was running. */
     private fun commit(
         startGeneration: Int,
-        probed: SessionStatus,
+        probed: ProbeOutcome,
         accountKey: String? = null,
     ): IqSession =
         synchronized(lock) {
@@ -235,13 +315,28 @@ class SessionManager(
 
             // An unverifiable probe must not overwrite what was last verified - in particular it
             // must never turn a rejected login into a session.
-            if (probed == SessionStatus.UNKNOWN) return current
+            if (probed.status == SessionStatus.UNKNOWN) return current
+
+            val nextScore =
+                when {
+                    probed.status == SessionStatus.GUEST -> null
+                    // Server field available → unconditional override (no merge with local).
+                    probed.serverScore != null -> probed.serverScore
+                    else -> current.score
+                }
 
             val session =
                 current.copy(
-                    status = probed,
-                    score = if (probed == SessionStatus.GUEST) null else current.score,
-                    accountKey = if (probed == SessionStatus.GUEST) null else accountKey ?: current.accountKey ?: newLocalAccountKey(),
+                    status = probed.status,
+                    score = nextScore,
+                    accountKey =
+                        if (probed.status ==
+                            SessionStatus.GUEST
+                        ) {
+                            null
+                        } else {
+                            accountKey ?: current.accountKey ?: newLocalAccountKey()
+                        },
                 )
 
             _sessionFlow.value = session
@@ -249,6 +344,11 @@ class SessionManager(
 
             session
         }
+
+    private data class ProbeOutcome(
+        val status: SessionStatus,
+        val serverScore: String? = null,
+    )
 
     private fun invalidateInFlightWork() {
         generation.incrementAndGet()
@@ -313,20 +413,59 @@ class SessionManager(
      * 33IQ's guest marker.
      */
     private object Classifier {
-        fun classify(body: String): SessionStatus {
+        fun classifyWithScore(body: String): ProbeOutcome {
             val payload = runCatching { Json.parseToJsonElement(body) }.getOrNull()
 
             return when (payload) {
-                is JsonArray -> classifyArray(payload)
-                is JsonObject -> classifyObject(payload)
-                else -> SessionStatus.UNKNOWN
+                is JsonArray -> {
+                    ProbeOutcome(classifyArray(payload))
+                }
+                is JsonObject -> {
+                    val status = classifyObject(payload)
+                    val score = if (status == SessionStatus.AUTHENTICATED) extractScore(payload) else null
+                    ProbeOutcome(status, score)
+                }
+                else -> {
+                    ProbeOutcome(SessionStatus.UNKNOWN)
+                }
             }
         }
 
+        /**
+         * The probe's own `status`, or null when the field is absent or JSON `null`.
+         *
+         * `JsonNull` is a `JsonPrimitive` whose `content` is the string `"null"`, so reading
+         * `content` as a fallback would turn a null status into a status literally called "null".
+         */
         fun scalarContent(obj: JsonObject?): String? {
             val primitive = obj?.get(STATUS_FIELD) as? JsonPrimitive ?: return null
 
-            return primitive.contentOrNull ?: primitive.content.takeIf { it.isNotEmpty() }
+            return primitive.contentOrNull?.takeIf { it.isNotEmpty() }
+        }
+
+        /**
+         * First candidate field that actually carries a 学识 number.
+         *
+         * JSON `null`, empty strings and anything non-numeric are *skipped*, not accepted: a
+         * `{"score": null, "myScore": 100}` reply has to fall through to `myScore`, and a reply
+         * whose only score field is invalid has to leave the cached value alone (null = unknown)
+         * instead of overwriting it with a placeholder.
+         */
+        private fun extractScore(obj: JsonObject): String? {
+            val userinfo = obj[USERINFO_FIELD] as? JsonObject
+            val candidates =
+                listOf(obj[SCORE_FIELD], obj[MYSCORE_FIELD], obj[MY_SCORE_FIELD]) +
+                    listOf(userinfo?.get(SCORE_FIELD), userinfo?.get(MYSCORE_FIELD), userinfo?.get(MY_SCORE_FIELD))
+
+            return candidates.firstNotNullOfOrNull(::numericScore)
+        }
+
+        private fun numericScore(value: JsonElement?): String? {
+            val primitive = value as? JsonPrimitive ?: return null
+            if (primitive is JsonNull) return null
+            val raw = primitive.contentOrNull?.trim().orEmpty()
+
+            return raw.takeIf { it.toLongOrNull() != null }
         }
 
         private fun classifyArray(payload: JsonArray): SessionStatus =
@@ -353,9 +492,13 @@ class SessionManager(
     private companion object {
         const val LOG_TAG = "Network"
         const val STATUS_FIELD = "status"
+        const val SCORE_FIELD = "score"
+        const val MYSCORE_FIELD = "myscore"
+        const val MY_SCORE_FIELD = "myScore"
+        const val USERINFO_FIELD = "userinfo"
         const val GUEST_STATUS = "guest"
         val ERROR_STATUSES = setOf("error", "fail", "failed", "false", "0", "-1")
-        val AUTH_EVIDENCE_FIELDS = setOf("uid", "username", "email", "tasks", "userinfo", "score")
+        val AUTH_EVIDENCE_FIELDS = setOf("uid", "username", "email", "tasks", USERINFO_FIELD, SCORE_FIELD)
         val NON_ACCOUNT_ENVELOPE_KEYS = setOf("message", "msg", "code", "error", "errno")
         const val PREF_KEY_STATUS = "session_status"
         const val PREF_KEY_SCORE = "score"

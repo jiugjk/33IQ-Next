@@ -7,6 +7,7 @@ import com.jiugjk.iq33.feature.favourite.domain.usecase.IsBookmarkedUseCase
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionJsonParser
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
+import com.jiugjk.iq33.feature.feed.data.repository.InMemoryAnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.QuestionAnswerUseCases
@@ -52,21 +53,21 @@ class WordBankViewModelTest {
             vm.onEvent(QuestionDetailEvent.DraftAnswerChanged("保"))
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("保"))
             advanceUntilIdle()
-            coVerify(exactly = 0) { submit(any(), any()) }
+            coVerify(exactly = 0) { submit(any(), any(), any()) }
             vm.onEvent(QuestionDetailEvent.CandidateToggled(2))
             advanceUntilIdle()
-            coVerify(exactly = 0) { submit(any(), any()) }
-            coEvery { submit(589_144, "保") } returns Result.Success(SubmitAnswerResult.AnswerAlreadyViewed)
+            coVerify(exactly = 0) { submit(any(), any(), any()) }
+            coEvery { submit(589_144, "保", any()) } returns Result.Success(SubmitAnswerResult.AnswerAlreadyViewed)
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("保"))
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("保"))
             advanceUntilIdle()
-            coVerify(exactly = 1) { submit(589_144, "保") }
+            coVerify(exactly = 1) { submit(589_144, "保", any()) }
             val content = vm.uiStateFlow.value as QuestionDetailUiState.Content
             content.detail.hasViewedAnswer shouldBeEqualTo true
             content.detail.isAnswered shouldBeEqualTo false
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("保"))
             advanceUntilIdle()
-            coVerify(exactly = 1) { submit(any(), any()) }
+            coVerify(exactly = 1) { submit(any(), any(), any()) }
         }
 
     @Test
@@ -79,7 +80,7 @@ class WordBankViewModelTest {
             flow.value = flow.value.copy(viewedAnswerIds = setOf(589_144))
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("保"))
             advanceUntilIdle()
-            coVerify(exactly = 0) { submit(any(), any()) }
+            coVerify(exactly = 0) { submit(any(), any(), any()) }
             (vm.uiStateFlow.value as QuestionDetailUiState.Content).canSelectChoice shouldBeEqualTo false
         }
 
@@ -95,6 +96,8 @@ class WordBankViewModelTest {
             QuestionAnswerUseCases(submit, mockk(), mockk(), mockk()),
             progressRepo,
             mockk(),
+            InMemoryAnswerRecordRepository(),
+            mockk(relaxed = true),
         ).also { store.put("detail", it) }
     }
 }

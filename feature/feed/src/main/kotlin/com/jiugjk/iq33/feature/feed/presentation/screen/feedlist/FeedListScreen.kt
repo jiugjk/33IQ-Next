@@ -118,8 +118,6 @@ private fun FeedListBody(
             onEvent = onEvent,
         )
 
-        HideAnsweredRow(uiState = uiState, onEvent = onEvent)
-
         BatchNotice(uiState = uiState)
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -269,6 +267,22 @@ private fun QuestionList(
                     Text(
                         text = stringResource(R.string.feed_load_more_failed),
                         color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+
+        // Automatic paging stopped on its own budget, not on an error: offer to keep going instead
+        // of quietly ending the list.
+        if (uiState.canContinuePaging) {
+            item {
+                TextButton(
+                    onClick = { onEvent(FeedListEvent.ContinuePagingRequested) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = Dimen.spaceM),
+                ) {
+                    Text(
+                        text = stringResource(R.string.feed_auto_paging_continue),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }

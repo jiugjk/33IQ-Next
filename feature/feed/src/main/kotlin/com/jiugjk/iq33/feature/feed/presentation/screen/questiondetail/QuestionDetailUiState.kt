@@ -28,6 +28,17 @@ internal sealed interface QuestionDetailUiState : BaseState {
         val submission: SubmissionState = SubmissionState.Idle,
         val hintReveal: RevealState<HintQuote, HintReveal> = RevealState.Idle,
         val answerReveal: RevealState<AnswerQuote, AnswerReveal> = RevealState.Idle,
+        /**
+         * Correct option remembered from this account's own history, independent of the reveal
+         * state: marking the right choice green must not depend on holding the analysis text.
+         */
+        val knownCorrectOption: String? = null,
+        /**
+         * Word-bank answer restored from history that could not be mapped back onto the current
+         * tiles (the server may return a different candidate array). Shown read-only instead of
+         * leaving the field blank under a "submitted" state.
+         */
+        val answerEcho: String = "",
         /** Guards against a double-tap firing two overlapping praise requests. */
         val isPraising: Boolean = false,
         /** Guards against overlapping bookmark writes for the same question. */
@@ -47,6 +58,13 @@ internal sealed interface QuestionDetailUiState : BaseState {
                 !detail.isSubmissionBlocked && !answerReveal.isBusy && !answerReveal.isRetryBlocked &&
                     !hintReveal.isBusy && submission !is SubmissionState.Submitting && submission !is SubmissionState.Done
 
+        /**
+         * Redo stays open only while the answer is still unknown to this account: once the analysis
+         * has been viewed there is nothing left to attempt, so the entry point goes away rather than
+         * offering an action the ViewModel would refuse.
+         */
+        val canRedo: Boolean get() = !detail.hasViewedAnswer
+
         val isWordBankReady: Boolean
             get() =
                 detail.questionType == QuestionType.WORD_BANK &&
@@ -57,18 +75,47 @@ internal sealed interface QuestionDetailUiState : BaseState {
         val wordBankAnswer: String
             get() = selectedCandidateIndices.mapNotNull { detail.answerCandidates.getOrNull(it) }.joinToString("")
 
+        /** What the word-bank field shows: the live selection, or the read-only history echo. */
+        val wordBankDisplayAnswer: String
+            get() = wordBankAnswer.ifEmpty { answerEcho }
+
+        /** Correct option to highlight: freshly revealed content first, then this account's history. */
+        val revealedCorrectOption: String?
+            get() =
+                (answerReveal as? RevealState.Revealed)
+                    ?.reveal
+                    ?.answerText
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: knownCorrectOption?.trim()?.takeIf { it.isNotEmpty() }
+
         val canStartAnswerReveal: Boolean
             get() =
                 !isSubmitting && !hintReveal.isBusy && !answerReveal.isBusy &&
-                    answerReveal !is RevealState.Revealed && !answerReveal.isRetryBlocked && !detail.isAnswerRevealPending
+                    answerReveal !is RevealState.Revealed && answerReveal !is RevealState.Entitled &&
+                    !answerReveal.isRetryBlocked && !detail.isAnswerRevealPending
 
         val canConfirmAnswerReveal: Boolean
             get() = !isSubmitting && !hintReveal.isBusy && answerReveal is RevealState.QuoteReady && !detail.isAnswerRevealPending
 
+        /**
+         * A fetch-only re-read is available: either a request that may already have been paid for,
+         * or content this account revealed earlier whose text this device does not hold. Neither
+         * path goes through the quote/pay endpoints.
+         */
         val canRecoverAnswerReveal: Boolean
             get() =
                 !isSubmitting && !hintReveal.isBusy && !answerReveal.isBusy && answerReveal !is RevealState.Revealed &&
-                    (detail.isAnswerRevealPending || answerReveal.isRetryBlocked)
+                    (detail.isAnswerRevealPending || answerReveal.isRetryBlocked || answerReveal is RevealState.Entitled)
+
+        /** True when the analysis was revealed before but its text is not cached on this device. */
+        val isAnswerRevealEntitled: Boolean get() = answerReveal is RevealState.Entitled
+
+        /**
+         * Same for the hint - but `showtips` charges on every call, so there is no free re-read: the
+         * entry point stays open and the UI says plainly that this costs 学识 again.
+         */
+        val isHintRevealEntitled: Boolean get() = hintReveal is RevealState.Entitled
 
         val canStartHintReveal: Boolean
             get() =

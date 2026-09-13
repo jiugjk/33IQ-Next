@@ -1,5 +1,6 @@
 package com.jiugjk.iq33.feature.feed.data.repository
 
+import com.jiugjk.iq33.feature.feed.domain.model.AnswerRecord
 import com.jiugjk.iq33.feature.feed.domain.model.FeedPosition
 import com.jiugjk.iq33.library.network.IqSession
 import com.jiugjk.iq33.library.network.SessionManager
@@ -19,35 +20,52 @@ class QuestionProgressRepositoryTest {
     private val preferences = FakeSharedPreferences()
     private val session = MutableStateFlow(IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:1"))
     private val manager = mockk<SessionManager> { every { sessionFlow } returns session }
-    private val sut = QuestionProgressRepositoryImpl(preferences, manager)
+    private val answerRecords = InMemoryAnswerRecordRepository { session.value.accountKey }
+    private val sut = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
 
     @Test
     fun `answered IDs and the filter survive repository recreation`() {
-        sut.recordAnswered(42, "uid:1")
-        sut.recordAnswered(42, "uid:1")
+        answerRecords.recordAnswer(accountKey = "uid:1", questionId = 42)
+        answerRecords.recordAnswer(accountKey = "uid:1", questionId = 42)
         sut.setHideAnswered(true)
 
-        val restored = QuestionProgressRepositoryImpl(preferences, manager)
+        val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
         restored.current.answeredIds shouldBeEqualTo setOf(42L)
         restored.current.hideAnswered shouldBeEqualTo true
     }
 
     @Test
     fun `viewed answer restrictions persist separately and respect account isolation`() {
-        sut.recordAnswerViewed(42, "uid:1")
-        sut.recordAnswered(43, "uid:1")
-        sut.recordAnswerViewed(43, "uid:1")
-        val restored = QuestionProgressRepositoryImpl(preferences, manager)
+        answerRecords.recordExplanationViewed("uid:1", 42)
+        answerRecords.recordAnswer(accountKey = "uid:1", questionId = 43)
+        answerRecords.recordExplanationViewed("uid:1", 43)
+        val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
         restored.current.viewedAnswerIds shouldBeEqualTo setOf(42L, 43L)
         restored.current.answeredIds shouldBeEqualTo setOf(43L)
         restored.current.isSubmissionBlocked(42) shouldBeEqualTo true
         session.value = IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:2")
         restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
-        restored.recordAnswerViewed(44, "uid:1")
+        answerRecords.recordExplanationViewed("uid:1", 44)
         restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
         session.value = IqSession(SessionStatus.GUEST)
-        restored.recordAnswerViewed(45, null)
+        answerRecords.recordExplanationViewed(null, 45)
         restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
+    }
+
+    @Test
+    fun `explanation-only migration shape keeps answeredAt null`() {
+        answerRecords.seed(
+            AnswerRecord(
+                questionId = 7,
+                accountKey = "uid:1",
+                viewedExplanation = true,
+                answeredAt = null,
+                updatedAt = 1L,
+            ),
+        )
+        sut.current.viewedAnswerIds shouldBeEqualTo setOf(7L)
+        sut.current.answeredIds shouldBeEqualTo emptySet()
+        answerRecords.get("uid:1", 7)?.answeredAt shouldBeEqualTo null
     }
 
     @Test
@@ -56,7 +74,7 @@ class QuestionProgressRepositoryTest {
         sut.setAnswerRevealPending(42, true, "uid:1") shouldBeEqualTo false
         sut.current.pendingAnswerRevealIds shouldBeEqualTo emptySet()
         sut.setAnswerRevealPending(42, true, "uid:1") shouldBeEqualTo true
-        val restored = QuestionProgressRepositoryImpl(preferences, manager)
+        val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
         restored.current.pendingAnswerRevealIds shouldBeEqualTo setOf(42L)
         preferences.failNextCommit = true
         restored.setAnswerRevealPending(42, false, "uid:1") shouldBeEqualTo false
@@ -68,13 +86,13 @@ class QuestionProgressRepositoryTest {
 
     @Test
     fun `account changes isolate records and reject stale responses`() {
-        sut.recordAnswered(42, "uid:1")
+        answerRecords.recordAnswer(accountKey = "uid:1", questionId = 42)
         session.value = IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:2")
-        sut.recordAnswered(43, "uid:1")
+        answerRecords.recordAnswer(accountKey = "uid:1", questionId = 43)
         sut.current.answeredIds shouldBeEqualTo emptySet()
-        sut.recordAnswered(44, "uid:2")
+        answerRecords.recordAnswer(accountKey = "uid:2", questionId = 44)
         session.value = IqSession(SessionStatus.GUEST)
-        sut.recordAnswered(45, null)
+        answerRecords.recordAnswer(accountKey = null, questionId = 45)
         sut.current.answeredIds shouldBeEqualTo emptySet()
         session.value = IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:1")
         sut.current.answeredIds shouldBeEqualTo setOf(42L)
@@ -84,7 +102,7 @@ class QuestionProgressRepositoryTest {
     fun `cursor and ordered recent IDs survive restart and are isolated by category and account`() {
         val position = FeedPosition("https://www.33iq.com/question/?cursor=abc", linkedSetOf(30, 2, 11))
         sut.saveFeedPosition("all", position, "uid:1")
-        val restored = QuestionProgressRepositoryImpl(preferences, manager)
+        val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
         restored.feedPosition("all") shouldBeEqualTo position
         restored.feedPosition("all").lastQuestionIds.toList() shouldBeEqualTo listOf(30L, 2L, 11L)
         restored.feedPosition("logic") shouldBeEqualTo FeedPosition()
@@ -95,13 +113,20 @@ class QuestionProgressRepositoryTest {
     }
 
     @Test
+    fun `clearFeedPosition drops cursor and recent ids`() {
+        sut.saveFeedPosition("all", FeedPosition("https://next", linkedSetOf(1, 2)), "uid:1")
+        sut.clearFeedPosition("all", "uid:1")
+        sut.feedPosition("all") shouldBeEqualTo FeedPosition()
+    }
+
+    @Test
     fun `answering and toggling the filter publish progress immediately`() =
         runTest {
             val updates = mutableListOf<Set<Long>>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 sut.progress.collect { updates += it.answeredIds }
             }
-            sut.recordAnswered(42, "uid:1")
+            answerRecords.recordAnswer(accountKey = "uid:1", questionId = 42)
             sut.setHideAnswered(true)
             updates.last() shouldBeEqualTo setOf(42L)
         }

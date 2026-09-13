@@ -28,7 +28,7 @@ import androidx.navigation.toRoute
 import com.jiugjk.iq33.app.BuildConfig
 import com.jiugjk.iq33.app.presentation.util.NavigationDestinationLogger
 import com.jiugjk.iq33.feature.auth.presentation.screen.login.LoginScreen
-import com.jiugjk.iq33.feature.favourite.presentation.screen.favourite.FavouriteScreen
+import com.jiugjk.iq33.app.presentation.library.LibraryScreen
 import com.jiugjk.iq33.feature.feed.presentation.screen.feedlist.FeedListScreen
 import com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail.QuestionDetailScreen
 import com.jiugjk.iq33.feature.feed.presentation.screen.search.SearchScreen
@@ -137,7 +137,7 @@ private fun NavController.buildAppNavGraph(): NavGraph =
             )
         }
         composable<NavigationRoute.Favourites> {
-            FavouriteScreen(
+            LibraryScreen(
                 onQuestionClick = { questionId ->
                     navigate(NavigationRoute.QuestionDetail(questionId))
                 },

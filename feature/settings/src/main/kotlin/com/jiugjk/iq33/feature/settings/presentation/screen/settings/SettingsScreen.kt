@@ -4,10 +4,22 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import java.util.Date
+import java.text.SimpleDateFormat
+import com.jiugjk.iq33.library.network.KnowledgeChangeEntry
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,12 +38,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -63,29 +78,47 @@ fun SettingsScreen(
             is SettingsUiState.Content ->
                 SettingsContent(
                     uiState = currentUiState,
+                    viewModel = viewModel,
                     onNavigateToAboutLibraries = onNavigateToAboutLibraries,
                     onNavigateToLogin = onNavigateToLogin,
-                    onThemeModeSelect = viewModel::onThemeModeSelected,
-                    onLogoutClick = viewModel::onLogoutClick,
                 )
         }
     }
 }
 
+@Suppress("LongMethod")
 @Composable
 private fun SettingsContent(
     uiState: SettingsUiState.Content,
+    viewModel: SettingsViewModel,
     onNavigateToAboutLibraries: () -> Unit,
     onNavigateToLogin: () -> Unit,
-    onThemeModeSelect: (ThemeMode) -> Unit,
-    onLogoutClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(vertical = 8.dp),
     ) {
-        AccountCard(session = uiState.session, onNavigateToLogin = onNavigateToLogin, onLogoutClick = onLogoutClick)
+        AccountCard(
+            session = uiState.session,
+            knowledgeChanges = uiState.knowledgeChanges,
+            knowledgeExpanded = uiState.knowledgeExpanded,
+            onKnowledgeExpandedChange = viewModel::onKnowledgeExpandedChanged,
+            onNavigateToLogin = onNavigateToLogin,
+            onLogoutClick = viewModel::onLogoutClick,
+        )
 
-        ThemeCard(themeMode = uiState.themeMode, onThemeModeSelect = onThemeModeSelect)
+        ThemeCard(themeMode = uiState.themeMode, onThemeModeSelect = viewModel::onThemeModeSelected)
+
+        FeedbackCard(
+            animationsEnabled = uiState.animationsEnabled,
+            hapticsEnabled = uiState.hapticsEnabled,
+            onAnimationsChange = viewModel::onAnimationsChanged,
+            onHapticsChange = viewModel::onHapticsChanged,
+        )
+
+        QuizPrefsCard(
+            hideAnswered = uiState.hideAnswered,
+            onHideAnsweredChange = viewModel::onHideAnsweredChanged,
+        )
 
         val context = LocalContext.current
 
@@ -131,9 +164,13 @@ private fun SettingsContent(
     }
 }
 
+@Suppress("LongParameterList", "LongMethod", "CognitiveComplexMethod")
 @Composable
 private fun AccountCard(
     session: IqSession,
+    knowledgeChanges: List<KnowledgeChangeEntry>,
+    knowledgeExpanded: Boolean,
+    onKnowledgeExpandedChange: (Boolean) -> Unit,
     onNavigateToLogin: () -> Unit,
     onLogoutClick: () -> Unit,
 ) {
@@ -143,41 +180,224 @@ private fun AccountCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(Dimen.spaceL),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Default.AccountCircle,
-                contentDescription = null,
-                modifier = Modifier.padding(end = Dimen.spaceM),
-                tint = MaterialTheme.colorScheme.primary,
-            )
+        Column(modifier = Modifier.fillMaxWidth().padding(Dimen.spaceL)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = Dimen.spaceM),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
 
-            Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    if (session.isLoggedIn) {
+                        Text(stringResource(R.string.settings_logged_in), style = MaterialTheme.typography.bodyLarge)
+                        val score = session.score
+                        val canExpand = score != null || knowledgeChanges.isNotEmpty()
+                        if (score != null) {
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .padding(top = Dimen.spaceS)
+                                        .then(
+                                            if (canExpand) {
+                                                Modifier.clickable { onKnowledgeExpandedChange(!knowledgeExpanded) }
+                                            } else {
+                                                Modifier
+                                            },
+                                        ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_score, score),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (canExpand) {
+                                    Icon(
+                                        imageVector = if (knowledgeExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription =
+                                            stringResource(
+                                                if (knowledgeExpanded) {
+                                                    R.string.settings_knowledge_collapse_cd
+                                                } else {
+                                                    R.string.settings_knowledge_expand_cd
+                                                },
+                                            ),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .padding(top = Dimen.spaceS)
+                                        .then(
+                                            if (knowledgeChanges.isNotEmpty()) {
+                                                Modifier.clickable { onKnowledgeExpandedChange(!knowledgeExpanded) }
+                                            } else {
+                                                Modifier
+                                            },
+                                        ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_score_label),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .padding(start = Dimen.spaceS)
+                                            .width(48.dp)
+                                            .height(14.dp)
+                                            .background(
+                                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                                shape = RoundedCornerShape(4.dp),
+                                            ),
+                                )
+                                if (knowledgeChanges.isNotEmpty()) {
+                                    Icon(
+                                        imageVector = if (knowledgeExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = stringResource(R.string.settings_knowledge_expand_cd),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Text(stringResource(R.string.settings_not_logged_in), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+
                 if (session.isLoggedIn) {
-                    Text(stringResource(R.string.settings_logged_in), style = MaterialTheme.typography.bodyLarge)
-                    val score = session.score
-                    if (score != null) {
-                        Text(
-                            text = stringResource(R.string.settings_score, score),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    TextButton(onClick = onLogoutClick) {
+                        Text(stringResource(R.string.settings_logout))
                     }
                 } else {
-                    Text(stringResource(R.string.settings_not_logged_in), style = MaterialTheme.typography.bodyLarge)
+                    Button(onClick = onNavigateToLogin) {
+                        Text(stringResource(R.string.settings_login))
+                    }
                 }
             }
 
-            if (session.isLoggedIn) {
-                TextButton(onClick = onLogoutClick) {
-                    Text(stringResource(R.string.settings_logout))
+            AnimatedVisibility(visible = session.isLoggedIn && knowledgeExpanded) {
+                KnowledgeChangesPanel(changes = knowledgeChanges)
+            }
+        }
+    }
+}
+
+@Composable
+private fun KnowledgeChangesPanel(changes: List<KnowledgeChangeEntry>) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM)) {
+        HorizontalDivider()
+        Text(
+            text = stringResource(R.string.settings_knowledge_expand),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(top = Dimen.spaceM),
+        )
+        if (changes.isEmpty()) {
+            Text(
+                text = stringResource(R.string.settings_knowledge_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Dimen.spaceS),
+            )
+        } else {
+            val locale = LocalConfiguration.current.locales[0]
+            val formatter = remember(locale) { SimpleDateFormat("MM-dd HH:mm", locale) }
+            changes.forEach { entry ->
+                val sign = if (entry.delta > 0) "+" else ""
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceS),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text =
+                            if (entry.title.isNotBlank()) {
+                                "${entry.title} · $sign${entry.delta}"
+                            } else {
+                                stringResource(R.string.settings_knowledge_item, entry.questionId, sign, entry.delta)
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = formatter.format(Date(entry.at)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-            } else {
-                Button(onClick = onNavigateToLogin) {
-                    Text(stringResource(R.string.settings_login))
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuizPrefsCard(
+    hideAnswered: Boolean,
+    onHideAnsweredChange: (Boolean) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(Dimen.spaceL)) {
+            Text(text = stringResource(R.string.settings_quiz_prefs_title), style = MaterialTheme.typography.bodyLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = Dimen.spaceM)) {
+                    Text(stringResource(R.string.settings_hide_answered))
+                    Text(
+                        text = stringResource(R.string.settings_hide_answered_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
+                Switch(checked = hideAnswered, onCheckedChange = onHideAnsweredChange)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedbackCard(
+    animationsEnabled: Boolean,
+    hapticsEnabled: Boolean,
+    onAnimationsChange: (Boolean) -> Unit,
+    onHapticsChange: (Boolean) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(Dimen.spaceL)) {
+            Text(text = stringResource(R.string.settings_feedback_title), style = MaterialTheme.typography.bodyLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.settings_feedback_animations), modifier = Modifier.weight(1f))
+                Switch(checked = animationsEnabled, onCheckedChange = onAnimationsChange)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceS),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.settings_feedback_haptics), modifier = Modifier.weight(1f))
+                Switch(checked = hapticsEnabled, onCheckedChange = onHapticsChange)
             }
         }
     }
@@ -274,11 +494,12 @@ private fun openGithubRepository(context: Context) {
 @Preview
 @Composable
 private fun SettingsScreenPreview() {
-    SettingsContent(
-        uiState = SettingsUiState.Content(),
-        onNavigateToAboutLibraries = { },
+    AccountCard(
+        session = IqSession(),
+        knowledgeChanges = emptyList(),
+        knowledgeExpanded = false,
+        onKnowledgeExpandedChange = { },
         onNavigateToLogin = { },
-        onThemeModeSelect = { },
         onLogoutClick = { },
     )
 }

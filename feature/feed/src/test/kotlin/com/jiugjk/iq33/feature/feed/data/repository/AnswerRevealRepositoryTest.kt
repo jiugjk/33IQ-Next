@@ -27,9 +27,10 @@ class AnswerRevealRepositoryTest {
     private val preferences = FakeSharedPreferences()
     private val session = MutableStateFlow(IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:1"))
     private val manager = mockk<SessionManager> { every { sessionFlow } returns session }
-    private val progress = QuestionProgressRepositoryImpl(preferences, manager)
+    private val answerRecords = InMemoryAnswerRecordRepository()
+    private val progress = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
     private val remote = mockk<AnswerRevealRemoteDataSource>()
-    private val sut = AnswerRevealRepositoryImpl(remote, progress)
+    private val sut = AnswerRevealRepositoryImpl(remote, progress, answerRecords)
     private val quote = AnswerQuote(1, 60, true)
     private val reveal = AnswerReveal("A", "解析")
 
@@ -50,6 +51,37 @@ class AnswerRevealRepositoryTest {
             progress.current.viewedAnswerIds shouldBeEqualTo setOf(1L)
             progress.current.answeredIds shouldBeEqualTo emptySet()
             progress.current.pendingAnswerRevealIds shouldBeEqualTo emptySet()
+        }
+
+    @Test
+    fun `content this account already revealed is re-read without another quote or payment`() =
+        runTest {
+            coEvery { remote.quote(1) } returns quote
+            coEvery { remote.pay(1) } returns Unit
+            coEvery { remote.fetch(1) } returns reveal
+            sut.reveal(quote) shouldBeEqualTo Result.Success(reveal)
+            // The stored record is the entitlement: the pending latch is already cleared by now.
+            progress.current.pendingAnswerRevealIds shouldBeEqualTo emptySet()
+            answerRecords.get("uid:1", 1)?.explanationText shouldBeEqualTo "解析"
+
+            sut.recover(1) shouldBeEqualTo Result.Success(reveal)
+
+            // Exactly the one quote and the one payment from the original reveal.
+            coVerify(exactly = 1) { remote.quote(1) }
+            coVerify(exactly = 1) { remote.pay(1) }
+            coVerify(exactly = 2) { remote.fetch(1) }
+        }
+
+    @Test
+    fun `a question never revealed by this account still goes through the quote flow`() =
+        runTest {
+            coEvery { remote.quote(1) } returns quote
+            coEvery { remote.fetch(1) } returns reveal
+
+            (sut.recover(1) as Result.Failure).afterSideEffect shouldBeEqualTo false
+
+            coVerify(exactly = 0) { remote.pay(any()) }
+            coVerify(exactly = 0) { remote.fetch(any()) }
         }
 
     @Test
@@ -104,8 +136,8 @@ class AnswerRevealRepositoryTest {
             (sut.reveal(quote) as Result.Failure).afterSideEffect shouldBeEqualTo true
             progress.current.pendingAnswerRevealIds shouldBeEqualTo setOf(1L)
             progress.current.viewedAnswerIds shouldBeEqualTo emptySet()
-            val restoredProgress = QuestionProgressRepositoryImpl(preferences, manager)
-            val restored = AnswerRevealRepositoryImpl(remote, restoredProgress)
+            val restoredProgress = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
+            val restored = AnswerRevealRepositoryImpl(remote, restoredProgress, answerRecords)
             coEvery { remote.fetch(1) } returns reveal
             restored.recover(1) shouldBeEqualTo Result.Success(reveal)
             coVerify(exactly = 1) { remote.pay(1) }
@@ -138,7 +170,7 @@ class AnswerRevealRepositoryTest {
             val job = launch { sut.reveal(quote) }
             started.await()
             job.cancelAndJoin()
-            val restored = QuestionProgressRepositoryImpl(preferences, manager)
+            val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
             restored.current.pendingAnswerRevealIds shouldBeEqualTo setOf(1L)
             restored.current.isSubmissionBlocked(1) shouldBeEqualTo true
             coVerify(exactly = 0) { remote.fetch(any()) }

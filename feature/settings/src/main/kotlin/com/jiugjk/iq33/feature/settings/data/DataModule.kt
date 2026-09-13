@@ -1,6 +1,10 @@
 package com.jiugjk.iq33.feature.settings.data
 
+import com.jiugjk.iq33.feature.settings.data.repository.FeedbackPreferencesRepositoryImpl
+import com.jiugjk.iq33.feature.settings.data.repository.QuizFilterPreferencesRepositoryImpl
 import com.jiugjk.iq33.feature.settings.data.repository.ThemeRepositoryImpl
+import com.jiugjk.iq33.feature.settings.domain.repository.FeedbackPreferencesRepository
+import com.jiugjk.iq33.feature.settings.domain.repository.QuizFilterPreferencesRepository
 import com.jiugjk.iq33.feature.settings.domain.repository.ThemeRepository
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
@@ -10,4 +14,6 @@ import org.koin.dsl.module
 internal val dataModule =
     module {
         singleOf(::ThemeRepositoryImpl) { bind<ThemeRepository>() }
+        singleOf(::FeedbackPreferencesRepositoryImpl) { bind<FeedbackPreferencesRepository>() }
+        singleOf(::QuizFilterPreferencesRepositoryImpl) { bind<QuizFilterPreferencesRepository>() }
     }

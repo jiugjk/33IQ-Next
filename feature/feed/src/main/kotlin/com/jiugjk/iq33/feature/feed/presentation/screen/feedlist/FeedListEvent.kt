@@ -25,4 +25,10 @@ internal sealed interface FeedListEvent {
 
     /** Explicit retry of a page whose request failed. */
     data object LoadMoreRetried : FeedListEvent
+
+    /** Explicitly extends an automatic walk that was paused after spending its request budget. */
+    data object ContinuePagingRequested : FeedListEvent
+
+    /** Empty-state shortcut: turn off hide-filter and refresh. */
+    data object ShowAllQuestions : FeedListEvent
 }

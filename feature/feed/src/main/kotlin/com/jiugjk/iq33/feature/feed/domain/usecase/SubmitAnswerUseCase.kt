@@ -10,5 +10,6 @@ internal class SubmitAnswerUseCase(
     suspend operator fun invoke(
         questionId: Long,
         answer: String,
-    ): Result<SubmitAnswerResult> = answerRepository.submitAnswer(questionId, answer)
+        title: String = "",
+    ): Result<SubmitAnswerResult> = answerRepository.submitAnswer(questionId, answer, title)
 }
