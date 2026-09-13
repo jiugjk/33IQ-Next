@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import com.jiugjk.iq33.feature.base.common.res.Dimen
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.TagChipRow
 import com.jiugjk.iq33.feature.feed.R
+import androidx.annotation.StringRes
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionRestrictions
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
 
 /**
@@ -37,6 +39,8 @@ import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
  *   「对联大全」every question carries the 对联大全 tag, so printing it on all of them is noise. Null
  *   (the default) shows every tag, which is what the bookmark and search lists want - there the tag
  *   is the only clue to where a question came from.
+ * @param restrictions locally confirmed answer restrictions, shown as a badge. The default carries
+ *   no flags, which means "nothing recorded on this device" rather than "confirmed answerable".
  */
 @Composable
 fun QuestionCard(
@@ -44,6 +48,7 @@ fun QuestionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     hiddenTag: String? = null,
+    restrictions: QuestionRestrictions = QuestionRestrictions(),
 ) {
     val tags = question.tags.filterNot { tag -> tag == hiddenTag }
 
@@ -57,6 +62,14 @@ fun QuestionCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.padding(Dimen.spaceL)) {
+            if (restrictions.hasAny) {
+                Text(
+                    text = stringResource(restrictions.badgeLabelRes()),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = Dimen.spaceS),
+                )
+            }
             Text(
                 text = question.title,
                 style = MaterialTheme.typography.titleMedium,
@@ -114,6 +127,16 @@ private fun StatItem(
 }
 
 private val StatIconSize = 16.dp
+
+/** Answered and viewed-analysis are independent, so a question can genuinely carry both. */
+@StringRes
+private fun QuestionRestrictions.badgeLabelRes(): Int =
+    when {
+        isAnswerRevealPending -> R.string.feed_answer_pending_label
+        isAnswered && hasViewedAnswer -> R.string.feed_answered_and_viewed_label
+        hasViewedAnswer -> R.string.feed_answer_viewed_label
+        else -> R.string.feed_answered_label
+    }
 
 @Preview
 @Composable

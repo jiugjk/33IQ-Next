@@ -8,19 +8,26 @@ import com.jiugjk.iq33.feature.favourite.domain.repository.BookmarkResult
 import com.jiugjk.iq33.feature.favourite.domain.usecase.IsBookmarkedUseCase
 import com.jiugjk.iq33.feature.favourite.domain.usecase.ToggleBookmarkUseCase
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
+import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase
+import com.jiugjk.iq33.feature.feed.domain.usecase.AnswerRevealUseCases
 import com.jiugjk.iq33.feature.feed.domain.usecase.QuestionAnswerUseCases
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 
 internal class QuestionDetailViewModel(
     private val getQuestionDetailUseCase: GetQuestionDetailUseCase,
     private val isBookmarkedUseCase: IsBookmarkedUseCase,
     private val toggleBookmarkUseCase: ToggleBookmarkUseCase,
     private val questionAnswerUseCases: QuestionAnswerUseCases,
+    private val questionProgressRepository: QuestionProgressRepository,
+    private val answerRevealUseCases: AnswerRevealUseCases,
 ) : BaseViewModel<QuestionDetailUiState, QuestionDetailAction>(QuestionDetailUiState.Loading) {
     private var loadJob: Job? = null
     private var loadedQuestionId: Long? = null
+    private var accountKey = questionProgressRepository.current.accountKey
 
     private val currentState: () -> QuestionDetailUiState = { uiStateFlow.value }
 
@@ -30,8 +37,40 @@ internal class QuestionDetailViewModel(
     private val hintRevealing = SideWorkSlot(viewModelScope, currentState)
     private val praising = SideWorkSlot(viewModelScope, currentState)
 
+    private val answerReveal =
+        AnswerRevealFlow(
+            scope = viewModelScope,
+            currentState = currentState,
+            answerRevealUseCases = answerRevealUseCases,
+            questionProgressRepository = questionProgressRepository,
+            sendAction = ::sendAction,
+        )
+
     /** Everything a fresh load has to abandon - all of it belongs to the question being replaced. */
-    private val sideWork = listOf(submission, bookmarking, hintQuoting, hintRevealing, praising)
+    private val sideWork = listOf(submission, bookmarking, hintQuoting, hintRevealing, praising) + answerReveal.slots
+
+    init {
+        viewModelScope.launch {
+            questionProgressRepository.progress.collect { progress ->
+                val changed = accountKey != progress.accountKey
+                accountKey = progress.accountKey
+                loadedQuestionId?.let { id ->
+                    if (changed) {
+                        load(id, forceReload = true)
+                    } else {
+                        sendAction(
+                            QuestionDetailAction.AnsweredChanged(
+                                id,
+                                id in progress.answeredIds,
+                                id in progress.viewedAnswerIds,
+                                id in progress.pendingAnswerRevealIds,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Loads [id], skipping the work when this question is already loaded or still loading.
@@ -53,15 +92,20 @@ internal class QuestionDetailViewModel(
         loadJob?.cancel()
         sideWork.forEach { it.cancel() }
         loadedQuestionId = id
+        val owner = questionProgressRepository.current.accountKey
+        accountKey = owner
 
         sendAction(QuestionDetailAction.LoadStart)
 
         loadJob =
             viewModelScope.launch {
-                when (val result = getQuestionDetailUseCase(id)) {
-                    is Result.Success -> sendAction(loadSuccessAction(result.value, id))
-                    is Result.Failure -> sendAction(QuestionDetailAction.LoadFailure)
-                }
+                val action =
+                    when (val result = getQuestionDetailUseCase(id)) {
+                        is Result.Success -> loadSuccessAction(result.value, id)
+                        is Result.Failure -> QuestionDetailAction.LoadFailure
+                    }
+                coroutineContext.ensureActive()
+                if (owner == questionProgressRepository.current.accountKey) sendAction(action)
             }
     }
 
@@ -74,18 +118,39 @@ internal class QuestionDetailViewModel(
      * past `canSelectChoice`, which is the same rule applied where the state lives.
      */
     fun onEvent(event: QuestionDetailEvent) {
+        if (accountKey != questionProgressRepository.current.accountKey) {
+            loadedQuestionId?.let { load(it, forceReload = true) }
+            return
+        }
         val content = uiStateFlow.value as? QuestionDetailUiState.Content
 
         when (event) {
-            QuestionDetailEvent.RetryRequested -> loadedQuestionId?.let { id -> load(id, forceReload = true) }
             is QuestionDetailEvent.ChoiceSelected -> sendAction(QuestionDetailAction.ChoiceSelected(event.choiceId))
             is QuestionDetailEvent.DraftAnswerChanged -> sendAction(QuestionDetailAction.DraftAnswerChanged(event.text))
             is QuestionDetailEvent.AnswerSubmitted -> submitAnswer(content, event.answer)
+            is QuestionDetailEvent.CandidateToggled -> sendAction(QuestionDetailAction.CandidateToggled(event.index))
+            else -> onSimpleEvent(event, content)
+        }
+    }
+
+    /** The parameterless events, split out so [onEvent] stays within one screen of branching. */
+    private fun onSimpleEvent(
+        event: QuestionDetailEvent,
+        content: QuestionDetailUiState.Content?,
+    ) {
+        when (event) {
+            QuestionDetailEvent.RetryRequested -> loadedQuestionId?.let { id -> load(id, forceReload = true) }
+            QuestionDetailEvent.CandidatesCleared -> sendAction(QuestionDetailAction.CandidatesCleared)
             QuestionDetailEvent.BookmarkToggled -> toggleBookmark(content)
+            QuestionDetailEvent.AnswerQuoteRequested -> answerReveal.requestQuote(content)
+            QuestionDetailEvent.AnswerRevealConfirmed -> answerReveal.reveal(content, recovery = false)
+            QuestionDetailEvent.AnswerRevealRecovered -> answerReveal.reveal(content, recovery = true)
+            QuestionDetailEvent.AnswerFlowDismissed -> sendAction(AnswerRevealAction.Dismissed)
             QuestionDetailEvent.HintQuoteRequested -> requestHintQuote(content)
             QuestionDetailEvent.HintRevealConfirmed -> confirmHintReveal(content)
             QuestionDetailEvent.PraiseClicked -> praise(content)
             QuestionDetailEvent.HintFlowDismissed -> sendAction(QuestionDetailAction.HintFlowDismissed)
+            else -> Unit
         }
     }
 
@@ -94,11 +159,23 @@ internal class QuestionDetailViewModel(
         content: QuestionDetailUiState.Content?,
         answer: String,
     ) {
-        if (content?.canSelectChoice != true || answer.isBlank() || submission.isActive) return
+        if (content?.canSubmitAnswer(answer) != true || submission.isActive) return
 
         val questionId = content.detail.id
+        val progress = questionProgressRepository.current
+        if (progress.isSubmissionBlocked(questionId)) {
+            sendAction(
+                QuestionDetailAction.AnsweredChanged(
+                    questionId,
+                    questionId in progress.answeredIds,
+                    questionId in progress.viewedAnswerIds,
+                    questionId in progress.pendingAnswerRevealIds,
+                ),
+            )
+            return
+        }
 
-        submission.start(questionId, { it.canSelectChoice }) {
+        submission.start(questionId, { it.canSubmitAnswer(answer) }) {
             sendAction(QuestionDetailAction.SubmissionStarted(questionId, answer))
 
             // The reducer is what decides whether the submission really started; if it refused, no

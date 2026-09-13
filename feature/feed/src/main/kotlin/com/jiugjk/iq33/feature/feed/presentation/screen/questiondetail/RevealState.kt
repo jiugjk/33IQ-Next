@@ -3,10 +3,7 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
 
 /**
- * Quote-then-reveal flow state for the paid-hint feature.
- *
- * Still generic over its quote and reveal types: it was written for two flows and the shape is what
- * makes the reducers' guards readable, but the paid-answer flow it also served has been removed.
+ * Quote-then-reveal flow state shared by the independent hint and answer-analysis features.
  */
 internal sealed interface RevealState<out Quote, out Reveal> {
     data object Idle : RevealState<Nothing, Nothing>

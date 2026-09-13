@@ -49,9 +49,11 @@ object IqConstants {
     // second submission for the same question with {"status":"repeat"}.
     const val SUBMIT_ANSWER_URL = "$BASE_URL/index/commentdeal"
 
-    // The paid answer-reveal endpoints (payforshowanswer / showanswertrue) are deliberately absent:
-    // the feature they backed was removed, and an endpoint constant with no caller is an invitation
-    // to wire it up again. The HAR findings that documented them are recorded in git history.
+    // Web quote/payment/reveal sequence confirmed by the supplied HAR and public index.js.
+    // These web requests do not use ACTION_QUERY_SUFFIX. Never use payment/reveal as a history probe.
+    const val ANSWER_QUOTE_URL = "$BASE_URL/index/showanswernew"
+    const val ANSWER_PAYMENT_URL = "$BASE_URL/index/payforshowanswer"
+    const val ANSWER_REVEAL_URL = "$BASE_URL/index/showanswertrue"
 
     // Paid-hint flow: showtipsbuy returns a price quote (with separate normal/member/life-member
     // 学识 costs), showtips returns the actual hint text.

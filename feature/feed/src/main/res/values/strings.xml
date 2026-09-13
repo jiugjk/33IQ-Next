@@ -15,6 +15,17 @@
     <string name="feed_comment_count_content_description">评论数</string>
     <string name="feed_collect_count_content_description">收藏数</string>
     <string name="feed_analysis_title">解析</string>
+    <string name="feed_reveal_answer_button">查看解析</string>
+    <string name="feed_answer_content_title">答案</string>
+    <string name="feed_answer_quote_cost">服务器报价：%1$d 学识（0 表示无需支付学识）</string>
+    <string name="feed_answer_reveal_warning">查看解析后将无法再答题，未作答时还可能计入错题。是否确认查看？</string>
+    <string name="feed_answer_confirm">确认查看</string>
+    <string name="feed_answer_loading">正在请求，请稍候…</string>
+    <string name="feed_answer_pending_label">解析请求结果待确认</string>
+    <string name="feed_answer_recover">恢复获取解析（不重复支付）</string>
+    <string name="feed_answer_pending_notice">上次请求可能已支付学识或记录查看。恢复只读取解析，不会再次支付；若仍失败，请先在官网核实。</string>
+    <string name="feed_answer_flow_failed">未能完成请求。请检查登录、学识余额或服务器限制，也可能是报价已变化；可重新获取报价。</string>
+    <string name="feed_analysis_missing">服务器未提供解析内容</string>
     <string name="feed_right_ratio">正确率 %1$d%%</string>
     <string name="feed_question_image_content_description">题目配图</string>
     <string name="feed_image_close">关闭图片</string>
@@ -23,6 +34,18 @@
     <string name="feed_image_saved">图片已保存到相册</string>
     <string name="feed_image_save_failed">保存失败，请稍后重试</string>
     <string name="feed_image_save_permission_denied">未授予存储权限，无法保存图片</string>
+    <string name="feed_answered_label">已答</string>
+    <string name="feed_answer_viewed_label">已看解析</string>
+    <string name="feed_answered_and_viewed_label">已答 · 已看解析</string>
+    <string name="feed_hide_answered">隐藏已答或已看解析的题目</string>
+    <string name="feed_answered_local_notice">仅标记本机已确认的答题及看解析记录；网页、其他设备及旧版历史暂未同步。</string>
+    <string name="feed_answered_unknown_notice">本机暂无该题答题或看解析记录，服务器历史状态尚未同步。</string>
+    <string name="feed_refresh_failed">刷新失败，已保留当前题目，请下拉重试。</string>
+    <string name="feed_no_new_title">本次没有新题目</string>
+    <string name="feed_no_new_content">本次未找到新题目，可再次下拉刷新或切换分类。</string>
+    <string name="feed_all_answered_hidden">本批题目暂不可作答，已隐藏</string>
+    <string name="feed_hidden_description">可继续加载，或关闭隐藏开关查看。</string>
+    <string name="feed_next_batch">加载下一批</string>
     <string name="feed_retry">重试</string>
     <string name="feed_load_more_failed">加载更多失败，点击重试</string>
     <string name="feed_load_failed_title">加载失败</string>
@@ -37,6 +60,7 @@
     <string name="feed_submission_correct_no_score">回答正确！（本次学识变化未返回）</string>
     <string name="feed_submission_wrong_no_score">回答错误。（本次学识变化未返回）</string>
     <string name="feed_submission_already_answered">您已经回答过该题，无法重复提交</string>
+    <string name="feed_submission_answer_viewed">您已看过该题解析，无法再答题</string>
     <string name="feed_submission_limit_reached">已达到今日答题上限</string>
     <string name="feed_submission_failed">提交失败，请检查网络或登录状态后重试</string>
 
@@ -50,6 +74,11 @@
     <string name="feed_flow_failed">请求失败，请检查网络或登录状态后重试</string>
     <string name="feed_flow_failed_after_side_effect">请求未完成，但学识可能已经扣除。请先刷新本题，不要立即重试。</string>
     <string name="feed_open_answer_label">填写答案</string>
+    <string name="feed_word_bank_length">答案：%1$d 个字</string>
+    <string name="feed_word_bank_placeholder">点击下方候选字填入答案</string>
+    <string name="feed_word_bank_undo">撤销</string>
+    <string name="feed_word_bank_clear">清空</string>
+    <string name="feed_word_bank_unavailable">候选字或答案长度未完整返回，暂不能作答，请重试。</string>
 
     <string name="feed_category_all">全部</string>
     <string name="feed_category_featured">精选题目</string>

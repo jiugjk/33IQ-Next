@@ -32,6 +32,11 @@ internal fun questionAsPlainText(detail: QuestionDetail): String =
             appendLine(detail.bodyText)
         }
 
+        if (detail.answerCandidates.isNotEmpty()) {
+            appendLine()
+            appendLine(detail.answerCandidates.joinToString(" · "))
+        }
+
         if (detail.choices.isNotEmpty()) {
             appendLine()
             detail.choices.forEach { choice -> appendLine("${choice.id}. ${choice.text}") }

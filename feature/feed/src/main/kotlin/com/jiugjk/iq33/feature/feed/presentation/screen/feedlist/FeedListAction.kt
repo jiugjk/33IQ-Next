@@ -3,6 +3,7 @@ package com.jiugjk.iq33.feature.feed.presentation.screen.feedlist
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
 import com.jiugjk.iq33.feature.feed.domain.model.Category
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
 import com.jiugjk.iq33.feature.feed.presentation.paging.mergeUniqueById
 
 /*
@@ -11,22 +12,38 @@ import com.jiugjk.iq33.feature.feed.presentation.paging.mergeUniqueById
  * is dropped, instead of appending another category's questions to the visible list.
  */
 internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
+    class ProgressChanged(
+        private val progress: QuestionProgress,
+    ) : FeedListAction {
+        override fun reduce(state: FeedListUiState): FeedListUiState =
+            when (state) {
+                is FeedListUiState.Loading -> state.copy(progress = progress)
+                is FeedListUiState.Error -> state.copy(progress = progress)
+                is FeedListUiState.Content -> state.copy(progress = progress)
+            }
+    }
+
     class LoadStart(
         private val category: Category,
     ) : FeedListAction {
-        override fun reduce(state: FeedListUiState) = FeedListUiState.Loading(category)
+        override fun reduce(state: FeedListUiState) = FeedListUiState.Loading(category, state.progress)
     }
 
     class LoadSuccess(
         private val category: Category,
         private val questions: List<QuestionSummary>,
+        private val nextPageUrl: String? = null,
+        private val hasMore: Boolean = questions.isNotEmpty(),
     ) : FeedListAction {
         override fun reduce(state: FeedListUiState): FeedListUiState =
             FeedListUiState.Content(
                 selectedCategory = category,
                 questions = questions,
                 page = FIRST_PAGE,
-                canLoadMore = questions.isNotEmpty(),
+                canLoadMore = hasMore,
+                nextPageUrl = nextPageUrl,
+                progress = state.progress,
+                batchRevision = ((state as? FeedListUiState.Content)?.batchRevision ?: 0) + 1,
             )
     }
 
@@ -35,7 +52,7 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
     ) : FeedListAction {
         override fun reduce(state: FeedListUiState): FeedListUiState =
             if (state is FeedListUiState.Content && state.selectedCategory == category) {
-                state.copy(isRefreshing = true, isLoadingMore = false, loadMoreFailed = false)
+                state.copy(isRefreshing = true, isLoadingMore = false, loadMoreFailed = false, refreshFailed = false, noNewContent = false)
             } else {
                 state
             }
@@ -46,7 +63,7 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
     ) : FeedListAction {
         override fun reduce(state: FeedListUiState): FeedListUiState =
             if (state is FeedListUiState.Content && state.selectedCategory == category) {
-                state.copy(isRefreshing = false)
+                state.copy(isRefreshing = false, refreshFailed = true)
             } else {
                 state
             }
@@ -55,7 +72,7 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
     class LoadFailure(
         private val category: Category,
     ) : FeedListAction {
-        override fun reduce(state: FeedListUiState) = FeedListUiState.Error(category)
+        override fun reduce(state: FeedListUiState) = FeedListUiState.Error(category, state.progress)
     }
 
     class LoadMoreStart(
@@ -73,6 +90,8 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
         private val category: Category,
         private val page: Int,
         private val newQuestions: List<QuestionSummary>,
+        private val nextPageUrl: String? = null,
+        private val hasMore: Boolean = newQuestions.isNotEmpty(),
     ) : FeedListAction {
         override fun reduce(state: FeedListUiState): FeedListUiState {
             if (state !is FeedListUiState.Content) return state
@@ -86,9 +105,10 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
                 page = page,
                 isLoadingMore = false,
                 loadMoreFailed = false,
-                // If the "next page" came back empty, or turned out to be the same content the site
-                // returned for page 1 (see the pagination caveat in QuestionRemoteDataSource), stop.
-                canLoadMore = hasNew,
+                // A duplicate-only reply must not keep an automatic paging loop alive.
+                canLoadMore = hasNew && hasMore,
+                nextPageUrl = nextPageUrl,
+                noNewContent = !hasNew,
             )
         }
     }
@@ -103,6 +123,18 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
             } else {
                 state
             }
+    }
+
+    class NoNewContent(
+        private val category: Category,
+        private val nextPageUrl: String?,
+    ) : FeedListAction {
+        override fun reduce(state: FeedListUiState): FeedListUiState {
+            if (state.selectedCategory != category) return state
+            val content =
+                state as? FeedListUiState.Content ?: FeedListUiState.Content(selectedCategory = category, progress = state.progress)
+            return content.copy(isRefreshing = false, noNewContent = true, nextPageUrl = nextPageUrl, canLoadMore = false)
+        }
     }
 
     private companion object {

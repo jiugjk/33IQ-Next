@@ -3,6 +3,7 @@ package com.jiugjk.iq33.feature.feed.data.datasource.remote
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
 import com.jiugjk.iq33.library.network.IqHtmlClient
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -85,6 +86,23 @@ class AnswerRemoteDataSourceTest {
             coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"success"}"""
 
             sut.submitAnswer(1, "A") shouldBeEqualTo SubmitAnswerResult.Correct(scoreDelta = null, myScore = null)
+        }
+
+    @Test
+    fun `captured seeanswer is distinct from an already answered rejection`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"seeanswer","isLimit":"0"}"""
+            sut.submitAnswer(108_950, "B") shouldBeEqualTo SubmitAnswerResult.AnswerAlreadyViewed
+        }
+
+    @Test
+    fun `a word bank sends literal selected characters not an option index`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"wrong","isLimit":"0"}"""
+            sut.submitAnswer(589_144, "保")
+            coVerify(exactly = 1) {
+                htmlClient.postFormForText(any(), match { it["context"] == "保" && it["id"] == "589144" && it["isanswer"] == "1" })
+            }
         }
 
     @Test

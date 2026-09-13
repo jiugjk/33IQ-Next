@@ -4,6 +4,7 @@ import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
 
 /*
@@ -30,6 +31,27 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         override fun reduce(state: QuestionDetailUiState) = QuestionDetailUiState.Error
     }
 
+    class AnsweredChanged(
+        private val questionId: Long,
+        private val isAnswered: Boolean,
+        private val hasViewedAnswer: Boolean = false,
+        private val isAnswerRevealPending: Boolean = false,
+    ) : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId) {
+                state.copy(
+                    detail =
+                        state.detail.copy(
+                            isAnswered = isAnswered,
+                            hasViewedAnswer = hasViewedAnswer,
+                            isAnswerRevealPending = isAnswerRevealPending,
+                        ),
+                )
+            } else {
+                state
+            }
+    }
+
     class ChoiceSelected(
         private val choiceId: String,
     ) : QuestionDetailAction {
@@ -45,8 +67,35 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         private val text: String,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.canSelectChoice) {
+            if (state is QuestionDetailUiState.Content && state.canSelectChoice && state.detail.questionType == QuestionType.OPEN) {
                 state.copy(draftAnswer = text)
+            } else {
+                state
+            }
+    }
+
+    class CandidateToggled(
+        private val index: Int,
+    ) : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState {
+            if (state !is QuestionDetailUiState.Content || !state.canSelectChoice || !state.isWordBankReady) return state
+            if (index !in state.detail.answerCandidates.indices) return state
+            val selection =
+                when {
+                    index in state.selectedCandidateIndices -> state.selectedCandidateIndices - index
+                    state.detail.answerLength == 1 -> listOf(index)
+                    else -> state.selectedCandidateIndices + index
+                }
+            val updated = state.copy(selectedCandidateIndices = selection)
+            val answer = updated.wordBankAnswer
+            return if (answer.codePointCount(0, answer.length) <= (state.detail.answerLength ?: 0)) updated else state
+        }
+    }
+
+    data object CandidatesCleared : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
+            if (state is QuestionDetailUiState.Content && state.canSelectChoice) {
+                state.copy(selectedCandidateIndices = emptyList())
             } else {
                 state
             }
@@ -89,7 +138,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         private val choiceId: String,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
-            if (state is QuestionDetailUiState.Content && state.detail.id == questionId && state.canSelectChoice) {
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId && state.canSubmitAnswer(choiceId)) {
                 state.copy(selectedChoiceId = choiceId, submission = SubmissionState.Submitting(choiceId))
             } else {
                 state
@@ -105,7 +154,19 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
 
             val submitting = state.submission as? SubmissionState.Submitting ?: return state
 
-            return state.copy(submission = SubmissionState.Done(submitting.submittedAnswer, result))
+            return state.copy(
+                submission = SubmissionState.Done(submitting.submittedAnswer, result),
+                detail =
+                    state.detail.copy(
+                        isAnswered =
+                            state.detail.isAnswered ||
+                                when (result) {
+                                    is SubmitAnswerResult.Correct, is SubmitAnswerResult.Wrong, SubmitAnswerResult.AlreadyAnswered -> true
+                                    SubmitAnswerResult.AnswerAlreadyViewed, SubmitAnswerResult.LimitReached -> false
+                                },
+                        hasViewedAnswer = state.detail.hasViewedAnswer || result == SubmitAnswerResult.AnswerAlreadyViewed,
+                    ),
+            )
         }
     }
 

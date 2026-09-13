@@ -6,12 +6,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.BufferedSink
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -41,11 +45,21 @@ class IqLoginRequiredException : IOException("33IQ served its login wall instead
 class IqHtmlClient(
     private val okHttpClient: OkHttpClient,
 ) {
+    private val webActionClient by lazy {
+        okHttpClient
+            .newBuilder()
+            .retryOnConnectionFailure(false)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+    }
+
     suspend fun get(url: String): Document {
         val request =
             Request
                 .Builder()
                 .url(url)
+                .cacheControl(CacheControl.FORCE_NETWORK)
                 .get()
                 .build()
 
@@ -81,6 +95,39 @@ class IqHtmlClient(
         }
     }
 
+    /** Browser AJAX form: UTF-8 request fields, GBK response, matching the captured web protocol. */
+    suspend fun postWebFormForText(
+        url: String,
+        params: Map<String, String>,
+    ): String {
+        val form = FormBody.Builder().apply { params.forEach { (name, value) -> add(name, value) } }.build()
+        // A payment must not be replayed by OkHttp's connection or HTTP follow-up machinery.
+        val body =
+            object : RequestBody() {
+                override fun contentType() = form.contentType()
+
+                override fun contentLength() = form.contentLength()
+
+                override fun writeTo(sink: BufferedSink) = form.writeTo(sink)
+
+                override fun isOneShot() = true
+            }
+        val request =
+            Request
+                .Builder()
+                .url(url)
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Origin", IqConstants.BASE_URL)
+                .header("Referer", "${IqConstants.BASE_URL}/")
+                .post(body)
+                .build()
+        return execute(request, webActionClient) { response ->
+            val text = decodeGbk(response.body.bytes())
+            if (isLoginWallText(text)) throw IqLoginRequiredException()
+            text
+        }
+    }
+
     /**
      * Raw text response for 33IQ's app-facing JSON endpoints (e.g. `/question/<id>.html?p=3`,
      * `/app/taskall`). These are the *same* URLs the public website serves as HTML, but adding the
@@ -92,6 +139,7 @@ class IqHtmlClient(
             Request
                 .Builder()
                 .url(url)
+                .cacheControl(CacheControl.FORCE_NETWORK)
                 .get()
                 .build()
 
@@ -111,13 +159,14 @@ class IqHtmlClient(
      */
     private suspend fun <T> execute(
         request: Request,
+        client: OkHttpClient = okHttpClient,
         readResponse: (Response) -> T,
     ): T {
         coroutineContext.ensureActive()
 
         return withContext(Dispatchers.IO) {
             suspendCancellableCoroutine { continuation ->
-                val call = okHttpClient.newCall(request)
+                val call = client.newCall(request)
 
                 continuation.invokeOnCancellation { call.cancel() }
 
@@ -176,10 +225,6 @@ class IqHtmlClient(
         return text.contains("用户登录") || text.contains("login-card")
     }
 
-    private fun decodeGbk(bytes: ByteArray): String = String(bytes, charset(IqConstants.PAGE_CHARSET))
-
-    private fun encodeGbk(value: String): String = URLEncoder.encode(value, IqConstants.PAGE_CHARSET)
-
     private fun Response.checkSuccessful() {
         if (!isSuccessful) throw IOException("HTTP $code")
     }
@@ -188,3 +233,8 @@ class IqHtmlClient(
         val FORM_MEDIA_TYPE = "application/x-www-form-urlencoded".toMediaType()
     }
 }
+
+/** 33IQ serves and expects GBK for its server-rendered pages and app-protocol forms. */
+private fun decodeGbk(bytes: ByteArray): String = String(bytes, charset(IqConstants.PAGE_CHARSET))
+
+private fun encodeGbk(value: String): String = URLEncoder.encode(value, IqConstants.PAGE_CHARSET)

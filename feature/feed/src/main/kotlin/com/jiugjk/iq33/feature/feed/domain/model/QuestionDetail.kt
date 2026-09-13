@@ -3,6 +3,7 @@ package com.jiugjk.iq33.feature.feed.domain.model
 enum class QuestionType {
     CHOICE,
     OPEN,
+    WORD_BANK,
 }
 
 data class Choice(
@@ -52,7 +53,19 @@ data class QuestionDetail(
     val analysis: String?,
     /** The public, browser-readable page for this question - what sharing must hand out. */
     val sourceUrl: String,
+    /** Locally confirmed for the active account; false means unknown, not confirmed unanswered. */
+    val isAnswered: Boolean = false,
+    /** Confirmed `seeanswer` response for this account; not evidence that it submitted an answer. */
+    val hasViewedAnswer: Boolean = false,
+    /** Payment/reveal may have happened; retry may only recover the already authorised content. */
+    val isAnswerRevealPending: Boolean = false,
+    /** Server `select_answer` tiles, preserving order and duplicates (never `qc_wronganswer`). */
+    val answerCandidates: List<String> = emptyList(),
+    /** Server `answerStrNum`, in Unicode code points, for word-bank answers. */
+    val answerLength: Int? = null,
 ) {
+    val isSubmissionBlocked: Boolean get() = isAnswered || hasViewedAnswer || isAnswerRevealPending
+
     /**
      * One line of text identifying this question, for the places that genuinely need a label rather
      * than the question itself: a bookmark row, a share sheet's subject.

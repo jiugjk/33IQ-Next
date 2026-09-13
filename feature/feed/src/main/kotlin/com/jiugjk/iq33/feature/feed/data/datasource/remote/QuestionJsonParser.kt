@@ -9,6 +9,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Parses 33IQ's app-facing question detail JSON - `GET /question/<id>.html?p=3` - discovered and
@@ -43,6 +45,22 @@ internal class QuestionJsonParser {
                     ?.let { text -> Choice(id = letter.uppercase(), text = text) }
             }
 
+        // #589144 confirms a third interaction type: ischoose=0 still has a server-provided word bank.
+        // qc_wronganswer is NOT the word bank; it can omit the correct tile and include different decoys.
+        val questionType =
+            when {
+                question.stringOrNull("ischoose") == "1" -> QuestionType.CHOICE
+                question.stringOrNull("is_select_answer") == "1" -> QuestionType.WORD_BANK
+                else -> QuestionType.OPEN
+            }
+        val candidates = question.jsonArrayOrEmpty("select_answer")
+        val candidateTexts = candidates.mapNotNull { (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.contentOrNull }
+        val validCandidates =
+            candidateTexts
+                .takeIf { values ->
+                    values.size == candidates.size && values.all { it.isNotBlank() }
+                }.orEmpty()
+
         val bodyHtml = question.stringOrNull("qc_context").orEmpty()
         val parsedBody = parseHtmlContent(bodyHtml, IqConstants.BASE_URL)
         val imageUrls = questionImageUrls(question, parsedBody)
@@ -66,8 +84,10 @@ internal class QuestionJsonParser {
             commentCount = question.intOrZero("o_commentnum"),
             collectCount = question.intOrZero("o_collectnum"),
             rightRatio = question.stringOrNull("right_ratio")?.toIntOrNull(),
-            questionType = if (question.stringOrNull("ischoose") == "1") QuestionType.CHOICE else QuestionType.OPEN,
+            questionType = questionType,
             choices = choices,
+            answerCandidates = if (questionType == QuestionType.WORD_BANK) validCandidates else emptyList(),
+            answerLength = if (questionType == QuestionType.WORD_BANK) question.intOrNull("answerStrNum")?.takeIf { it > 0 } else null,
             analysis = null, // 33IQ hides analysis from guests, and no field carrying it has been confirmed.
             // The public page, not the `?p=3` API URL that was fetched: that switch makes the same
             // address serve raw JSON, which is not what a share link should open.

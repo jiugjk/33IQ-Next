@@ -13,7 +13,11 @@ internal sealed interface FeedListEvent {
         val category: Category,
     ) : FeedListEvent
 
-    /** Pull-to-refresh, and the retry offered when the first page failed. */
+    data class HideAnsweredChanged(
+        val hide: Boolean,
+    ) : FeedListEvent
+
+    /** Requests a fresh batch, or retries a failed request without advancing its cursor. */
     data object Refreshed : FeedListEvent
 
     /** The list was scrolled close enough to its end to want the next page. */

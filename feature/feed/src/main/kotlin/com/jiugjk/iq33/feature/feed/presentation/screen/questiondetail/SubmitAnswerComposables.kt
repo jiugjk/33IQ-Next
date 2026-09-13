@@ -123,6 +123,13 @@ private fun SubmissionDoneText(result: SubmitAnswerResult) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
+        SubmitAnswerResult.AnswerAlreadyViewed ->
+            Text(
+                text = stringResource(R.string.feed_submission_answer_viewed),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = Dimen.spaceS),
+            )
         SubmitAnswerResult.LimitReached ->
             Text(
                 text = stringResource(R.string.feed_submission_limit_reached),

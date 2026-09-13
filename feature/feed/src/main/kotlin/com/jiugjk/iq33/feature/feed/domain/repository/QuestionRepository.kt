@@ -4,12 +4,13 @@ import com.jiugjk.iq33.feature.base.domain.result.Result
 import com.jiugjk.iq33.feature.feed.domain.model.Category
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionPage
 
 internal interface QuestionRepository {
     suspend fun getQuestionList(
         category: Category,
-        page: Int,
-    ): Result<List<QuestionSummary>>
+        nextPageUrl: String?,
+    ): Result<QuestionPage>
 
     suspend fun searchQuestions(
         keyword: String,
