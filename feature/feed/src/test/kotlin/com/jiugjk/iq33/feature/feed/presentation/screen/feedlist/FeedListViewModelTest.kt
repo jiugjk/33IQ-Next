@@ -57,7 +57,7 @@ class FeedListViewModelTest {
         }
 
     @Test
-    fun `failed refresh keeps content and leaves the previous cursor intact`() =
+    fun `failed refresh keeps content but clears the persisted cursor`() =
         runTest {
             coEvery { getList(Category.ALL, null) } returnsMany listOf(page(1, NEXT), Result.Failure())
             val sut = createViewModel()
@@ -67,7 +67,7 @@ class FeedListViewModelTest {
             advanceUntilIdle()
             content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
             content(sut).refreshFailed shouldBeEqualTo true
-            progress.feedPosition(Category.ALL.id).nextPageUrl shouldBeEqualTo NEXT
+            progress.feedPosition(Category.ALL.id) shouldBeEqualTo FeedPosition()
             coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
             coEvery { getList(Category.ALL, NEXT) } returns page(2, null)
             sut.onEvent(FeedListEvent.Refreshed)
@@ -220,6 +220,21 @@ class FeedListViewModelTest {
         }
 
     @Test
+    fun `auto-continues load more when the filter hides the whole batch`() =
+        runTest {
+            progress.setHideAnswered(true)
+            progress.markAnswered(1)
+            progress.markAnswered(2)
+            coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
+            coEvery { getList(Category.ALL, NEXT) } returns page(2, THIRD)
+            coEvery { getList(Category.ALL, THIRD) } returns page(3, null)
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+            // First batch is all hidden; ViewModel should keep walking without a manual EndReached.
+            content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(3L)
+        }
+
     fun `load more also walks filtered pages instead of stopping on a hidden-only reply`() =
         runTest {
             progress.setHideAnswered(true)

@@ -28,7 +28,11 @@ internal class FeedListViewModel(
                 val accountChanged = accountKey != progress.accountKey
                 accountKey = progress.accountKey
                 sendAction(FeedListAction.ProgressChanged(progress))
-                if (accountChanged) selectCategory(uiStateFlow.value.selectedCategory)
+                if (accountChanged) {
+                    selectCategory(uiStateFlow.value.selectedCategory)
+                } else {
+                    maybeContinueFilteredPaging()
+                }
             }
         }
     }
@@ -70,7 +74,7 @@ internal class FeedListViewModel(
         loadJob?.cancel()
         loadMoreJob?.cancel()
         sendAction(FeedListAction.LoadStart(category))
-        // Category switch also starts from a clean cursor for that account/category batch.
+        // Category switch resumes the persisted cursor for that account/category.
         startFreshBatch(category, resetCursor = false)
     }
 
@@ -101,10 +105,10 @@ internal class FeedListViewModel(
                 .orEmpty()
                 .map { it.id }
                 .toSet()
-        // Refresh uses a clean in-memory cursor; persisted position is only overwritten on success
-        // so a failed pull does not throw away the previous next-link.
+        // Pull-to-refresh clears the persisted cursor + recent window immediately (agreed T2 rule).
         val position =
             if (resetCursor) {
+                questionProgressRepository.clearFeedPosition(category.id, owner)
                 FeedPosition(nextPageUrl = null, lastQuestionIds = emptySet())
             } else {
                 questionProgressRepository.feedPosition(category.id)
@@ -146,6 +150,7 @@ internal class FeedListViewModel(
                         FeedListAction.LoadSuccess(category, page.questions, page.nextPageUrl, page.nextPageUrl != null)
                     },
                 )
+                maybeContinueFilteredPaging()
             }
             is Result.Failure -> {
                 sendAction(
@@ -203,6 +208,7 @@ internal class FeedListViewModel(
                         page.nextPageUrl != null,
                     ),
                 )
+                maybeContinueFilteredPaging()
             }
             is Result.Failure -> {
                 sendAction(FeedListAction.LoadMoreFailure(request.category))
