@@ -308,11 +308,15 @@ private fun ChoiceAndSubmitSection(
 ) {
     // Choices stay tappable only while a submission could still be sent: once one is in flight the
     // selection is frozen, so the result can never be shown next to a different option.
+    val correctAnswerId =
+        (uiState.answerReveal as? RevealState.Revealed)?.reveal?.answerText?.trim()?.takeIf { it.isNotEmpty() }
+
     ChoiceSection(
         choices = detail.choices,
         selectedChoiceId = uiState.selectedChoiceId,
         submission = uiState.submission,
         feedback = feedback,
+        correctAnswerId = correctAnswerId,
         enabled = uiState.canSelectChoice,
         onChoiceSelect = { choiceId -> onEvent(QuestionDetailEvent.ChoiceSelected(choiceId)) },
     )

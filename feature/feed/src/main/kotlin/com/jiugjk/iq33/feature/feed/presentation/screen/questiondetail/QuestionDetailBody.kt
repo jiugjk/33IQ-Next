@@ -229,6 +229,7 @@ internal fun ChoiceSection(
     selectedChoiceId: String?,
     submission: SubmissionState = SubmissionState.Idle,
     feedback: FeedbackAnimState = FeedbackAnimState(1f, 0f, 0f, false),
+    correctAnswerId: String? = null,
     enabled: Boolean,
     onChoiceSelect: (String) -> Unit,
 ) {
@@ -242,10 +243,16 @@ internal fun ChoiceSection(
         choices.forEach { choice ->
             val isSelected = choice.id == selectedChoiceId
             val done = submission as? SubmissionState.Done
-            val showCorrect = done != null && (
-                (done.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Correct && choice.id == done.submittedAnswer) ||
-                    (done.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Wrong && false)
-            )
+            val matchedCorrect =
+                correctAnswerId != null &&
+                    (choice.id.equals(correctAnswerId, ignoreCase = true) ||
+                        choice.text.trim().equals(correctAnswerId.trim(), ignoreCase = true))
+            val showCorrect =
+                done != null &&
+                    (
+                        (done.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Correct && choice.id == done.submittedAnswer) ||
+                            matchedCorrect
+                    )
             val showWrong = done?.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Wrong &&
                 choice.id == done.submittedAnswer
 

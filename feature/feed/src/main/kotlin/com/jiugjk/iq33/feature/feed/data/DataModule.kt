@@ -40,6 +40,7 @@ internal val dataModule =
         single {
             Room
                 .databaseBuilder(get(), AnswerRecordDatabase::class.java, "AnswerRecords.db")
+                .fallbackToDestructiveMigration()
                 .build()
         }
         single { get<AnswerRecordDatabase>().answerRecordDao() }

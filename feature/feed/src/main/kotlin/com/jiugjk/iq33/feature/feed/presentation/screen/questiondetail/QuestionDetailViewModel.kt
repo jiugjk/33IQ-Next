@@ -323,6 +323,7 @@ internal class QuestionDetailViewModel(
                     submission = echoedSubmission,
                     explanationAlreadyViewed = record?.viewedExplanation == true,
                     hintAlreadyViewed = record?.viewedHint == true,
+                    correctOption = record?.correctOption,
                 )
             is BookmarkResult.Failure ->
                 QuestionDetailAction.LoadSuccess(
@@ -334,6 +335,7 @@ internal class QuestionDetailViewModel(
                     submission = echoedSubmission,
                     explanationAlreadyViewed = record?.viewedExplanation == true,
                     hintAlreadyViewed = record?.viewedHint == true,
+                    correctOption = record?.correctOption,
                 )
         }
     }

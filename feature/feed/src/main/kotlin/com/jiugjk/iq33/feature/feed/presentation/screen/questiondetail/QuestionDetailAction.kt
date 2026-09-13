@@ -27,6 +27,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         private val submission: SubmissionState = SubmissionState.Idle,
         private val explanationAlreadyViewed: Boolean = false,
         private val hintAlreadyViewed: Boolean = false,
+        private val correctOption: String? = null,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState) =
             QuestionDetailUiState.Content(

@@ -88,6 +88,11 @@ internal class AnswerRecordRepositoryImpl(
                 categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
                 selectedOption = selectedOption ?: existing?.selectedOption,
                 isCorrect = isCorrect ?: existing?.isCorrect,
+                correctOption =
+                    when {
+                        isCorrect == true -> selectedOption ?: existing?.correctOption
+                        else -> existing?.correctOption
+                    },
                 knowledgeDelta = knowledgeDelta ?: existing?.knowledgeDelta,
                 answeredAt = answeredAt,
                 updatedAt = System.currentTimeMillis(),
@@ -101,6 +106,7 @@ internal class AnswerRecordRepositoryImpl(
         questionId: Long,
         title: String,
         categoryId: String,
+        correctOption: String?,
     ) {
         if (accountKey == null) return
         ensureMigrated()
@@ -110,6 +116,7 @@ internal class AnswerRecordRepositoryImpl(
                 title = title.ifBlank { existing?.title.orEmpty() },
                 categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
                 viewedExplanation = true,
+                correctOption = correctOption?.takeIf { it.isNotBlank() } ?: existing?.correctOption,
                 // Do not invent an answeredAt — explanation-only history stays distinct.
                 updatedAt = System.currentTimeMillis(),
             )
@@ -257,6 +264,7 @@ private fun AnswerRecordEntity.toDomain() =
         categoryId = categoryId,
         selectedOption = selectedOption,
         isCorrect = isCorrect,
+        correctOption = correctOption,
         viewedExplanation = viewedExplanation,
         viewedHint = viewedHint,
         knowledgeDelta = knowledgeDelta,
@@ -272,6 +280,7 @@ private fun AnswerRecord.toEntity() =
         categoryId = categoryId,
         selectedOption = selectedOption,
         isCorrect = isCorrect,
+        correctOption = correctOption,
         viewedExplanation = viewedExplanation,
         viewedHint = viewedHint,
         knowledgeDelta = knowledgeDelta,

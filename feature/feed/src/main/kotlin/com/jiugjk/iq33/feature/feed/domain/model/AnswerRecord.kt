@@ -12,6 +12,8 @@ internal data class AnswerRecord(
     val categoryId: String = "",
     val selectedOption: String? = null,
     val isCorrect: Boolean? = null,
+    /** Known correct choice id/letter once revealed or answered correctly. */
+    val correctOption: String? = null,
     val viewedExplanation: Boolean = false,
     val viewedHint: Boolean = false,
     val knowledgeDelta: Int? = null,

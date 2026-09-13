@@ -55,6 +55,7 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
                 categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
                 selectedOption = selectedOption ?: existing?.selectedOption,
                 isCorrect = isCorrect ?: existing?.isCorrect,
+                correctOption = if (isCorrect == true) selectedOption ?: existing?.correctOption else existing?.correctOption,
                 knowledgeDelta = knowledgeDelta ?: existing?.knowledgeDelta,
                 answeredAt = answeredAt,
                 updatedAt = System.currentTimeMillis(),

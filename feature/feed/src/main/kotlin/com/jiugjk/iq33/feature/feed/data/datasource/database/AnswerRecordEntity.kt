@@ -13,6 +13,7 @@ internal data class AnswerRecordEntity(
     val categoryId: String,
     val selectedOption: String?,
     val isCorrect: Boolean?,
+    val correctOption: String? = null,
     val viewedExplanation: Boolean,
     val viewedHint: Boolean,
     val knowledgeDelta: Int?,

@@ -41,6 +41,7 @@ internal interface AnswerRecordRepository {
         questionId: Long,
         title: String = "",
         categoryId: String = "",
+        correctOption: String? = null,
     )
 
     /** ③ Successful hint reveal. */

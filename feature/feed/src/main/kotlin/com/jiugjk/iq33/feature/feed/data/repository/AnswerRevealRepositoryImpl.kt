@@ -120,7 +120,11 @@ internal class AnswerRevealRepositoryImpl(
         ensureOwner(owner)
         val reveal = remote.fetch(questionId)
         ensureOwner(owner)
-        answerRecords.recordExplanationViewed(owner, questionId)
+        answerRecords.recordExplanationViewed(
+            accountKey = owner,
+            questionId = questionId,
+            correctOption = reveal.answerText.trim().takeIf { it.isNotEmpty() },
+        )
 
         // Clearing the latch is best effort. Content that was already fetched (and possibly paid for)
         // must still be shown; a stale latch only ever offers another fetch-only recovery.
