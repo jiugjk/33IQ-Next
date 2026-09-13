@@ -81,7 +81,7 @@ To be transparent about reliability:
 | Comments on a question | ❌ Not loaded. No comments-list endpoint was present in the HAR capture, so the parser leaves the list empty and the UI says so; only the comment *count* from the detail payload is shown |
 | Word-bank questions | ✅ `is_select_answer=1`, `select_answer` and `answerStrNum` confirmed by an anonymous JSON fetch of #589144. Candidate tiles preserve server order/duplicates; incomplete metadata disables submission instead of falling back to free typing |
 | Answered markers / hide answered | ✅ Persists locally confirmed correct/wrong/repeat results and the separate `seeanswer` restriction per account; list and detail share the state. ⚠️ No server history endpoint/field is confirmed: older answers and answers on other devices/web are **unknown**, not confirmed unanswered |
-| Pagination beyond page 1 | ⚠️ Follows same-site HTTPS next links advertised by the HTML, never guesses `?page=N`. Fresh live pagination could not be verified because the site returned a security challenge. Missing/repeated next links stop paging; failures preserve the list and retry cursor |
+| Pagination beyond page 1 | ⚠️ Prefers same-site HTTPS next links. Lists without navigation retain the old `?page=N` protocol, reported working by the user even though the web UI has no next-page button. Empty or duplicate-only legacy pages stop paging; explicit final-page controls are respected. Failures preserve the list and retry cursor. Fresh live verification is still blocked by the site's security challenge |
 | Favouriting a question on 33IQ's own servers | ❌ Not implemented — no server-side "收藏" endpoint was present in the HAR capture. Favourites are instead a genuine, fully-working **local** bookmark list |
 | Search (`/index/search`) | ⚠️ HTML scraping only; during this round of development the endpoint started returning a login-wall/anti-bot response to repeated automated requests, so this path is untested against a fresh session — the existing implementation is unchanged and best-effort |
 | Daily check-in (`/index/signin`, `/member/gettask`) | ⚠️ URLs and form fields confirmed from a captured web session that only asserted HTTP 200. Success `status` strings are unconfirmed; a non-error JSON reply is treated as done, once per Asia/Shanghai calendar day |
@@ -251,7 +251,8 @@ Locally, the same four values can go in `~/.gradle/gradle.properties` as `signin
 ## Roadmap
 
 - Verify the real "收藏" (server-side favourite) and comment-posting/comments-list endpoints against a live account and wire them in behind the existing `QuestionRepository`/`BookmarkRepository` interfaces
-- Verify the question-list next-link markup against a working live session; the client now follows advertised links instead of guessing pagination parameters
+- Captured tag pagination uses `>` for the last page (932 in the saved sample). The parser now prefers the active page's immediate successor over that ambiguous arrow, while explicit `rel=next` remains highest priority.
+- Re-verify legacy `?page=N` responses against a working live session. The client prefers advertised links but no longer treats absent pagination controls as proof that the list has ended; duplicate-only legacy responses stop further requests
 - Confirm a read-only historical answer-status endpoint/field to complement local answered markers
 - Wire up further endpoints seen in the HAR captures but not yet used by any feature in this app (e.g. `/index/loadnummc` notification counts, `/app/signrecord` check-in history, `/follow/feedupdate` feed updates)
 - Confirm the login endpoint's error `status` strings (only a successful login has ever been captured) and populate `IqSession.score` from `/app/userinfo`'s confirmed `score` field

@@ -421,6 +421,81 @@ class FeedListViewModelTest {
             content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L, 2L)
         }
 
+    @Test
+    fun `legacy page numbers keep loading new questions without the hidden page limit`() =
+        runTest {
+            coEvery { getList(Category.ALL, any()) } answers {
+                requestCount++
+                page(requestCount.toLong(), "https://www.33iq.com/question/?page=${requestCount + 1}", inferred = true)
+            }
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+            repeat(MAX_CHAIN_REQUESTS * 2) {
+                sut.onEvent(FeedListEvent.EndReached)
+                advanceUntilIdle()
+            }
+            requestCount shouldBeEqualTo MAX_CHAIN_REQUESTS * 2 + 1
+            content(sut).questions.size shouldBeEqualTo requestCount
+            content(sut).canStartLoadMore shouldBeEqualTo true
+        }
+
+    @Test
+    fun `a server ignoring legacy page numbers stops at the first duplicate page`() =
+        runTest {
+            coEvery { getList(Category.ALL, any()) } answers {
+                requestCount++
+                page(1, "https://www.33iq.com/question/?page=${requestCount + 1}", inferred = true)
+            }
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+            repeat(3) {
+                sut.onEvent(FeedListEvent.EndReached)
+                advanceUntilIdle()
+            }
+            requestCount shouldBeEqualTo 2
+            content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
+            content(sut).canLoadMore shouldBeEqualTo false
+            content(sut).nextPageUrl shouldBeEqualTo null
+        }
+
+    @Test
+    fun `hidden legacy pages continue to unseen questions and refresh resets the walk`() =
+        runTest {
+            progress.markAnswered(1)
+            progress.markAnswered(2)
+            progress.setHideAnswered(true)
+            coEvery { getList(Category.ALL, null) } returns page(1, NEXT, inferred = true)
+            coEvery { getList(Category.ALL, NEXT) } returns page(2, THIRD, inferred = true)
+            coEvery { getList(Category.ALL, THIRD) } returns page(3, null)
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+            content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(3L)
+            sut.onEvent(FeedListEvent.Refreshed)
+            advanceUntilIdle()
+            content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(3L)
+            content(sut).batchRevision shouldBeEqualTo 2
+        }
+
+    @Test
+    fun `repeated legacy pages within an all hidden batch also stop immediately`() =
+        runTest {
+            progress.markAnswered(1)
+            progress.setHideAnswered(true)
+            coEvery { getList(Category.ALL, any()) } answers {
+                requestCount++
+                page(1, "https://www.33iq.com/question/?page=${requestCount + 1}", inferred = true)
+            }
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+            requestCount shouldBeEqualTo 2
+            content(sut).visibleQuestions shouldBeEqualTo emptyList()
+            content(sut).canLoadMore shouldBeEqualTo false
+        }
+
     private fun createViewModel() = FeedListViewModel(getList, progress).also { models.put("vm${modelCount++}", it) }
 
     private fun content(vm: FeedListViewModel) = vm.uiStateFlow.value as FeedListUiState.Content
@@ -430,7 +505,8 @@ class FeedListViewModelTest {
     private fun page(
         id: Long,
         next: String?,
-    ) = Result.Success(QuestionPage(listOf(question(id)), next))
+        inferred: Boolean = false,
+    ) = Result.Success(QuestionPage(listOf(question(id)), next, isNextPageInferred = inferred))
 
     private class MemoryProgress : QuestionProgressRepository {
         override val progress = MutableStateFlow(QuestionProgress(accountKey = "uid:1"))

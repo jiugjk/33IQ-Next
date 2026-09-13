@@ -77,8 +77,8 @@ internal class FeedWalk(
 /**
  * Walks forward from [position] until it has at least one visible question, or the feed ends.
  *
- * Follows the site's own next-page links, never guesses a page number, stops at any cursor already
- * seen in [walk] - including one from an earlier batch - and gives up after [maxRequests] requests
+ * Follows the data source's continuation (advertised links or legacy page numbers), stops at any
+ * cursor already seen in [walk] - including one from an earlier batch - and gives up after [maxRequests] requests
  * in this batch or when the chain's budget runs out. Hidden cards stay in the batch so turning the
  * filter off can restore them without another network round-trip.
  *
@@ -117,7 +117,11 @@ internal suspend fun fetchUnseenBatch(
             }
             is Result.Success -> {
                 val page = result.value
-                val next = page.nextPageUrl?.takeUnless { walk.hasVisited(it) }
+                // Some endpoints ignore ?page=N and return the first page forever. Only legacy
+                // paging ends on duplicate content; an advertised cursor may legitimately cross an
+                // overlapping page before reaching new questions. Answered-but-new IDs still count.
+                val repeatedLegacyPage = page.repeatsLegacyPage(excluded, collected.keys)
+                val next = page.nextPageUrl?.takeUnless { repeatedLegacyPage || walk.hasVisited(it) }
                 page.questions.filterNot { it.id in excluded }.forEach { collected.putIfAbsent(it.id, it) }
 
                 // Same rule the list itself applies - only answered questions are hidden - so paging
@@ -135,3 +139,8 @@ internal suspend fun fetchUnseenBatch(
 
     return Result.Success(QuestionPage(collected.values.toList(), cursor))
 }
+
+private fun QuestionPage.repeatsLegacyPage(
+    displayedIds: Set<Long>,
+    collectedIds: Set<Long>,
+): Boolean = isNextPageInferred && questions.all { it.id in displayedIds || it.id in collectedIds }

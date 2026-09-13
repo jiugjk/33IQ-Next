@@ -4,7 +4,7 @@ import com.jiugjk.iq33.library.network.IqConstants
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 
-/** Follows advertised links only. A missing link is an end, not permission to guess ?page=N. */
+/** Prefer advertised links, with the legacy page-number protocol for lists without navigation. */
 internal object QuestionListLinks {
     private val NEXT_LABELS = setOf("下一页", "下一页 »", "下页", "next", ">", ">>", "›", "»")
     private val DETAIL_PATH = Regex("/question/\\d+\\.html")
@@ -22,7 +22,10 @@ internal object QuestionListLinks {
             document.select(
                 ".pagination .active + li a[href], .pagination .current + a[href], .pagination .current + li a[href]",
             )
-        return (explicit + following)
+        // Captured tag HTML uses ">" for the LAST page (e.g. 932), not the next page.
+        // A declared rel=next wins; otherwise prefer the current page's immediate successor.
+        val declaredNext = document.select("a[rel=next], link[rel=next]")
+        return (declaredNext + following + explicit)
             .asSequence()
             .filterNot { link ->
                 link.attr("href").isBlank() || link.hasClass("disabled") ||
@@ -42,6 +45,29 @@ internal object QuestionListLinks {
                         .build()
                         .toString()
             }
+    }
+
+    /**
+     * The list can support ?page=N without displaying a next-page control. Preserve the old client's
+     * protocol in that case, but never override explicit navigation or invent a cursor-based URL.
+     * Call only for a non-empty question page; the caller also stops on duplicate-only responses.
+     */
+    @Suppress("ReturnCount") // Fail closed at each URL/navigation validation boundary.
+    fun legacyNextPage(document: Document): String? {
+        val navigation = "a[rel=next], link[rel=next], a[rel=prev], link[rel=prev], .pagination, .pager, .page"
+        if (document.select(navigation).isNotEmpty()) return null
+        val current = document.location().toHttpUrlOrNull() ?: return null
+        if (!isSafeListUrl(current.toString()) || current.queryParameterNames.any { it != "page" }) return null
+        val values = current.queryParameterValues("page")
+        val page = if (values.isEmpty()) 1 else values.singleOrNull()?.toIntOrNull() ?: return null
+        if (page < 1 || page == Int.MAX_VALUE) return null
+
+        return current
+            .newBuilder()
+            .setQueryParameter("page", (page + 1).toString())
+            .fragment(null)
+            .build()
+            .toString()
     }
 
     fun isSafeListUrl(value: String): Boolean {

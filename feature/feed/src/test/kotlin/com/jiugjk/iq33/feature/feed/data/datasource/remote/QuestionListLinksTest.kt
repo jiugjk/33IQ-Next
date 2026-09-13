@@ -50,5 +50,67 @@ class QuestionListLinksTest {
         QuestionListLinks.nextPage(document) shouldBeEqualTo "https://www.33iq.com/tag/logic/?offset=20"
     }
 
+    @Test
+    fun `captured tag navigation advances one page instead of jumping to page 932`() {
+        // Reduced from the saved tag_tuili.html: its trailing > link is the LAST page.
+        val tag = "https://www.33iq.com/tag/%D5%EC%CC%BD%CD%C6%C0%ED"
+        val document =
+            Jsoup.parse(
+                "<div class='pagination pagination-right'><ul>" +
+                    "<li class='disabled'><a href='$tag.html'>&lt;</a></li>" +
+                    "<li class='active'><a href='#'>1</a></li>" +
+                    "<li><a href='$tag/2.html'>2</a></li>" +
+                    "<li><a href='$tag/3.html'>3</a></li>" +
+                    "<li><a href='$tag/932.html'>&gt;</a></li></ul></div>",
+                "$tag.html",
+            )
+        QuestionListLinks.nextPage(document) shouldBeEqualTo "$tag/2.html"
+    }
+
+    @Test
+    fun `declared next link has priority over a numbered sibling`() {
+        next(
+            "<link rel='next' href='?cursor=next'>" +
+                "<ul class='pagination'><li class='active'>1</li><li><a href='?page=2'>2</a></li></ul>",
+        ) shouldBeEqualTo "https://www.33iq.com/question/?cursor=next"
+    }
+
+    @Test
+    fun `legacy lists without navigation advance page numbers on the same path`() {
+        legacy("https://www.33iq.com/question/") shouldBeEqualTo "https://www.33iq.com/question/?page=2"
+        legacy("https://www.33iq.com/question/?page=2") shouldBeEqualTo "https://www.33iq.com/question/?page=3"
+        legacy("https://www.33iq.com/tag/logic.html?page=39#list") shouldBeEqualTo
+            "https://www.33iq.com/tag/logic.html?page=40"
+    }
+
+    @Test
+    fun `explicit pagination never falls back including disabled or unsafe next links`() {
+        listOf(
+            "<div class='pagination'><a href='?page=1'>上一页</a></div>",
+            "<a rel='next' class='disabled' href='?page=2'>Next</a>",
+            "<link rel='next' href='https://evil.example/question/'>",
+            "<div class='pager'></div>",
+        ).forEach { html ->
+            QuestionListLinks.legacyNextPage(Jsoup.parse(html, "https://www.33iq.com/question/")) shouldBeEqualTo null
+        }
+    }
+
+    @Test
+    fun `legacy paging rejects unsafe URLs other cursor protocols and invalid page numbers`() {
+        listOf(
+            "https://evil.example/question/",
+            "http://www.33iq.com/question/",
+            "https://www.33iq.com/question/123.html",
+            "https://www.33iq.com/question/?cursor=abc",
+            "https://www.33iq.com/question/?page=0",
+            "https://www.33iq.com/question/?page=-1",
+            "https://www.33iq.com/question/?page=invalid",
+            "https://www.33iq.com/question/?page=2147483647",
+            "https://www.33iq.com/question/?page=1&page=2",
+        ).forEach { url -> legacy(url) shouldBeEqualTo null }
+    }
+
+    private fun legacy(url: String) = QuestionListLinks.legacyNextPage(Jsoup.parse("", url))
+
     private fun next(html: String) = QuestionListLinks.nextPage(Jsoup.parse(html, "https://www.33iq.com/question/"))
 }
