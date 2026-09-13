@@ -39,6 +39,10 @@ internal class SettingsViewModel(
                 sendAction(SettingsAction.HapticsChanged(enabled))
             }
         }
+
+        viewModelScope.launch {
+            sessionManager.refreshFromServer()
+        }
     }
 
     fun onThemeModeSelected(themeMode: ThemeMode) {
@@ -54,8 +58,6 @@ internal class SettingsViewModel(
     }
 
     fun onLogoutClick() {
-        viewModelScope.launch {
-            sessionManager.logout()
-        }
+        sessionManager.logout()
     }
 }
