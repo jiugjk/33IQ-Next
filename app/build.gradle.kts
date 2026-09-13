@@ -35,8 +35,16 @@ android {
         // Local / default. CI (Build.yml) overrides these so each published APK matches its tag.
         versionCode = 2
         versionName = "0.0.2" // SemVer (Major.Minor.Patch)
-        providers.environmentVariable("VERSION_CODE").orNull?.toIntOrNull()?.let { versionCode = it }
-        providers.environmentVariable("VERSION_NAME").orNull?.takeIf { it.isNotBlank() }?.let { versionName = it }
+        providers
+            .environmentVariable("VERSION_CODE")
+            .orNull
+            ?.toIntOrNull()
+            ?.let { versionCode = it }
+        providers
+            .environmentVariable("VERSION_NAME")
+            .orNull
+            ?.takeIf { it.isNotBlank() }
+            ?.let { versionName = it }
     }
 
     signingConfigs {

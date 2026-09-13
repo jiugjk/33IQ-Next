@@ -106,6 +106,63 @@ class QuestionDetailActionTest {
         QuestionDetailAction.HintRevealFinished(99, HintReveal(tips = "提示")).reduce(revealing) shouldBeEqualTo revealing
     }
 
+    @Test
+    fun `an answered detail blocks editing and submission before a request is sent`() {
+        val initial = content()
+        val answered = QuestionDetailAction.AnsweredChanged(1, true).reduce(initial) as QuestionDetailUiState.Content
+        answered.canSelectChoice shouldBeEqualTo false
+        QuestionDetailAction.ChoiceSelected("B").reduce(answered) shouldBeEqualTo answered
+        QuestionDetailAction.DraftAnswerChanged("answer").reduce(answered) shouldBeEqualTo answered
+        QuestionDetailAction.SubmissionStarted(1, "A").reduce(answered) shouldBeEqualTo answered
+    }
+
+    @Test
+    fun `a limit response is not evidence of an answered question`() {
+        val submitting = QuestionDetailAction.SubmissionStarted(1, "A").reduce(content())
+        val reduced =
+            QuestionDetailAction.SubmissionFinished(1, SubmitAnswerResult.LimitReached).reduce(submitting) as QuestionDetailUiState.Content
+        reduced.detail.isAnswered shouldBeEqualTo false
+    }
+
+    @Test
+    fun `confirmed results immediately update the detail answered flag`() {
+        val results =
+            listOf(
+                SubmitAnswerResult.Correct(null, null),
+                SubmitAnswerResult.Wrong(null, null),
+                SubmitAnswerResult.AlreadyAnswered,
+            )
+        results.forEach { result ->
+            val submitting = QuestionDetailAction.SubmissionStarted(1, "A").reduce(content())
+            val reduced = QuestionDetailAction.SubmissionFinished(1, result).reduce(submitting) as QuestionDetailUiState.Content
+            reduced.detail.isAnswered shouldBeEqualTo true
+        }
+    }
+
+    @Test
+    fun `seeanswer blocks future submissions without labelling an unknown history as answered`() {
+        val submitting = QuestionDetailAction.SubmissionStarted(1, "A").reduce(content())
+        val reduced =
+            QuestionDetailAction
+                .SubmissionFinished(1, SubmitAnswerResult.AnswerAlreadyViewed)
+                .reduce(submitting) as QuestionDetailUiState.Content
+        reduced.detail.hasViewedAnswer shouldBeEqualTo true
+        reduced.detail.isAnswered shouldBeEqualTo false
+        reduced.canSelectChoice shouldBeEqualTo false
+        QuestionDetailAction.SubmissionStarted(1, "B").reduce(reduced) shouldBeEqualTo reduced
+    }
+
+    @Test
+    fun `answered and viewed restrictions can coexist and a reload starts blocked`() {
+        val known = content().detail.copy(isAnswered = true, hasViewedAnswer = true)
+        val loaded =
+            QuestionDetailAction.LoadSuccess(known, false).reduce(QuestionDetailUiState.Loading)
+                as QuestionDetailUiState.Content
+        loaded.detail.isAnswered shouldBeEqualTo true
+        loaded.detail.hasViewedAnswer shouldBeEqualTo true
+        loaded.canSelectChoice shouldBeEqualTo false
+    }
+
     private fun quoting() = QuestionDetailAction.HintQuoteStarted(1).reduce(content())
 
     private fun hintQuote() = HintQuote(normalCost = 30, memberCost = 20, lifeMemberCost = 10, effectiveCost = 30)

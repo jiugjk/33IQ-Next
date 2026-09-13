@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -41,8 +40,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.Lifecycle
 import com.jiugjk.iq33.feature.base.common.res.Dimen
-import com.jiugjk.iq33.feature.base.presentation.compose.composable.EmptyState
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.ErrorState
 import com.jiugjk.iq33.feature.base.presentation.compose.composable.SkeletonList
 import com.jiugjk.iq33.feature.feed.R
@@ -67,6 +67,7 @@ fun FeedListScreen(
     LaunchedEffect(Unit) {
         viewModel.onInit()
     }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onForeground() }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -117,6 +118,10 @@ private fun FeedListBody(
             onEvent = onEvent,
         )
 
+        HideAnsweredRow(uiState = uiState, onEvent = onEvent)
+
+        BatchNotice(uiState = uiState)
+
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (val currentUiState = uiState) {
                 is FeedListUiState.Loading -> SkeletonList()
@@ -155,16 +160,10 @@ private fun FeedListContent(
         onRefresh = { onEvent(FeedListEvent.Refreshed) },
         modifier = Modifier.fillMaxSize(),
     ) {
-        if (uiState.questions.isEmpty() && !uiState.isRefreshing) {
-            // 33IQ answered with nothing rather than failing - a retry is still offered, since
-            // an empty tag page is usually transient.
-            EmptyState(
-                icon = Icons.Outlined.Inbox,
-                title = stringResource(R.string.feed_empty_title),
-                description = stringResource(R.string.feed_empty_description),
-                actionLabel = stringResource(R.string.feed_retry),
-                action = { onEvent(FeedListEvent.Refreshed) },
-            )
+        val settled = !uiState.isRefreshing && !uiState.isLoadingMore
+
+        if (uiState.visibleQuestions.isEmpty() && settled) {
+            FeedEmptyState(uiState = uiState, onEvent = onEvent)
         } else {
             QuestionList(uiState = uiState, onEvent = onEvent, onQuestionClick = onQuestionClick)
         }
@@ -231,6 +230,7 @@ private fun QuestionList(
 ) {
     val listState = rememberLazyListState()
 
+    LaunchedEffect(uiState.batchRevision) { listState.scrollToItem(0) }
     LoadMoreTrigger(listState = listState, uiState = uiState, onLoadMore = { onEvent(FeedListEvent.EndReached) })
 
     LazyColumn(
@@ -239,11 +239,12 @@ private fun QuestionList(
         contentPadding = PaddingValues(Dimen.spaceL),
         verticalArrangement = Arrangement.spacedBy(Dimen.spaceML),
     ) {
-        items(items = uiState.questions, key = { it.id }) { question ->
+        items(items = uiState.visibleQuestions, key = { it.id }) { question ->
             QuestionCard(
                 question = question,
                 onClick = { onQuestionClick(question.id) },
                 hiddenTag = uiState.selectedCategory.redundantCardTag(),
+                restrictions = uiState.progress.restrictionsFor(question.id),
                 modifier = Modifier.animateItem(),
             )
         }
@@ -300,12 +301,12 @@ private fun LoadMoreTrigger(
                 listState.layoutInfo.visibleItemsInfo
                     .lastOrNull()
                     ?.index ?: -1
-            val questionCount = currentUiState.questions.size
+            val questionCount = currentUiState.visibleQuestions.size
             val reachedEnd = questionCount > 0 && lastVisibleIndex >= questionCount - LOAD_MORE_THRESHOLD
 
             // Emitting the count (not just a boolean) means an appended page re-arms the trigger
             // even when the longer list still ends on screen, so paging continues past page two.
-            questionCount.takeIf { reachedEnd }
+            (currentUiState.page to questionCount).takeIf { reachedEnd && currentUiState.canStartLoadMore }
         }.distinctUntilChanged()
             .filterNotNull()
             .collect { currentOnLoadMore() }

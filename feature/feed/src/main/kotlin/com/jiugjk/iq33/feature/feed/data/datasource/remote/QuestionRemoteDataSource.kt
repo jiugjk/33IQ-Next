@@ -4,6 +4,7 @@ import com.jiugjk.iq33.feature.feed.domain.model.Category
 import com.jiugjk.iq33.feature.feed.domain.model.CategorySource
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionPage
 import com.jiugjk.iq33.library.network.IqConstants
 import com.jiugjk.iq33.library.network.IqHtmlClient
 import kotlinx.coroutines.CoroutineDispatcher
@@ -27,11 +28,15 @@ internal class QuestionRemoteDataSource(
 ) {
     suspend fun fetchQuestionList(
         category: Category,
-        page: Int,
-    ): List<QuestionSummary> {
-        val document = htmlClient.get(buildListUrl(category, page))
+        nextPageUrl: String?,
+    ): QuestionPage {
+        require(nextPageUrl == null || QuestionListLinks.isSafeListUrl(nextPageUrl)) { "Invalid question list cursor" }
+        val url = nextPageUrl ?: buildListUrl(category)
+        val document = htmlClient.get(url)
 
-        return withContext(parsingDispatcher) { htmlParser.parseQuestionSummaries(document) }
+        return withContext(parsingDispatcher) {
+            QuestionPage(htmlParser.parseQuestionSummaries(document), QuestionListLinks.nextPage(document))
+        }
     }
 
     suspend fun fetchSearchResults(
@@ -61,14 +66,7 @@ internal class QuestionRemoteDataSource(
         }
     }
 
-    // Pagination beyond page 1 is a best-effort `?page=N` guess: the real parameter name used by
-    // 33IQ's own pagination hasn't been confirmed. If the site ignores it, callers will simply see
-    // the same first-page results again and the UI stops requesting further pages (see
-    // QuestionRepositoryImpl / feed list view model paging logic).
-    private fun buildListUrl(
-        category: Category,
-        page: Int,
-    ): String {
+    private fun buildListUrl(category: Category): String {
         val base =
             when (val source = category.source) {
                 CategorySource.QuestionList -> {
@@ -80,6 +78,6 @@ internal class QuestionRemoteDataSource(
                 }
             }
 
-        return if (page > 1) "$base?page=$page" else base
+        return base
     }
 }

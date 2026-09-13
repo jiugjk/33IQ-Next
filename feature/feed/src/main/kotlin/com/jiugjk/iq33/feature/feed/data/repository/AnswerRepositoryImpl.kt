@@ -9,16 +9,26 @@ import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
+import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 
 internal class AnswerRepositoryImpl(
     private val remoteDataSource: AnswerRemoteDataSource,
+    private val progressRepository: QuestionProgressRepository,
 ) : AnswerRepository {
     override suspend fun submitAnswer(
         questionId: Long,
         answer: String,
     ): Result<SubmitAnswerResult> =
         resultOf(TimberLogTags.NETWORK, "Failed to submit answer for $questionId") {
-            remoteDataSource.submitAnswer(questionId, answer)
+            val accountKey = progressRepository.current.accountKey
+            remoteDataSource.submitAnswer(questionId, answer).also { result ->
+                when (result) {
+                    is SubmitAnswerResult.Correct, is SubmitAnswerResult.Wrong, SubmitAnswerResult.AlreadyAnswered ->
+                        progressRepository.recordAnswered(questionId, accountKey)
+                    SubmitAnswerResult.AnswerAlreadyViewed -> progressRepository.recordAnswerViewed(questionId, accountKey)
+                    SubmitAnswerResult.LimitReached -> Unit
+                }
+            }
         }.withSideEffectFlag()
 
     override suspend fun quoteHint(questionId: Long): Result<HintQuote> =

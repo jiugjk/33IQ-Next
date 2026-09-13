@@ -20,7 +20,21 @@ internal sealed interface QuestionDetailEvent {
         val answer: String,
     ) : QuestionDetailEvent
 
+    data class CandidateToggled(
+        val index: Int,
+    ) : QuestionDetailEvent
+
+    data object CandidatesCleared : QuestionDetailEvent
+
     data object BookmarkToggled : QuestionDetailEvent
+
+    data object AnswerQuoteRequested : QuestionDetailEvent
+
+    data object AnswerRevealConfirmed : QuestionDetailEvent
+
+    data object AnswerRevealRecovered : QuestionDetailEvent
+
+    data object AnswerFlowDismissed : QuestionDetailEvent
 
     data object HintQuoteRequested : QuestionDetailEvent
 

@@ -14,6 +14,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import timber.log.Timber
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -42,6 +43,8 @@ data class IqSession(
      * logged-in response was never available to confirm which field carries it.
      */
     val score: String? = null,
+    /** Stable local-data namespace. A confirmed login UID is preferred; legacy sessions use an opaque ID. */
+    val accountKey: String? = null,
 ) {
     /** Only a positively verified session counts as logged in - see [SessionStatus]. */
     val isLoggedIn: Boolean get() = status == SessionStatus.AUTHENTICATED
@@ -115,6 +118,10 @@ class SessionManager(
     ): LoginResult {
         // A login attempt supersedes anything already in flight, and any state it might commit.
         invalidateInFlightWork()
+        cookieJar.invalidate()
+        // Never let an old account's cookies or local progress authenticate a new login attempt.
+        _sessionFlow.value = IqSession()
+        persist(_sessionFlow.value)
         val startGeneration = generation.get()
         val job = currentCoroutineContext()[Job]
 
@@ -138,17 +145,17 @@ class SessionManager(
                     return LoginResult.Failure(LoginError.NetworkUnavailable)
                 }
 
-            val status =
-                runCatching {
-                    Classifier.scalarContent(Json.parseToJsonElement(rawResponse) as? JsonObject)
-                }.getOrNull()
+            val loginPayload = runCatching { Json.parseToJsonElement(rawResponse) as? JsonObject }.getOrNull()
+            val status = Classifier.scalarContent(loginPayload)
+            val uid =
+                (loginPayload?.get("uid") as? JsonPrimitive)?.contentOrNull?.takeIf { it.toLongOrNull()?.let { id -> id > 0 } == true }
 
             // A real successful login is confirmed to reply {"status":"1","uid":"<id>"}, but the failure
             // status strings still aren't (no failed login was ever captured). Success is therefore
             // decided by the verification probe, which is the only signal confirmed against the real
             // server - the reported status only distinguishes *why* an unverified attempt failed.
             val probed = probeSessionStatus()
-            commit(startGeneration, probed)
+            commit(startGeneration, probed, accountKey = uid?.takeIf { status == "1" }?.let { "uid:$it" })
 
             // Login success is decided by *this* probe, not by whatever commit() kept on screen when
             // the probe was UNKNOWN (that path preserves the last verified session for display).
@@ -197,6 +204,7 @@ class SessionManager(
         preferences.edit {
             remove(PREF_KEY_STATUS)
             remove(PREF_KEY_SCORE)
+            remove(PREF_KEY_ACCOUNT)
             remove(PREF_KEY_LEGACY_LOGGED_IN)
         }
         _sessionFlow.value = IqSession(status = SessionStatus.GUEST)
@@ -218,6 +226,7 @@ class SessionManager(
     private fun commit(
         startGeneration: Int,
         probed: SessionStatus,
+        accountKey: String? = null,
     ): IqSession =
         synchronized(lock) {
             val current = _sessionFlow.value
@@ -228,7 +237,12 @@ class SessionManager(
             // must never turn a rejected login into a session.
             if (probed == SessionStatus.UNKNOWN) return current
 
-            val session = current.copy(status = probed, score = if (probed == SessionStatus.GUEST) null else current.score)
+            val session =
+                current.copy(
+                    status = probed,
+                    score = if (probed == SessionStatus.GUEST) null else current.score,
+                    accountKey = if (probed == SessionStatus.GUEST) null else accountKey ?: current.accountKey ?: newLocalAccountKey(),
+                )
 
             _sessionFlow.value = session
             persist(session)
@@ -264,13 +278,24 @@ class SessionManager(
                 else -> SessionStatus.UNKNOWN
             }
 
-        return IqSession(status = status, score = preferences.getString(PREF_KEY_SCORE, null))
+        val accountKey =
+            if (status == SessionStatus.AUTHENTICATED) {
+                preferences.getString(PREF_KEY_ACCOUNT, null) ?: newLocalAccountKey().also { key ->
+                    preferences.edit { putString(PREF_KEY_ACCOUNT, key) }
+                }
+            } else {
+                null
+            }
+        return IqSession(status = status, score = preferences.getString(PREF_KEY_SCORE, null), accountKey = accountKey)
     }
+
+    private fun newLocalAccountKey(): String = "local:${UUID.randomUUID()}"
 
     private fun persist(session: IqSession) {
         preferences.edit {
             putString(PREF_KEY_STATUS, session.status.name)
             putString(PREF_KEY_SCORE, session.score)
+            putString(PREF_KEY_ACCOUNT, session.accountKey)
             remove(PREF_KEY_LEGACY_LOGGED_IN)
         }
     }
@@ -334,6 +359,7 @@ class SessionManager(
         val NON_ACCOUNT_ENVELOPE_KEYS = setOf("message", "msg", "code", "error", "errno")
         const val PREF_KEY_STATUS = "session_status"
         const val PREF_KEY_SCORE = "score"
+        const val PREF_KEY_ACCOUNT = "session_account_key"
         const val PREF_KEY_LEGACY_LOGGED_IN = "is_logged_in"
     }
 }

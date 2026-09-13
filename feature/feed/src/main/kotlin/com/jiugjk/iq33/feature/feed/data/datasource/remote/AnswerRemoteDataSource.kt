@@ -51,6 +51,7 @@ internal class AnswerRemoteDataSource(
             "success" -> SubmitAnswerResult.Correct(scoreDelta = json.intOrNull("score"), myScore = json.intOrNull("myScore"))
             "wrong" -> SubmitAnswerResult.Wrong(scoreDelta = json.intOrNull("score"), myScore = json.intOrNull("myScore"))
             "repeat" -> SubmitAnswerResult.AlreadyAnswered
+            "seeanswer" -> SubmitAnswerResult.AnswerAlreadyViewed
             else ->
                 if (json.stringOrNull("isLimit") == "1") {
                     SubmitAnswerResult.LimitReached

@@ -4,20 +4,24 @@ import androidx.compose.runtime.Immutable
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseState
 import com.jiugjk.iq33.feature.feed.domain.model.Category
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionSummary
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
 
 @Immutable
 internal sealed interface FeedListUiState : BaseState {
     /** The category being loaded, so a retry and the chip row survive a failed first page. */
     val selectedCategory: Category
+    val progress: QuestionProgress
 
     @Immutable
     data class Loading(
         override val selectedCategory: Category = Category.ALL,
+        override val progress: QuestionProgress = QuestionProgress(),
     ) : FeedListUiState
 
     @Immutable
     data class Error(
         override val selectedCategory: Category = Category.ALL,
+        override val progress: QuestionProgress = QuestionProgress(),
     ) : FeedListUiState
 
     @Immutable
@@ -26,6 +30,11 @@ internal sealed interface FeedListUiState : BaseState {
         override val selectedCategory: Category = Category.ALL,
         val questions: List<QuestionSummary> = emptyList(),
         val page: Int = 1,
+        override val progress: QuestionProgress = QuestionProgress(),
+        val nextPageUrl: String? = null,
+        val refreshFailed: Boolean = false,
+        val noNewContent: Boolean = false,
+        val batchRevision: Int = 0,
         val isRefreshing: Boolean = false,
         val isLoadingMore: Boolean = false,
         val canLoadMore: Boolean = true,
@@ -35,6 +44,9 @@ internal sealed interface FeedListUiState : BaseState {
          */
         val loadMoreFailed: Boolean = false,
     ) : FeedListUiState {
+        val visibleQuestions: List<QuestionSummary>
+            get() = if (progress.hideAnswered) questions.filterNot { progress.isSubmissionBlocked(it.id) } else questions
+
         /** No page request is in flight, and none is sitting unretried. */
         private val isPagingIdle: Boolean
             get() = !isLoadingMore && !isRefreshing && !loadMoreFailed

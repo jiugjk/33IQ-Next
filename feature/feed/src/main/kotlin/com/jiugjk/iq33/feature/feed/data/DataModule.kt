@@ -1,11 +1,16 @@
 package com.jiugjk.iq33.feature.feed.data
 
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
+import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRevealRemoteDataSource
+import com.jiugjk.iq33.feature.feed.data.repository.AnswerRevealRepositoryImpl
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRevealRepository
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionHtmlParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionJsonParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionRemoteDataSource
 import com.jiugjk.iq33.feature.feed.data.repository.AnswerRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.QuestionRepositoryImpl
+import com.jiugjk.iq33.feature.feed.data.repository.QuestionProgressRepositoryImpl
+import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -26,6 +31,7 @@ internal val dataModule =
     module {
         single<CoroutineDispatcher>(parsingDispatcherQualifier) { Dispatchers.Default }
 
+        singleOf(::QuestionProgressRepositoryImpl) { bind<QuestionProgressRepository>() }
         singleOf(::QuestionRepositoryImpl) { bind<QuestionRepository>() }
         single {
             QuestionRemoteDataSource(
@@ -38,6 +44,8 @@ internal val dataModule =
         singleOf(::QuestionHtmlParser)
         singleOf(::QuestionJsonParser)
         singleOf(::AnswerRepositoryImpl) { bind<AnswerRepository>() }
+        singleOf(::AnswerRevealRepositoryImpl) { bind<AnswerRevealRepository>() }
+        single { AnswerRevealRemoteDataSource(htmlClient = get(), parsingDispatcher = get(parsingDispatcherQualifier)) }
         single {
             AnswerRemoteDataSource(
                 htmlClient = get(),

@@ -22,6 +22,9 @@ sealed interface SubmitAnswerResult {
     /** 33IQ rejected the submission because this account already answered this question before. */
     data object AlreadyAnswered : SubmitAnswerResult
 
+    /** Server `seeanswer`: viewing the analysis disqualifies answering, independently of having answered. */
+    data object AnswerAlreadyViewed : SubmitAnswerResult
+
     /** 33IQ's own `isLimit` flag came back set - exact trigger unconfirmed, surfaced as a soft failure. */
     data object LimitReached : SubmitAnswerResult
 }

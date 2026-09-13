@@ -141,6 +141,39 @@ private fun QuestionDetailTopBar(
     )
 }
 
+/**
+ * States what this device actually knows about the question's answer restrictions.
+ *
+ * The absence of a local record is reported as unknown rather than as "not answered yet": history
+ * from the website, another device or an older install is never imported.
+ */
+@Composable
+private fun RestrictionNotice(detail: QuestionDetail) {
+    if (!detail.isSubmissionBlocked) {
+        Text(
+            text = stringResource(R.string.feed_answered_unknown_notice),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = Dimen.spaceM),
+        )
+        return
+    }
+
+    val label =
+        when {
+            detail.isAnswerRevealPending -> R.string.feed_answer_pending_label
+            detail.hasViewedAnswer -> R.string.feed_submission_answer_viewed
+            else -> R.string.feed_submission_already_answered
+        }
+
+    Text(
+        text = stringResource(label),
+        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = Dimen.spaceM),
+    )
+}
+
 @Composable
 private fun QuestionDetailContent(
     uiState: QuestionDetailUiState.Content,
@@ -158,6 +191,8 @@ private fun QuestionDetailContent(
                 .padding(horizontal = Dimen.spaceL)
                 .padding(bottom = Dimen.spaceL),
     ) {
+        RestrictionNotice(detail = detail)
+
         if (detail.breadcrumb.isNotEmpty()) {
             Text(
                 text = detail.breadcrumb.joinToString(" · "),
@@ -205,11 +240,7 @@ private fun QuestionDetailContent(
 }
 
 /**
- * Everything below the question itself: where the answer is given, and the paid hint.
- *
- * The analysis 33IQ hands out for free is rendered here directly. It used to be a fallback shown
- * only until the paid answer-reveal replaced it; with that feature gone it is simply the analysis,
- * shown whenever the question has one.
+ * Answer input plus independent hint and analysis flows. Only explicit confirmation can reveal an answer.
  */
 @Composable
 private fun AnswerSections(
@@ -220,6 +251,8 @@ private fun AnswerSections(
 
     if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
         ChoiceAndSubmitSection(detail = detail, uiState = uiState, onEvent = onEvent)
+    } else if (detail.questionType == QuestionType.WORD_BANK) {
+        WordBankAnswerSection(uiState = uiState, onEvent = onEvent)
     } else if (detail.questionType == QuestionType.OPEN) {
         OpenAnswerSection(
             draftAnswer = uiState.draftAnswer,
@@ -232,7 +265,11 @@ private fun AnswerSections(
 
     HintSection(hintReveal = uiState.hintReveal, canStartHintReveal = uiState.canStartHintReveal, onEvent = onEvent)
 
-    detail.analysis?.let { analysis -> AnalysisSection(analysis = analysis) }
+    AnswerAnalysisSection(uiState = uiState, onEvent = onEvent)
+
+    if (uiState.answerReveal !is RevealState.Revealed) {
+        detail.analysis?.let { analysis -> AnalysisSection(analysis = analysis) }
+    }
 }
 
 @Composable

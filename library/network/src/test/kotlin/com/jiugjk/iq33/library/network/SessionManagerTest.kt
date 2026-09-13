@@ -17,6 +17,40 @@ class SessionManagerTest {
     private val sut = SessionManager(preferences, cookieJar, htmlClient)
 
     @Test
+    fun `verified login persists a stable UID namespace across logout and login`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"1","uid":"7"}"""
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","data":[]}"""
+            sut.login("account", "password")
+            sut.sessionFlow.value.accountKey shouldBeEqualTo "uid:7"
+            SessionManager(preferences, cookieJar, htmlClient).sessionFlow.value.accountKey shouldBeEqualTo "uid:7"
+            sut.logout()
+            sut.sessionFlow.value.accountKey shouldBeEqualTo null
+            sut.login("account", "password")
+            sut.sessionFlow.value.accountKey shouldBeEqualTo "uid:7"
+        }
+
+    @Test
+    fun `a failed account switch does not keep the previous accounts namespace`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"1","uid":"7"}"""
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","data":[]}"""
+            sut.login("account", "password")
+            coEvery { htmlClient.postFormForText(any(), any()) } throws IOException("offline")
+            sut.login("other", "password")
+            sut.sessionFlow.value.accountKey shouldBeEqualTo null
+            sut.sessionFlow.value.isLoggedIn shouldBeEqualTo false
+        }
+
+    @Test
+    fun `legacy authenticated sessions receive a persistent opaque namespace`() {
+        preferences.edit().putString("session_status", "AUTHENTICATED").apply()
+        val first = SessionManager(preferences, cookieJar, htmlClient).sessionFlow.value.accountKey
+        (first?.startsWith("local:") == true) shouldBeEqualTo true
+        SessionManager(preferences, cookieJar, htmlClient).sessionFlow.value.accountKey shouldBeEqualTo first
+    }
+
+    @Test
     fun `guest probe reply is reported as guest, not as a session`() =
         runTest {
             coEvery { htmlClient.getText(any()) } returns """{"status":"guest"}"""
