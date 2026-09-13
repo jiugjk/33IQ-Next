@@ -39,8 +39,9 @@ enum class SessionStatus {
 data class IqSession(
     val status: SessionStatus = SessionStatus.UNKNOWN,
     /**
-     * 学识 score shown by 33IQ next to a logged-in user's name. Always null for now: a real
-     * logged-in response was never available to confirm which field carries it.
+     * 学识 shown next to a logged-in user. Null means "unknown yet" — UI shows a skeleton, never 0.
+     * Server values (probe / submit myScore) replace this unconditionally; local deltas only adjust
+     * an already-known score.
      */
     val score: String? = null,
     /** Stable local-data namespace. A confirmed login UID is preferred; legacy sessions use an opaque ID. */
@@ -159,7 +160,7 @@ class SessionManager(
 
             // Login success is decided by *this* probe, not by whatever commit() kept on screen when
             // the probe was UNKNOWN (that path preserves the last verified session for display).
-            return when (probed) {
+            return when (probed.status) {
                 SessionStatus.AUTHENTICATED -> LoginResult.Success
                 SessionStatus.GUEST -> LoginResult.Failure(loginErrorFor(status))
                 SessionStatus.UNKNOWN -> LoginResult.Failure(LoginError.NotVerified)
@@ -210,22 +211,53 @@ class SessionManager(
         _sessionFlow.value = IqSession(status = SessionStatus.GUEST)
     }
 
-    private suspend fun probeSessionStatus(): SessionStatus =
+    /**
+     * Unconditional server truth. Replaces any optimistic local score.
+     * Pass the raw display string (usually digits from myScore / probe).
+     */
+    fun applyServerScore(score: String) {
+        synchronized(lock) {
+            val current = _sessionFlow.value
+            if (!current.isLoggedIn) return
+            val session = current.copy(score = score)
+            _sessionFlow.value = session
+            persist(session)
+        }
+    }
+
+    fun applyServerScore(score: Int) = applyServerScore(score.toString())
+
+    /**
+     * Optimistic only: adjusts an already-known score by [delta]. Does nothing when score is unknown
+     * (keeps skeleton — never invents 0).
+     */
+    fun applyOptimisticDelta(delta: Int) {
+        if (delta == 0) return
+        synchronized(lock) {
+            val current = _sessionFlow.value
+            if (!current.isLoggedIn) return
+            val base = current.score?.toIntOrNull() ?: return
+            val session = current.copy(score = (base + delta).toString())
+            _sessionFlow.value = session
+            persist(session)
+        }
+    }
+
+    private suspend fun probeSessionStatus(): ProbeOutcome =
         runCatching {
             val url = "${IqConstants.GUEST_PROBE_URL}?lang=zh-cn&p=3&time=${System.currentTimeMillis()}"
-
-            Classifier.classify(htmlClient.getText(url))
+            Classifier.classifyWithScore(htmlClient.getText(url))
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
 
             Timber.tag(LOG_TAG).w(throwable, "Failed to refresh session")
-            SessionStatus.UNKNOWN
+            ProbeOutcome(SessionStatus.UNKNOWN)
         }
 
     /** Applies [probed] only if no login/logout happened while the probe was running. */
     private fun commit(
         startGeneration: Int,
-        probed: SessionStatus,
+        probed: ProbeOutcome,
         accountKey: String? = null,
     ): IqSession =
         synchronized(lock) {
@@ -235,13 +267,21 @@ class SessionManager(
 
             // An unverifiable probe must not overwrite what was last verified - in particular it
             // must never turn a rejected login into a session.
-            if (probed == SessionStatus.UNKNOWN) return current
+            if (probed.status == SessionStatus.UNKNOWN) return current
+
+            val nextScore =
+                when {
+                    probed.status == SessionStatus.GUEST -> null
+                    // Server field available → unconditional override (no merge with local).
+                    probed.serverScore != null -> probed.serverScore
+                    else -> current.score
+                }
 
             val session =
                 current.copy(
-                    status = probed,
-                    score = if (probed == SessionStatus.GUEST) null else current.score,
-                    accountKey = if (probed == SessionStatus.GUEST) null else accountKey ?: current.accountKey ?: newLocalAccountKey(),
+                    status = probed.status,
+                    score = nextScore,
+                    accountKey = if (probed.status == SessionStatus.GUEST) null else accountKey ?: current.accountKey ?: newLocalAccountKey(),
                 )
 
             _sessionFlow.value = session
@@ -249,6 +289,11 @@ class SessionManager(
 
             session
         }
+
+    private data class ProbeOutcome(
+        val status: SessionStatus,
+        val serverScore: String? = null,
+    )
 
     private fun invalidateInFlightWork() {
         generation.incrementAndGet()
@@ -313,13 +358,17 @@ class SessionManager(
      * 33IQ's guest marker.
      */
     private object Classifier {
-        fun classify(body: String): SessionStatus {
+        fun classifyWithScore(body: String): ProbeOutcome {
             val payload = runCatching { Json.parseToJsonElement(body) }.getOrNull()
 
             return when (payload) {
-                is JsonArray -> classifyArray(payload)
-                is JsonObject -> classifyObject(payload)
-                else -> SessionStatus.UNKNOWN
+                is JsonArray -> ProbeOutcome(classifyArray(payload))
+                is JsonObject -> {
+                    val status = classifyObject(payload)
+                    val score = if (status == SessionStatus.AUTHENTICATED) extractScore(payload) else null
+                    ProbeOutcome(status, score)
+                }
+                else -> ProbeOutcome(SessionStatus.UNKNOWN)
             }
         }
 
@@ -327,6 +376,25 @@ class SessionManager(
             val primitive = obj?.get(STATUS_FIELD) as? JsonPrimitive ?: return null
 
             return primitive.contentOrNull ?: primitive.content.takeIf { it.isNotEmpty() }
+        }
+
+        private fun extractScore(obj: JsonObject): String? {
+            fun fromPrimitive(value: Any?): String? {
+                val primitive = value as? JsonPrimitive ?: return null
+                return primitive.contentOrNull?.takeIf { it.isNotBlank() }
+                    ?: primitive.content.takeIf { it.isNotBlank() }
+            }
+
+            fromPrimitive(obj["score"])?.let { return it }
+            fromPrimitive(obj["myscore"])?.let { return it }
+            fromPrimitive(obj["myScore"])?.let { return it }
+            val userinfo = obj["userinfo"] as? JsonObject
+            if (userinfo != null) {
+                fromPrimitive(userinfo["score"])?.let { return it }
+                fromPrimitive(userinfo["myscore"])?.let { return it }
+                fromPrimitive(userinfo["myScore"])?.let { return it }
+            }
+            return null
         }
 
         private fun classifyArray(payload: JsonArray): SessionStatus =

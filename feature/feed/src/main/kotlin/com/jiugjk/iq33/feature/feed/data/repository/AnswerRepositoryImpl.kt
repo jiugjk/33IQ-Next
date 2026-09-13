@@ -12,12 +12,14 @@ import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
+import com.jiugjk.iq33.library.network.SessionManager
 
 internal class AnswerRepositoryImpl(
     private val remoteDataSource: AnswerRemoteDataSource,
     private val progressRepository: QuestionProgressRepository,
     private val answerRecords: AnswerRecordRepository,
     private val feedbackPreferences: AnswerFeedbackPreferences,
+    private val sessionManager: SessionManager,
 ) : AnswerRepository {
     override suspend fun submitAnswer(
         questionId: Long,
@@ -36,6 +38,7 @@ internal class AnswerRepositoryImpl(
                             knowledgeDelta = result.scoreDelta,
                         )
                         feedbackPreferences.recordCorrect()
+                        applyKnowledgeScore(result.myScore, result.scoreDelta)
                     }
                     is SubmitAnswerResult.Wrong -> {
                         answerRecords.recordAnswer(
@@ -46,6 +49,7 @@ internal class AnswerRepositoryImpl(
                             knowledgeDelta = result.scoreDelta,
                         )
                         feedbackPreferences.recordWrong()
+                        applyKnowledgeScore(result.myScore, result.scoreDelta)
                     }
                     SubmitAnswerResult.AlreadyAnswered ->
                         answerRecords.recordAnswer(
@@ -78,6 +82,14 @@ internal class AnswerRepositoryImpl(
         resultOf(TimberLogTags.NETWORK, "Failed to praise question $questionId") {
             remoteDataSource.praiseQuestion(questionId)
         }.withSideEffectFlag()
+
+
+    private fun applyKnowledgeScore(myScore: Int?, scoreDelta: Int?) {
+        when {
+            myScore != null -> sessionManager.applyServerScore(myScore)
+            scoreDelta != null -> sessionManager.applyOptimisticDelta(scoreDelta)
+        }
+    }
 
     private fun <T> Result<T>.withSideEffectFlag(): Result<T> {
         if (this !is Result.Failure) return this
