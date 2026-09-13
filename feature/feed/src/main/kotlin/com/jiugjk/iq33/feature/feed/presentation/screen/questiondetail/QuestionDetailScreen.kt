@@ -39,6 +39,9 @@ import com.jiugjk.iq33.feature.feed.R
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
+import androidx.compose.runtime.collectAsState
 
 @Composable
 fun QuestionDetailScreen(
@@ -248,9 +251,32 @@ private fun AnswerSections(
     onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     val detail = uiState.detail
+    val feedbackPrefs: AnswerFeedbackPreferences = koinInject()
+    val animationsEnabled by feedbackPrefs.animationsEnabled.collectAsStateWithLifecycle(feedbackPrefs.currentAnimationsEnabled)
+    val hapticsEnabled by feedbackPrefs.hapticsEnabled.collectAsStateWithLifecycle(feedbackPrefs.currentHapticsEnabled)
+    val streak by feedbackPrefs.streak.collectAsStateWithLifecycle(feedbackPrefs.currentStreak)
+    val feedback =
+        rememberFeedbackAnimation(
+            submission = uiState.submission,
+            animationsEnabled = animationsEnabled,
+            hapticsEnabled = hapticsEnabled,
+        )
+
+    StreakBanner(streak = streak, modifier = Modifier.padding(top = Dimen.spaceS))
+
+    KnowledgeFloatLabel(
+        delta =
+            when (val result = (uiState.submission as? SubmissionState.Done)?.result) {
+                is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Correct -> result.scoreDelta
+                is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Wrong -> result.scoreDelta
+                else -> null
+            },
+        visible = feedback.showFloat,
+        offsetY = feedback.floatY,
+    )
 
     if (detail.questionType == QuestionType.CHOICE && detail.choices.isNotEmpty()) {
-        ChoiceAndSubmitSection(detail = detail, uiState = uiState, onEvent = onEvent)
+        ChoiceAndSubmitSection(detail = detail, uiState = uiState, feedback = feedback, onEvent = onEvent)
     } else if (detail.questionType == QuestionType.WORD_BANK) {
         WordBankAnswerSection(uiState = uiState, onEvent = onEvent)
     } else if (detail.questionType == QuestionType.OPEN) {
@@ -260,6 +286,7 @@ private fun AnswerSections(
             enabled = uiState.canSelectChoice,
             onDraftChange = { text -> onEvent(QuestionDetailEvent.DraftAnswerChanged(text)) },
             onSubmitAnswerClick = { answer -> onEvent(QuestionDetailEvent.AnswerSubmitted(answer)) },
+            onRedoClick = { onEvent(QuestionDetailEvent.RedoRequested) },
         )
     }
 
@@ -276,6 +303,7 @@ private fun AnswerSections(
 private fun ChoiceAndSubmitSection(
     detail: QuestionDetail,
     uiState: QuestionDetailUiState.Content,
+    feedback: FeedbackAnimState,
     onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     // Choices stay tappable only while a submission could still be sent: once one is in flight the
@@ -284,6 +312,7 @@ private fun ChoiceAndSubmitSection(
         choices = detail.choices,
         selectedChoiceId = uiState.selectedChoiceId,
         submission = uiState.submission,
+        feedback = feedback,
         enabled = uiState.canSelectChoice,
         onChoiceSelect = { choiceId -> onEvent(QuestionDetailEvent.ChoiceSelected(choiceId)) },
     )

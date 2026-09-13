@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,6 +67,8 @@ fun SettingsScreen(
                     onNavigateToAboutLibraries = onNavigateToAboutLibraries,
                     onNavigateToLogin = onNavigateToLogin,
                     onThemeModeSelect = viewModel::onThemeModeSelected,
+                    onAnimationsChanged = viewModel::onAnimationsChanged,
+                    onHapticsChanged = viewModel::onHapticsChanged,
                     onLogoutClick = viewModel::onLogoutClick,
                 )
         }
@@ -78,6 +81,8 @@ private fun SettingsContent(
     onNavigateToAboutLibraries: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onThemeModeSelect: (ThemeMode) -> Unit,
+    onAnimationsChanged: (Boolean) -> Unit,
+    onHapticsChanged: (Boolean) -> Unit,
     onLogoutClick: () -> Unit,
 ) {
     Column(
@@ -86,6 +91,13 @@ private fun SettingsContent(
         AccountCard(session = uiState.session, onNavigateToLogin = onNavigateToLogin, onLogoutClick = onLogoutClick)
 
         ThemeCard(themeMode = uiState.themeMode, onThemeModeSelect = onThemeModeSelect)
+
+        FeedbackCard(
+            animationsEnabled = uiState.animationsEnabled,
+            hapticsEnabled = uiState.hapticsEnabled,
+            onAnimationsChanged = onAnimationsChanged,
+            onHapticsChanged = onHapticsChanged,
+        )
 
         val context = LocalContext.current
 
@@ -178,6 +190,39 @@ private fun AccountCard(
                 Button(onClick = onNavigateToLogin) {
                     Text(stringResource(R.string.settings_login))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedbackCard(
+    animationsEnabled: Boolean,
+    hapticsEnabled: Boolean,
+    onAnimationsChanged: (Boolean) -> Unit,
+    onHapticsChanged: (Boolean) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(Dimen.spaceL)) {
+            Text(text = stringResource(R.string.settings_feedback_title), style = MaterialTheme.typography.bodyLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.settings_feedback_animations), modifier = Modifier.weight(1f))
+                Switch(checked = animationsEnabled, onCheckedChange = onAnimationsChanged)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceS),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.settings_feedback_haptics), modifier = Modifier.weight(1f))
+                Switch(checked = hapticsEnabled, onCheckedChange = onHapticsChanged)
             }
         }
     }
@@ -279,6 +324,8 @@ private fun SettingsScreenPreview() {
         onNavigateToAboutLibraries = { },
         onNavigateToLogin = { },
         onThemeModeSelect = { },
+        onAnimationsChanged = { },
+        onHapticsChanged = { },
         onLogoutClick = { },
     )
 }

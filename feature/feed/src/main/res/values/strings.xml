@@ -60,9 +60,9 @@
     <string name="feed_redo_question">重做本题</string>
     <string name="feed_submit_answer">提交答案</string>
     <string name="feed_submission_correct">回答正确！学识 +%1$d（当前 %2$d）</string>
-    <string name="feed_submission_wrong">回答错误。学识 %1$d（当前 %2$d）</string>
+    <string name="feed_submission_wrong">再想想～学识 %1$d（当前 %2$d）</string>
     <string name="feed_submission_correct_no_score">回答正确！（本次学识变化未返回）</string>
-    <string name="feed_submission_wrong_no_score">回答错误。（本次学识变化未返回）</string>
+    <string name="feed_submission_wrong_no_score">再想想～这次没拿到学识变化</string>
     <string name="feed_submission_already_answered">您已经回答过该题，无法重复提交</string>
     <string name="feed_submission_answer_viewed">您已看过该题解析，无法再答题</string>
     <string name="feed_submission_limit_reached">已达到今日答题上限</string>
@@ -116,4 +116,6 @@
     <string name="feed_history_result_wrong">✗ 答错</string>
     <string name="feed_history_result_viewed">👁 仅看过解析</string>
     <string name="feed_history_result_answered">已答</string>
+
+    <string name="feed_submission_wrong_choice">再想想～你选的是 %1$s</string>
 </resources>

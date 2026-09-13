@@ -4,6 +4,7 @@ import com.jiugjk.iq33.feature.base.domain.result.Result
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import io.mockk.coEvery
@@ -23,7 +24,8 @@ class AnswerRepositoryTest {
             every { current } returns QuestionProgress(accountKey = "uid:1")
         }
     private val answerRecords = mockk<AnswerRecordRepository>(relaxed = true)
-    private val sut = AnswerRepositoryImpl(remote, progress, answerRecords)
+    private val feedback = mockk<AnswerFeedbackPreferences>(relaxed = true)
+    private val sut = AnswerRepositoryImpl(remote, progress, answerRecords, feedback)
 
     @Test
     fun `correct wrong and repeated answers are persisted`() =

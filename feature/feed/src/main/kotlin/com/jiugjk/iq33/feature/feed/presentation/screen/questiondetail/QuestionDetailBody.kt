@@ -1,5 +1,7 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
+import kotlin.math.roundToInt
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -223,10 +228,17 @@ internal fun ChoiceSection(
     choices: List<Choice>,
     selectedChoiceId: String?,
     submission: SubmissionState = SubmissionState.Idle,
+    feedback: FeedbackAnimState = FeedbackAnimState(1f, 0f, 0f, false),
     enabled: Boolean,
     onChoiceSelect: (String) -> Unit,
 ) {
-    Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
+    Column(
+        modifier =
+            Modifier
+                .padding(top = Dimen.spaceL)
+                .scale(feedback.scale)
+                .offset { IntOffset(feedback.shakeX.roundToInt(), 0) },
+    ) {
         choices.forEach { choice ->
             val isSelected = choice.id == selectedChoiceId
             val done = submission as? SubmissionState.Done

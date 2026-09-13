@@ -7,11 +7,13 @@ import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRevealRemoteDat
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionHtmlParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionJsonParser
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionRemoteDataSource
+import com.jiugjk.iq33.feature.feed.data.repository.AnswerFeedbackPreferencesImpl
 import com.jiugjk.iq33.feature.feed.data.repository.AnswerRecordRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.AnswerRevealRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.AnswerRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.QuestionProgressRepositoryImpl
 import com.jiugjk.iq33.feature.feed.data.repository.QuestionRepositoryImpl
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRevealRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
@@ -42,6 +44,7 @@ internal val dataModule =
         }
         single { get<AnswerRecordDatabase>().answerRecordDao() }
         singleOf(::AnswerRecordRepositoryImpl) { bind<AnswerRecordRepository>() }
+        singleOf(::AnswerFeedbackPreferencesImpl) { bind<AnswerFeedbackPreferences>() }
 
         singleOf(::QuestionProgressRepositoryImpl) { bind<QuestionProgressRepository>() }
         singleOf(::QuestionRepositoryImpl) { bind<QuestionRepository>() }

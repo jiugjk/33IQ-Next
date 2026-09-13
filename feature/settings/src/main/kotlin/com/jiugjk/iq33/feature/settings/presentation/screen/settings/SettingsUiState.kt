@@ -11,5 +11,7 @@ internal sealed interface SettingsUiState : BaseState {
     data class Content(
         val session: IqSession = IqSession(),
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
+        val animationsEnabled: Boolean = true,
+        val hapticsEnabled: Boolean = true,
     ) : SettingsUiState
 }

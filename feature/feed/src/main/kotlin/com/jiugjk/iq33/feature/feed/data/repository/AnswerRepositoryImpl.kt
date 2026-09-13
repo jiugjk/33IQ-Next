@@ -8,6 +8,7 @@ import com.jiugjk.iq33.feature.feed.data.datasource.remote.IqResponseException
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
@@ -16,6 +17,7 @@ internal class AnswerRepositoryImpl(
     private val remoteDataSource: AnswerRemoteDataSource,
     private val progressRepository: QuestionProgressRepository,
     private val answerRecords: AnswerRecordRepository,
+    private val feedbackPreferences: AnswerFeedbackPreferences,
 ) : AnswerRepository {
     override suspend fun submitAnswer(
         questionId: Long,
@@ -25,7 +27,7 @@ internal class AnswerRepositoryImpl(
             val accountKey = progressRepository.current.accountKey
             remoteDataSource.submitAnswer(questionId, answer).also { result ->
                 when (result) {
-                    is SubmitAnswerResult.Correct ->
+                    is SubmitAnswerResult.Correct -> {
                         answerRecords.recordAnswer(
                             accountKey = accountKey,
                             questionId = questionId,
@@ -33,7 +35,9 @@ internal class AnswerRepositoryImpl(
                             isCorrect = true,
                             knowledgeDelta = result.scoreDelta,
                         )
-                    is SubmitAnswerResult.Wrong ->
+                        feedbackPreferences.recordCorrect()
+                    }
+                    is SubmitAnswerResult.Wrong -> {
                         answerRecords.recordAnswer(
                             accountKey = accountKey,
                             questionId = questionId,
@@ -41,6 +45,8 @@ internal class AnswerRepositoryImpl(
                             isCorrect = false,
                             knowledgeDelta = result.scoreDelta,
                         )
+                        feedbackPreferences.recordWrong()
+                    }
                     SubmitAnswerResult.AlreadyAnswered ->
                         answerRecords.recordAnswer(
                             accountKey = accountKey,

@@ -14,6 +14,14 @@
     <string name="settings_logout">退出登录</string>
 
     <string name="settings_theme_title">外观</string>
+
+    <string name="settings_feedback_title">答题反馈</string>
+    <string name="settings_feedback_animations">答题动效</string>
+    <string name="settings_feedback_haptics">震动反馈</string>
+    <string name="settings_quiz_prefs_title">刷题偏好</string>
+    <string name="settings_hide_answered">隐藏已答或已看解析的题目</string>
+    <string name="settings_hide_answered_subtitle">仅按本机记录过滤；网页和其他设备的历史不同步。</string>
+
     <string name="settings_theme_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>

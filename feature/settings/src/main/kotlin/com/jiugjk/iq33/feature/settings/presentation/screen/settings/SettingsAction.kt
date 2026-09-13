@@ -17,4 +17,18 @@ internal sealed interface SettingsAction : BaseAction<SettingsUiState> {
         override fun reduce(state: SettingsUiState): SettingsUiState =
             (state as? SettingsUiState.Content)?.copy(themeMode = themeMode) ?: state
     }
+
+    class AnimationsChanged(
+        private val enabled: Boolean,
+    ) : SettingsAction {
+        override fun reduce(state: SettingsUiState): SettingsUiState =
+            (state as? SettingsUiState.Content)?.copy(animationsEnabled = enabled) ?: state
+    }
+
+    class HapticsChanged(
+        private val enabled: Boolean,
+    ) : SettingsAction {
+        override fun reduce(state: SettingsUiState): SettingsUiState =
+            (state as? SettingsUiState.Content)?.copy(hapticsEnabled = enabled) ?: state
+    }
 }

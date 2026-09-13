@@ -85,7 +85,7 @@ internal fun OpenAnswerSection(
 @Composable
 private fun SubmissionResultText(submission: SubmissionState) {
     when (submission) {
-        is SubmissionState.Done -> SubmissionDoneText(submission.result)
+        is SubmissionState.Done -> SubmissionDoneText(submission.submittedAnswer, submission.result)
         SubmissionState.Failed ->
             Text(
                 text = stringResource(R.string.feed_submission_failed),
@@ -98,7 +98,7 @@ private fun SubmissionResultText(submission: SubmissionState) {
 }
 
 @Composable
-private fun SubmissionDoneText(result: SubmitAnswerResult) {
+private fun SubmissionDoneText(submittedAnswer: String, result: SubmitAnswerResult) {
     when (result) {
         is SubmitAnswerResult.Correct ->
             Text(
@@ -116,12 +116,18 @@ private fun SubmissionDoneText(result: SubmitAnswerResult) {
         is SubmitAnswerResult.Wrong ->
             Text(
                 text =
-                    scoreText(
-                        R.string.feed_submission_wrong,
-                        R.string.feed_submission_wrong_no_score,
-                        result.scoreDelta,
-                        result.myScore,
-                    ),
+                    if (result.scoreDelta != null && result.myScore != null) {
+                        scoreText(
+                            R.string.feed_submission_wrong,
+                            R.string.feed_submission_wrong_no_score,
+                            result.scoreDelta,
+                            result.myScore,
+                        )
+                    } else if (submittedAnswer.isNotBlank()) {
+                        stringResource(R.string.feed_submission_wrong_choice, submittedAnswer)
+                    } else {
+                        stringResource(R.string.feed_submission_wrong_no_score)
+                    },
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Dimen.spaceS),
