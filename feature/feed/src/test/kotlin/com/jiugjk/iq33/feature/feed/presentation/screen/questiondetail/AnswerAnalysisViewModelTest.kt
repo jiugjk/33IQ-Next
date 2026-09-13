@@ -8,6 +8,7 @@ import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionJsonParser
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
+import com.jiugjk.iq33.feature.feed.data.repository.InMemoryAnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.usecase.AnswerRevealUseCases
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase

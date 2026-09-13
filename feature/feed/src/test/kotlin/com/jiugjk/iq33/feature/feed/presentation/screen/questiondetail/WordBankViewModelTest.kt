@@ -7,6 +7,7 @@ import com.jiugjk.iq33.feature.favourite.domain.usecase.IsBookmarkedUseCase
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionJsonParser
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
+import com.jiugjk.iq33.feature.feed.data.repository.InMemoryAnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.QuestionAnswerUseCases

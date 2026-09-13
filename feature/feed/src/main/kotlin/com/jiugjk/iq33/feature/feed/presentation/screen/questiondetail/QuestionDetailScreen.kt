@@ -283,6 +283,7 @@ private fun ChoiceAndSubmitSection(
     ChoiceSection(
         choices = detail.choices,
         selectedChoiceId = uiState.selectedChoiceId,
+        submission = uiState.submission,
         enabled = uiState.canSelectChoice,
         onChoiceSelect = { choiceId -> onEvent(QuestionDetailEvent.ChoiceSelected(choiceId)) },
     )
@@ -292,6 +293,7 @@ private fun ChoiceAndSubmitSection(
         submission = uiState.submission,
         enabled = uiState.canSelectChoice,
         onSubmitAnswerClick = { choiceId -> onEvent(QuestionDetailEvent.AnswerSubmitted(choiceId)) },
+        onRedoClick = { onEvent(QuestionDetailEvent.RedoRequested) },
     )
 }
 

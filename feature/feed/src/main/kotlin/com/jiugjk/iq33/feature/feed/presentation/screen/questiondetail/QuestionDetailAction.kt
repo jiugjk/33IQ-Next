@@ -22,9 +22,51 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         private val detail: QuestionDetail,
         private val isBookmarked: Boolean,
         private val bookmarkFailed: Boolean = false,
+        private val selectedChoiceId: String? = null,
+        private val draftAnswer: String = "",
+        private val submission: SubmissionState = SubmissionState.Idle,
+        private val explanationAlreadyViewed: Boolean = false,
+        private val hintAlreadyViewed: Boolean = false,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState) =
-            QuestionDetailUiState.Content(detail = detail, isBookmarked = isBookmarked, bookmarkFailed = bookmarkFailed)
+            QuestionDetailUiState.Content(
+                detail = detail,
+                isBookmarked = isBookmarked,
+                bookmarkFailed = bookmarkFailed,
+                selectedChoiceId = selectedChoiceId,
+                draftAnswer = draftAnswer,
+                submission = submission,
+                // Mark analysis/hint as already handled without inventing paid content.
+                answerReveal =
+                    if (explanationAlreadyViewed) {
+                        RevealState.Revealed(com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal("", ""))
+                    } else {
+                        RevealState.Idle
+                    },
+                hintReveal =
+                    if (hintAlreadyViewed) {
+                        RevealState.Revealed(com.jiugjk.iq33.feature.feed.domain.model.HintReveal(""))
+                    } else {
+                        RevealState.Idle
+                    },
+            )
+    }
+
+    class AnswerEchoCleared(
+        private val questionId: Long,
+    ) : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
+            if (state is QuestionDetailUiState.Content && state.detail.id == questionId) {
+                state.copy(
+                    selectedChoiceId = null,
+                    draftAnswer = "",
+                    selectedCandidateIndices = emptyList(),
+                    submission = SubmissionState.Idle,
+                    detail = state.detail.copy(isAnswered = false),
+                )
+            } else {
+                state
+            }
     }
 
     object LoadFailure : QuestionDetailAction {

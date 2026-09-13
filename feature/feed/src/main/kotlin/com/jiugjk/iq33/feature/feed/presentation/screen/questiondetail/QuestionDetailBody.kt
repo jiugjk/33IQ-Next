@@ -222,28 +222,53 @@ private fun StatText(
 internal fun ChoiceSection(
     choices: List<Choice>,
     selectedChoiceId: String?,
+    submission: SubmissionState = SubmissionState.Idle,
     enabled: Boolean,
     onChoiceSelect: (String) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
         choices.forEach { choice ->
             val isSelected = choice.id == selectedChoiceId
+            val done = submission as? SubmissionState.Done
+            val showCorrect = done != null && (
+                (done.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Correct && choice.id == done.submittedAnswer) ||
+                    (done.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Wrong && false)
+            )
+            val showWrong = done?.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Wrong &&
+                choice.id == done.submittedAnswer
 
+            val container =
+                when {
+                    showCorrect -> MaterialTheme.colorScheme.tertiaryContainer
+                    showWrong -> MaterialTheme.colorScheme.errorContainer
+                    isSelected -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.surface
+                }
+            val content =
+                when {
+                    showCorrect -> MaterialTheme.colorScheme.onTertiaryContainer
+                    showWrong -> MaterialTheme.colorScheme.onErrorContainer
+                    isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
+            val borderColor =
+                when {
+                    showCorrect -> MaterialTheme.colorScheme.tertiary
+                    showWrong -> MaterialTheme.colorScheme.error
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.outline
+                }
             OutlinedButton(
                 onClick = { onChoiceSelect(choice.id) },
                 enabled = enabled,
                 colors =
-                    if (isSelected) {
-                        ButtonDefaults.outlinedButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    } else {
-                        ButtonDefaults.outlinedButtonColors()
-                    },
+                    ButtonDefaults.outlinedButtonColors(
+                        containerColor = container,
+                        contentColor = content,
+                    ),
                 border =
-                    if (isSelected) {
-                        BorderStroke(SelectedChoiceBorderWidth, MaterialTheme.colorScheme.primary)
+                    if (showCorrect || showWrong || isSelected) {
+                        BorderStroke(SelectedChoiceBorderWidth, borderColor)
                     } else {
                         ButtonDefaults.outlinedButtonBorder(enabled)
                     },

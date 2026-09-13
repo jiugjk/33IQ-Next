@@ -8,6 +8,9 @@ import com.jiugjk.iq33.feature.favourite.domain.repository.BookmarkResult
 import com.jiugjk.iq33.feature.favourite.domain.usecase.IsBookmarkedUseCase
 import com.jiugjk.iq33.feature.favourite.domain.usecase.ToggleBookmarkUseCase
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionDetail
+import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
+import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
+import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.AnswerRevealUseCases
@@ -24,6 +27,7 @@ internal class QuestionDetailViewModel(
     private val questionAnswerUseCases: QuestionAnswerUseCases,
     private val questionProgressRepository: QuestionProgressRepository,
     private val answerRevealUseCases: AnswerRevealUseCases,
+    private val answerRecords: AnswerRecordRepository,
 ) : BaseViewModel<QuestionDetailUiState, QuestionDetailAction>(QuestionDetailUiState.Loading) {
     private var loadJob: Job? = null
     private var loadedQuestionId: Long? = null
@@ -149,6 +153,7 @@ internal class QuestionDetailViewModel(
             QuestionDetailEvent.HintQuoteRequested -> requestHintQuote(content)
             QuestionDetailEvent.HintRevealConfirmed -> confirmHintReveal(content)
             QuestionDetailEvent.PraiseClicked -> praise(content)
+            QuestionDetailEvent.RedoRequested -> redo(content)
             QuestionDetailEvent.HintFlowDismissed -> sendAction(QuestionDetailAction.HintFlowDismissed)
             else -> Unit
         }
@@ -159,6 +164,8 @@ internal class QuestionDetailViewModel(
         content: QuestionDetailUiState.Content?,
         answer: String,
     ) {
+        // Echoed Done means we already have a local result — never re-hit the server for 学识.
+        if (content?.submission is SubmissionState.Done) return
         if (content?.canSubmitAnswer(answer) != true || submission.isActive) return
 
         val questionId = content.detail.id
@@ -261,13 +268,73 @@ internal class QuestionDetailViewModel(
         }
     }
 
+    private fun redo(content: QuestionDetailUiState.Content?) {
+        if (content == null) return
+        val questionId = content.detail.id
+        val owner = questionProgressRepository.current.accountKey
+        answerRecords.clearAnswerState(owner, questionId)
+        sendAction(QuestionDetailAction.AnswerEchoCleared(questionId))
+    }
+
     /** A failed bookmark lookup must not take the loaded question down with it - it is a side note. */
     private suspend fun loadSuccessAction(
         detail: QuestionDetail,
         id: Long,
-    ): QuestionDetailAction.LoadSuccess =
-        when (val bookmarked = isBookmarkedUseCase(id)) {
-            is BookmarkResult.Success -> QuestionDetailAction.LoadSuccess(detail, bookmarked.value)
-            is BookmarkResult.Failure -> QuestionDetailAction.LoadSuccess(detail, isBookmarked = false, bookmarkFailed = true)
+    ): QuestionDetailAction.LoadSuccess {
+        val record = answerRecords.get(questionProgressRepository.current.accountKey, id)
+        val echoedSubmission =
+            when {
+                record?.answeredAt == null && record?.selectedOption == null && record?.isCorrect == null ->
+                    SubmissionState.Idle
+                record.isCorrect == true ->
+                    SubmissionState.Done(
+                        record.selectedOption.orEmpty(),
+                        SubmitAnswerResult.Correct(record.knowledgeDelta, null),
+                    )
+                record.isCorrect == false ->
+                    SubmissionState.Done(
+                        record.selectedOption.orEmpty(),
+                        SubmitAnswerResult.Wrong(record.knowledgeDelta, null),
+                    )
+                else ->
+                    SubmissionState.Done(
+                        record.selectedOption.orEmpty(),
+                        SubmitAnswerResult.AlreadyAnswered,
+                    )
+            }
+        val selected =
+            when (detail.questionType) {
+                QuestionType.CHOICE -> record?.selectedOption
+                else -> null
+            }
+        val draft =
+            when (detail.questionType) {
+                QuestionType.OPEN -> record?.selectedOption.orEmpty()
+                else -> ""
+            }
+        val bookmarked = isBookmarkedUseCase(id)
+        return when (bookmarked) {
+            is BookmarkResult.Success ->
+                QuestionDetailAction.LoadSuccess(
+                    detail = detail,
+                    isBookmarked = bookmarked.value,
+                    selectedChoiceId = selected,
+                    draftAnswer = draft,
+                    submission = echoedSubmission,
+                    explanationAlreadyViewed = record?.viewedExplanation == true,
+                    hintAlreadyViewed = record?.viewedHint == true,
+                )
+            is BookmarkResult.Failure ->
+                QuestionDetailAction.LoadSuccess(
+                    detail = detail,
+                    isBookmarked = false,
+                    bookmarkFailed = true,
+                    selectedChoiceId = selected,
+                    draftAnswer = draft,
+                    submission = echoedSubmission,
+                    explanationAlreadyViewed = record?.viewedExplanation == true,
+                    hintAlreadyViewed = record?.viewedHint == true,
+                )
         }
+    }
 }

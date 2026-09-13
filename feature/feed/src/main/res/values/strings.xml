@@ -57,6 +57,7 @@
     <string name="feed_empty_description">换个分类看看，或稍后再试</string>
     <string name="feed_bookmark_failed">收藏操作失败，请稍后重试</string>
 
+    <string name="feed_redo_question">重做本题</string>
     <string name="feed_submit_answer">提交答案</string>
     <string name="feed_submission_correct">回答正确！学识 +%1$d（当前 %2$d）</string>
     <string name="feed_submission_wrong">回答错误。学识 %1$d（当前 %2$d）</string>
