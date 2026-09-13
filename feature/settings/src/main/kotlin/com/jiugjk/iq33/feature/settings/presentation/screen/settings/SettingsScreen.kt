@@ -321,12 +321,6 @@ private fun KnowledgeChangesPanel(changes: List<KnowledgeChangeEntry>) {
             val formatter = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
             changes.forEach { entry ->
                 val sign = if (entry.delta > 0) "+" else ""
-                val label =
-                    if (entry.title.isNotBlank()) {
-                        entry.title
-                    } else {
-                        stringResource(R.string.settings_knowledge_item, entry.questionId, sign, entry.delta)
-                    }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceS),
                     verticalAlignment = Alignment.CenterVertically,
