@@ -52,6 +52,33 @@ class QuestionRemoteDataSourceTest {
         }
 
     @Test
+    fun `featured list pagination continues onto the 24h feed`() =
+        runTest {
+            coEvery { htmlClient.get(LIST_URL) } returns
+                Jsoup.parse(
+                    listHtml(1) +
+                        "<div class='pagination'><ul>" +
+                        "<li class='active'><a href='#'>1</a></li>" +
+                        "<li><a href='/24h/2.html'>2</a></li></ul></div>",
+                    LIST_URL,
+                )
+            coEvery { htmlClient.get("https://www.33iq.com/24h/2.html") } returns
+                Jsoup.parse(
+                    listHtml(2) +
+                        "<div class='pagination'><ul>" +
+                        "<li class='active'><a href='#'>2</a></li>" +
+                        "<li><a href='/24h/3.html'>3</a></li></ul></div>",
+                    "https://www.33iq.com/24h/2.html",
+                )
+            val first = sut.fetchQuestionList(Category.ALL, null)
+            first.nextPageUrl shouldBeEqualTo "https://www.33iq.com/24h/2.html"
+            first.isNextPageInferred shouldBeEqualTo false
+            val second = sut.fetchQuestionList(Category.FEATURED, first.nextPageUrl)
+            second.questions.single().id shouldBeEqualTo 2L
+            second.nextPageUrl shouldBeEqualTo "https://www.33iq.com/24h/3.html"
+        }
+
+    @Test
     fun `an explicit last page does not use legacy paging`() =
         runTest {
             coEvery { htmlClient.get(LIST_URL) } returns

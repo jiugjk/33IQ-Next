@@ -8,6 +8,9 @@ import org.jsoup.nodes.Document
 internal object QuestionListLinks {
     private val NEXT_LABELS = setOf("下一页", "下一页 »", "下页", "next", ">", ">>", "›", "»")
     private val DETAIL_PATH = Regex("/question/\\d+\\.html")
+
+    // Archived /question/ (全部 / 精选题目) paginates as /24h.html, /24h/2.html, … not /question/N.html.
+    private val FEATURED_FEED_PATH = Regex("^/24h(/\\d+)?\\.html$")
     private const val HTTPS_PORT = 443
 
     fun nextPage(document: Document): String? {
@@ -74,7 +77,14 @@ internal object QuestionListLinks {
         val url = value.toHttpUrlOrNull() ?: return false
         return url.scheme == "https" && url.host == IqConstants.BASE_URL.toHttpUrlOrNull()?.host &&
             url.port == HTTPS_PORT && url.username.isEmpty() && url.password.isEmpty() &&
-            (url.encodedPath.startsWith("/question/") || url.encodedPath.startsWith("/tag/")) &&
-            !DETAIL_PATH.matches(url.encodedPath)
+            isListPath(url.encodedPath)
+    }
+
+    private fun isListPath(path: String): Boolean {
+        if (DETAIL_PATH.matches(path)) return false
+        return path == "/question" ||
+            path.startsWith("/question/") ||
+            path.startsWith("/tag/") ||
+            FEATURED_FEED_PATH.matches(path)
     }
 }

@@ -68,6 +68,23 @@ class QuestionListLinksTest {
     }
 
     @Test
+    fun `featured question list follows 24h pages instead of stopping or jumping to the last page`() {
+        // Reduced from archived /question/: 全部 / 精选题目 paginate as /24h/N.html.
+        next(
+            "<div class='pagination pagination-right'><ul>" +
+                "<li class='disabled'><a href='/24h.html'>&lt;</a></li>" +
+                "<li class='active'><a href='#'>1</a></li>" +
+                "<li><a href='/24h/2.html'>2</a></li>" +
+                "<li><a href='/24h/3.html'>3</a></li>" +
+                "<li><a href='/24h/7169.html'>&gt;</a></li></ul></div>",
+        ) shouldBeEqualTo "https://www.33iq.com/24h/2.html"
+        QuestionListLinks.isSafeListUrl("https://www.33iq.com/24h.html") shouldBeEqualTo true
+        QuestionListLinks.isSafeListUrl("https://www.33iq.com/24h/2.html") shouldBeEqualTo true
+        QuestionListLinks.isSafeListUrl("https://www.33iq.com/24h/evil.html") shouldBeEqualTo false
+        QuestionListLinks.isSafeListUrl("https://www.33iq.com/question") shouldBeEqualTo true
+    }
+
+    @Test
     fun `declared next link has priority over a numbered sibling`() {
         next(
             "<link rel='next' href='?cursor=next'>" +
