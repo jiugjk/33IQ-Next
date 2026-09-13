@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,12 +80,20 @@ internal fun FeedEmptyState(
 ) {
     val hidden = uiState.questions.isNotEmpty()
     val canAdvance = uiState.canLoadMore && !uiState.loadMoreFailed
+    val filterOn = uiState.progress.hideAnswered
 
     val title =
         when {
-            hidden -> R.string.feed_all_answered_hidden
+            hidden && canAdvance -> R.string.feed_all_answered_hidden
+            hidden && !canAdvance -> R.string.feed_filtered_exhausted_title
             uiState.noNewContent -> R.string.feed_no_new_title
             else -> R.string.feed_empty_title
+        }
+    val description =
+        when {
+            hidden && canAdvance -> R.string.feed_filtered_loading_more
+            hidden -> R.string.feed_hidden_description
+            else -> R.string.feed_empty_description
         }
     val next =
         when {
@@ -92,12 +101,34 @@ internal fun FeedEmptyState(
             uiState.canLoadMore -> FeedListEvent.EndReached
             else -> FeedListEvent.Refreshed
         }
+    val primaryLabel =
+        when {
+            filterOn -> R.string.feed_show_all_questions
+            canAdvance -> R.string.feed_next_batch
+            else -> R.string.feed_retry
+        }
+    val primaryAction =
+        if (filterOn) {
+            { onEvent(FeedListEvent.ShowAllQuestions) }
+        } else {
+            { onEvent(next) }
+        }
 
-    EmptyState(
-        icon = Icons.Outlined.Inbox,
-        title = stringResource(title),
-        description = stringResource(if (hidden) R.string.feed_hidden_description else R.string.feed_empty_description),
-        actionLabel = stringResource(if (canAdvance) R.string.feed_next_batch else R.string.feed_retry),
-        action = { onEvent(next) },
-    )
+    Column {
+        EmptyState(
+            icon = Icons.Outlined.Inbox,
+            title = stringResource(title),
+            description = stringResource(description),
+            actionLabel = stringResource(primaryLabel),
+            action = primaryAction,
+        )
+        if (filterOn && canAdvance) {
+            TextButton(
+                onClick = { onEvent(next) },
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            ) {
+                Text(stringResource(R.string.feed_next_batch))
+            }
+        }
+    }
 }

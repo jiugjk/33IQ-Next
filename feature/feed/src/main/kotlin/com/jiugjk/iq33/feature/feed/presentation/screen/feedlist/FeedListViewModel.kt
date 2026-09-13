@@ -36,10 +36,23 @@ internal class FeedListViewModel(
     fun onEvent(event: FeedListEvent) {
         when (event) {
             is FeedListEvent.CategorySelected -> selectCategory(event.category)
-            is FeedListEvent.HideAnsweredChanged -> questionProgressRepository.setHideAnswered(event.hide)
+            is FeedListEvent.HideAnsweredChanged -> {
+                questionProgressRepository.setHideAnswered(event.hide)
+                if (!event.hide) {
+                    // Turning the filter off should not require a manual pull.
+                    val content = uiStateFlow.value as? FeedListUiState.Content
+                    if (content != null && content.visibleQuestions.isEmpty() && content.questions.isNotEmpty()) {
+                        // Cards already in the batch become visible via ProgressChanged.
+                    }
+                }
+            }
             FeedListEvent.Refreshed -> refresh()
             FeedListEvent.EndReached -> loadMore(retry = false)
             FeedListEvent.LoadMoreRetried -> loadMore(retry = true)
+            FeedListEvent.ShowAllQuestions -> {
+                questionProgressRepository.setHideAnswered(false)
+                refresh()
+            }
         }
     }
 
@@ -57,7 +70,8 @@ internal class FeedListViewModel(
         loadJob?.cancel()
         loadMoreJob?.cancel()
         sendAction(FeedListAction.LoadStart(category))
-        startFreshBatch(category)
+        // Category switch also starts from a clean cursor for that account/category batch.
+        startFreshBatch(category, resetCursor = false)
     }
 
     private fun refresh() {
@@ -69,18 +83,33 @@ internal class FeedListViewModel(
         }
         loadMoreJob?.cancel()
         sendAction(FeedListAction.RefreshStart(current.selectedCategory))
-        startFreshBatch(current.selectedCategory)
+        startFreshBatch(current.selectedCategory, resetCursor = true)
     }
 
-    private fun startFreshBatch(category: Category) {
+    /**
+     * @param resetCursor pull-to-refresh clears persisted next + recent, then excludes only the
+     *   currently displayed IDs in memory for this one request.
+     */
+    private fun startFreshBatch(
+        category: Category,
+        resetCursor: Boolean,
+    ) {
         val owner = questionProgressRepository.current.accountKey
-        val position = questionProgressRepository.feedPosition(category.id)
         val displayedIds =
             (uiStateFlow.value as? FeedListUiState.Content)
                 ?.questions
                 .orEmpty()
                 .map { it.id }
                 .toSet()
+        // Refresh uses a clean in-memory cursor; persisted position is only overwritten on success
+        // so a failed pull does not throw away the previous next-link.
+        val position =
+            if (resetCursor) {
+                FeedPosition(nextPageUrl = null, lastQuestionIds = emptySet())
+            } else {
+                questionProgressRepository.feedPosition(category.id)
+            }
+        val excludeIds = if (resetCursor) displayedIds else emptySet()
         loadJob =
             viewModelScope.launch {
                 val result =
@@ -89,11 +118,11 @@ internal class FeedListViewModel(
                         progress = questionProgressRepository.current,
                         category = category,
                         position = position,
-                        displayedIds = displayedIds,
+                        displayedIds = excludeIds,
                     )
                 coroutineContext.ensureActive()
                 if (owner == questionProgressRepository.current.accountKey) {
-                    applyBatch(category, position, owner, result)
+                    applyBatch(category, position, owner, result, replace = true)
                 }
             }
     }
@@ -103,11 +132,12 @@ internal class FeedListViewModel(
         position: FeedPosition,
         owner: String?,
         result: Result<QuestionPage>,
+        replace: Boolean,
     ) {
         when (result) {
             is Result.Success -> {
                 val page = result.value
-                savePosition(category, page, position, owner)
+                savePosition(category, page, if (replace) FeedPosition() else position, owner)
                 lastLoadedAt = System.currentTimeMillis()
                 sendAction(
                     if (page.questions.isEmpty()) {
@@ -139,10 +169,18 @@ internal class FeedListViewModel(
         val owner = questionProgressRepository.current.accountKey
         val position = questionProgressRepository.feedPosition(category.id)
         val request = LoadMoreRequest(category, position, owner, cursor, state.page + 1)
+        val alreadyListed = state.questions.map { it.id }.toSet()
         sendAction(FeedListAction.LoadMoreStart(category))
         loadMoreJob =
             viewModelScope.launch {
-                val result = getQuestionListUseCase(category, cursor)
+                val result =
+                    fetchUnseenBatch(
+                        getQuestionListUseCase = getQuestionListUseCase,
+                        progress = questionProgressRepository.current,
+                        category = category,
+                        position = FeedPosition(nextPageUrl = cursor, lastQuestionIds = position.lastQuestionIds),
+                        displayedIds = alreadyListed,
+                    )
                 coroutineContext.ensureActive()
                 if (owner == questionProgressRepository.current.accountKey) applyLoadMore(request, result)
             }
@@ -154,7 +192,6 @@ internal class FeedListViewModel(
     ) {
         when (result) {
             is Result.Success -> {
-                // A next link identical to the cursor just used would page in place forever.
                 val page = result.value.let { it.copy(nextPageUrl = it.nextPageUrl?.takeUnless { url -> url == request.cursor }) }
                 savePosition(request.category, page, request.position, request.owner)
                 sendAction(
@@ -183,7 +220,6 @@ internal class FeedListViewModel(
         questionProgressRepository.saveFeedPosition(category.id, FeedPosition(page.nextPageUrl, recentIds), owner)
     }
 
-    /** One "load more" in flight, captured so a late reply cannot be applied to a newer cursor. */
     private data class LoadMoreRequest(
         val category: Category,
         val position: FeedPosition,

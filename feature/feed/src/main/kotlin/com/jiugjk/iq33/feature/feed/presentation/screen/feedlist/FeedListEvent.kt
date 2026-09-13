@@ -25,4 +25,7 @@ internal sealed interface FeedListEvent {
 
     /** Explicit retry of a page whose request failed. */
     data object LoadMoreRetried : FeedListEvent
+
+    /** Empty-state shortcut: turn off hide-filter and refresh. */
+    data object ShowAllQuestions : FeedListEvent
 }
