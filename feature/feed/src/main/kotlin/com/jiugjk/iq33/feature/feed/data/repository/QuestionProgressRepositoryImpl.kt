@@ -64,10 +64,10 @@ internal class QuestionProgressRepositoryImpl(
     override fun feedPosition(categoryId: String): FeedPosition {
         val key = feedKey(categoryId, current.accountKey)
         return FeedPosition(
-            nextPageUrl = preferences.getString("$key:next", null),
+            nextPageUrl = preferences.getString(nextKey(key), null),
             lastQuestionIds =
                 preferences
-                    .getString("$key:recent", null)
+                    .getString(recentKey(key), null)
                     .orEmpty()
                     .split(',')
                     .mapNotNull { it.toLongOrNull() }
@@ -83,8 +83,8 @@ internal class QuestionProgressRepositoryImpl(
         if (current.accountKey != accountKey) return
         val key = feedKey(categoryId, accountKey)
         preferences.edit {
-            putString("$key:next", position.nextPageUrl)
-            putString("$key:recent", position.lastQuestionIds.joinToString(","))
+            putString(nextKey(key), position.nextPageUrl)
+            putString(recentKey(key), position.lastQuestionIds.joinToString(","))
         }
     }
 
@@ -95,8 +95,8 @@ internal class QuestionProgressRepositoryImpl(
         if (current.accountKey != accountKey) return
         val key = feedKey(categoryId, accountKey)
         preferences.edit {
-            remove("$key:next")
-            remove("$key:recent")
+            remove(nextKey(key))
+            remove(recentKey(key))
         }
     }
 
@@ -120,6 +120,10 @@ internal class QuestionProgressRepositoryImpl(
         categoryId: String,
         accountKey: String?,
     ) = "feed:${accountKey ?: "guest"}:$categoryId"
+
+    private fun nextKey(key: String) = "$key:next"
+
+    private fun recentKey(key: String) = "$key:recent"
 
     private companion object {
         const val HIDE_ANSWERED = "feed_hide_answered"

@@ -53,6 +53,7 @@ internal fun SubmitAnswerSection(
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 internal fun OpenAnswerSection(
     draftAnswer: String,
@@ -98,7 +99,10 @@ private fun SubmissionResultText(submission: SubmissionState) {
 }
 
 @Composable
-private fun SubmissionDoneText(submittedAnswer: String, result: SubmitAnswerResult) {
+private fun SubmissionDoneText(
+    submittedAnswer: String,
+    result: SubmitAnswerResult,
+) {
     when (result) {
         is SubmitAnswerResult.Correct ->
             Text(

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
-import java.util.Locale
 import java.util.Date
 import java.text.SimpleDateFormat
 import com.jiugjk.iq33.library.network.KnowledgeChangeEntry
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
@@ -45,8 +43,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -78,30 +78,21 @@ fun SettingsScreen(
             is SettingsUiState.Content ->
                 SettingsContent(
                     uiState = currentUiState,
+                    viewModel = viewModel,
                     onNavigateToAboutLibraries = onNavigateToAboutLibraries,
                     onNavigateToLogin = onNavigateToLogin,
-                    onThemeModeSelect = viewModel::onThemeModeSelected,
-                    onAnimationsChanged = viewModel::onAnimationsChanged,
-                    onHapticsChanged = viewModel::onHapticsChanged,
-                    onHideAnsweredChanged = viewModel::onHideAnsweredChanged,
-                    onKnowledgeExpandedChanged = viewModel::onKnowledgeExpandedChanged,
-                    onLogoutClick = viewModel::onLogoutClick,
                 )
         }
     }
 }
 
+@Suppress("LongMethod")
 @Composable
 private fun SettingsContent(
     uiState: SettingsUiState.Content,
+    viewModel: SettingsViewModel,
     onNavigateToAboutLibraries: () -> Unit,
     onNavigateToLogin: () -> Unit,
-    onThemeModeSelect: (ThemeMode) -> Unit,
-    onAnimationsChanged: (Boolean) -> Unit,
-    onHapticsChanged: (Boolean) -> Unit,
-    onHideAnsweredChanged: (Boolean) -> Unit,
-    onKnowledgeExpandedChanged: (Boolean) -> Unit,
-    onLogoutClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(vertical = 8.dp),
@@ -110,23 +101,23 @@ private fun SettingsContent(
             session = uiState.session,
             knowledgeChanges = uiState.knowledgeChanges,
             knowledgeExpanded = uiState.knowledgeExpanded,
-            onKnowledgeExpandedChanged = onKnowledgeExpandedChanged,
+            onKnowledgeExpandedChange = viewModel::onKnowledgeExpandedChanged,
             onNavigateToLogin = onNavigateToLogin,
-            onLogoutClick = onLogoutClick,
+            onLogoutClick = viewModel::onLogoutClick,
         )
 
-        ThemeCard(themeMode = uiState.themeMode, onThemeModeSelect = onThemeModeSelect)
+        ThemeCard(themeMode = uiState.themeMode, onThemeModeSelect = viewModel::onThemeModeSelected)
 
         FeedbackCard(
             animationsEnabled = uiState.animationsEnabled,
             hapticsEnabled = uiState.hapticsEnabled,
-            onAnimationsChanged = onAnimationsChanged,
-            onHapticsChanged = onHapticsChanged,
+            onAnimationsChange = viewModel::onAnimationsChanged,
+            onHapticsChange = viewModel::onHapticsChanged,
         )
 
         QuizPrefsCard(
             hideAnswered = uiState.hideAnswered,
-            onHideAnsweredChanged = onHideAnsweredChanged,
+            onHideAnsweredChange = viewModel::onHideAnsweredChanged,
         )
 
         val context = LocalContext.current
@@ -173,12 +164,13 @@ private fun SettingsContent(
     }
 }
 
+@Suppress("LongParameterList", "LongMethod", "CognitiveComplexMethod")
 @Composable
 private fun AccountCard(
     session: IqSession,
     knowledgeChanges: List<KnowledgeChangeEntry>,
     knowledgeExpanded: Boolean,
-    onKnowledgeExpandedChanged: (Boolean) -> Unit,
+    onKnowledgeExpandedChange: (Boolean) -> Unit,
     onNavigateToLogin: () -> Unit,
     onLogoutClick: () -> Unit,
 ) {
@@ -212,7 +204,7 @@ private fun AccountCard(
                                         .padding(top = Dimen.spaceS)
                                         .then(
                                             if (canExpand) {
-                                                Modifier.clickable { onKnowledgeExpandedChanged(!knowledgeExpanded) }
+                                                Modifier.clickable { onKnowledgeExpandedChange(!knowledgeExpanded) }
                                             } else {
                                                 Modifier
                                             },
@@ -246,7 +238,7 @@ private fun AccountCard(
                                         .padding(top = Dimen.spaceS)
                                         .then(
                                             if (knowledgeChanges.isNotEmpty()) {
-                                                Modifier.clickable { onKnowledgeExpandedChanged(!knowledgeExpanded) }
+                                                Modifier.clickable { onKnowledgeExpandedChange(!knowledgeExpanded) }
                                             } else {
                                                 Modifier
                                             },
@@ -318,7 +310,8 @@ private fun KnowledgeChangesPanel(changes: List<KnowledgeChangeEntry>) {
                 modifier = Modifier.padding(top = Dimen.spaceS),
             )
         } else {
-            val formatter = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+            val locale = LocalConfiguration.current.locales[0]
+            val formatter = remember(locale) { SimpleDateFormat("MM-dd HH:mm", locale) }
             changes.forEach { entry ->
                 val sign = if (entry.delta > 0) "+" else ""
                 Row(
@@ -349,7 +342,7 @@ private fun KnowledgeChangesPanel(changes: List<KnowledgeChangeEntry>) {
 @Composable
 private fun QuizPrefsCard(
     hideAnswered: Boolean,
-    onHideAnsweredChanged: (Boolean) -> Unit,
+    onHideAnsweredChange: (Boolean) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
@@ -371,7 +364,7 @@ private fun QuizPrefsCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = hideAnswered, onCheckedChange = onHideAnsweredChanged)
+                Switch(checked = hideAnswered, onCheckedChange = onHideAnsweredChange)
             }
         }
     }
@@ -381,8 +374,8 @@ private fun QuizPrefsCard(
 private fun FeedbackCard(
     animationsEnabled: Boolean,
     hapticsEnabled: Boolean,
-    onAnimationsChanged: (Boolean) -> Unit,
-    onHapticsChanged: (Boolean) -> Unit,
+    onAnimationsChange: (Boolean) -> Unit,
+    onHapticsChange: (Boolean) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM),
@@ -397,14 +390,14 @@ private fun FeedbackCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(R.string.settings_feedback_animations), modifier = Modifier.weight(1f))
-                Switch(checked = animationsEnabled, onCheckedChange = onAnimationsChanged)
+                Switch(checked = animationsEnabled, onCheckedChange = onAnimationsChange)
             }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceS),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(R.string.settings_feedback_haptics), modifier = Modifier.weight(1f))
-                Switch(checked = hapticsEnabled, onCheckedChange = onHapticsChanged)
+                Switch(checked = hapticsEnabled, onCheckedChange = onHapticsChange)
             }
         }
     }
@@ -501,15 +494,12 @@ private fun openGithubRepository(context: Context) {
 @Preview
 @Composable
 private fun SettingsScreenPreview() {
-    SettingsContent(
-        uiState = SettingsUiState.Content(),
-        onNavigateToAboutLibraries = { },
+    AccountCard(
+        session = IqSession(),
+        knowledgeChanges = emptyList(),
+        knowledgeExpanded = false,
+        onKnowledgeExpandedChange = { },
         onNavigateToLogin = { },
-        onThemeModeSelect = { },
-        onAnimationsChanged = { },
-        onHapticsChanged = { },
-        onHideAnsweredChanged = { },
-        onKnowledgeExpandedChanged = { },
         onLogoutClick = { },
     )
 }

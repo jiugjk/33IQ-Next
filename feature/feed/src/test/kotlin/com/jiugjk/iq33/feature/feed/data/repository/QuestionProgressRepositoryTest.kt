@@ -20,7 +20,7 @@ class QuestionProgressRepositoryTest {
     private val preferences = FakeSharedPreferences()
     private val session = MutableStateFlow(IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:1"))
     private val manager = mockk<SessionManager> { every { sessionFlow } returns session }
-    private val answerRecords = InMemoryAnswerRecordRepository()
+    private val answerRecords = InMemoryAnswerRecordRepository { session.value.accountKey }
     private val sut = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
 
     @Test

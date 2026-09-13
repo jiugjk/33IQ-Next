@@ -98,6 +98,7 @@ sealed interface LoginError {
  * that was already in flight when the user logged out cannot install its now-stale result - and its
  * HTTP call is cancelled, so its response cannot re-install authentication cookies either.
  */
+@Suppress("TooManyFunctions")
 class SessionManager(
     private val preferences: SharedPreferences,
     private val cookieJar: PersistentCookieJar,
@@ -281,7 +282,14 @@ class SessionManager(
                 current.copy(
                     status = probed.status,
                     score = nextScore,
-                    accountKey = if (probed.status == SessionStatus.GUEST) null else accountKey ?: current.accountKey ?: newLocalAccountKey(),
+                    accountKey =
+                        if (probed.status ==
+                            SessionStatus.GUEST
+                        ) {
+                            null
+                        } else {
+                            accountKey ?: current.accountKey ?: newLocalAccountKey()
+                        },
                 )
 
             _sessionFlow.value = session
@@ -362,13 +370,17 @@ class SessionManager(
             val payload = runCatching { Json.parseToJsonElement(body) }.getOrNull()
 
             return when (payload) {
-                is JsonArray -> ProbeOutcome(classifyArray(payload))
+                is JsonArray -> {
+                    ProbeOutcome(classifyArray(payload))
+                }
                 is JsonObject -> {
                     val status = classifyObject(payload)
                     val score = if (status == SessionStatus.AUTHENTICATED) extractScore(payload) else null
                     ProbeOutcome(status, score)
                 }
-                else -> ProbeOutcome(SessionStatus.UNKNOWN)
+                else -> {
+                    ProbeOutcome(SessionStatus.UNKNOWN)
+                }
             }
         }
 
@@ -378,6 +390,7 @@ class SessionManager(
             return primitive.contentOrNull ?: primitive.content.takeIf { it.isNotEmpty() }
         }
 
+        @Suppress("ReturnCount")
         private fun extractScore(obj: JsonObject): String? {
             fun fromPrimitive(value: Any?): String? {
                 val primitive = value as? JsonPrimitive ?: return null
@@ -385,14 +398,14 @@ class SessionManager(
                     ?: primitive.content.takeIf { it.isNotBlank() }
             }
 
-            fromPrimitive(obj["score"])?.let { return it }
-            fromPrimitive(obj["myscore"])?.let { return it }
-            fromPrimitive(obj["myScore"])?.let { return it }
-            val userinfo = obj["userinfo"] as? JsonObject
+            fromPrimitive(obj[SCORE_FIELD])?.let { return it }
+            fromPrimitive(obj[MYSCORE_FIELD])?.let { return it }
+            fromPrimitive(obj[MY_SCORE_FIELD])?.let { return it }
+            val userinfo = obj[USERINFO_FIELD] as? JsonObject
             if (userinfo != null) {
-                fromPrimitive(userinfo["score"])?.let { return it }
-                fromPrimitive(userinfo["myscore"])?.let { return it }
-                fromPrimitive(userinfo["myScore"])?.let { return it }
+                fromPrimitive(userinfo[SCORE_FIELD])?.let { return it }
+                fromPrimitive(userinfo[MYSCORE_FIELD])?.let { return it }
+                fromPrimitive(userinfo[MY_SCORE_FIELD])?.let { return it }
             }
             return null
         }
@@ -421,9 +434,13 @@ class SessionManager(
     private companion object {
         const val LOG_TAG = "Network"
         const val STATUS_FIELD = "status"
+        const val SCORE_FIELD = "score"
+        const val MYSCORE_FIELD = "myscore"
+        const val MY_SCORE_FIELD = "myScore"
+        const val USERINFO_FIELD = "userinfo"
         const val GUEST_STATUS = "guest"
         val ERROR_STATUSES = setOf("error", "fail", "failed", "false", "0", "-1")
-        val AUTH_EVIDENCE_FIELDS = setOf("uid", "username", "email", "tasks", "userinfo", "score")
+        val AUTH_EVIDENCE_FIELDS = setOf("uid", "username", "email", "tasks", USERINFO_FIELD, SCORE_FIELD)
         val NON_ACCOUNT_ENVELOPE_KEYS = setOf("message", "msg", "code", "error", "errno")
         const val PREF_KEY_STATUS = "session_status"
         const val PREF_KEY_SCORE = "score"

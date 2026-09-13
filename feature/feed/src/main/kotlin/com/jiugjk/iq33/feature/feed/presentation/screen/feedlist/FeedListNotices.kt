@@ -1,8 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.feedlist
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Inbox
@@ -37,6 +35,7 @@ internal fun BatchNotice(uiState: FeedListUiState) {
 }
 
 /** Empty because everything loaded is filtered out is a different situation from an empty category. */
+@Suppress("CyclomaticComplexMethod")
 @Composable
 internal fun FeedEmptyState(
     uiState: FeedListUiState.Content,

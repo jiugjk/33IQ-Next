@@ -41,7 +41,6 @@ import com.jiugjk.iq33.feature.feed.domain.model.QuestionType
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
-import androidx.compose.runtime.collectAsState
 
 @Composable
 fun QuestionDetailScreen(
@@ -301,7 +300,11 @@ private fun ChoiceAndSubmitSection(
     // Choices stay tappable only while a submission could still be sent: once one is in flight the
     // selection is frozen, so the result can never be shown next to a different option.
     val correctAnswerId =
-        (uiState.answerReveal as? RevealState.Revealed)?.reveal?.answerText?.trim()?.takeIf { it.isNotEmpty() }
+        (uiState.answerReveal as? RevealState.Revealed)
+            ?.reveal
+            ?.answerText
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
 
     ChoiceSection(
         choices = detail.choices,

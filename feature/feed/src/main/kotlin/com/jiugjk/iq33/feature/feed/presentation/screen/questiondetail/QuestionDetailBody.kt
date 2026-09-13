@@ -223,14 +223,15 @@ private fun StatText(
     }
 }
 
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod", "CognitiveComplexMethod", "MaxLineLength")
 @Composable
 internal fun ChoiceSection(
     choices: List<Choice>,
     selectedChoiceId: String?,
+    enabled: Boolean,
     submission: SubmissionState = SubmissionState.Idle,
     feedback: FeedbackAnimState = FeedbackAnimState(1f, 0f, 0f, false),
     correctAnswerId: String? = null,
-    enabled: Boolean,
     onChoiceSelect: (String) -> Unit,
 ) {
     Column(
@@ -245,16 +246,22 @@ internal fun ChoiceSection(
             val done = submission as? SubmissionState.Done
             val matchedCorrect =
                 correctAnswerId != null &&
-                    (choice.id.equals(correctAnswerId, ignoreCase = true) ||
-                        choice.text.trim().equals(correctAnswerId.trim(), ignoreCase = true))
+                    (
+                        choice.id.equals(correctAnswerId, ignoreCase = true) ||
+                            choice.text.trim().equals(correctAnswerId.trim(), ignoreCase = true)
+                    )
             val showCorrect =
                 done != null &&
                     (
-                        (done.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Correct && choice.id == done.submittedAnswer) ||
+                        (
+                            done.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Correct &&
+                                choice.id == done.submittedAnswer
+                        ) ||
                             matchedCorrect
                     )
-            val showWrong = done?.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Wrong &&
-                choice.id == done.submittedAnswer
+            val showWrong =
+                done?.result is com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult.Wrong &&
+                    choice.id == done.submittedAnswer
 
             val container =
                 when {

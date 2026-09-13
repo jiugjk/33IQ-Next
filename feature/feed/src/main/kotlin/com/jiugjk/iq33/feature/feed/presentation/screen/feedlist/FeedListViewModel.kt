@@ -13,6 +13,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 
+@Suppress("TooManyFunctions")
 internal class FeedListViewModel(
     private val getQuestionListUseCase: GetQuestionListUseCase,
     private val questionProgressRepository: QuestionProgressRepository,
@@ -39,20 +40,21 @@ internal class FeedListViewModel(
 
     fun onEvent(event: FeedListEvent) {
         when (event) {
-            is FeedListEvent.CategorySelected -> selectCategory(event.category)
+            is FeedListEvent.CategorySelected -> {
+                selectCategory(event.category)
+            }
             is FeedListEvent.HideAnsweredChanged -> {
                 questionProgressRepository.setHideAnswered(event.hide)
-                if (!event.hide) {
-                    // Turning the filter off should not require a manual pull.
-                    val content = uiStateFlow.value as? FeedListUiState.Content
-                    if (content != null && content.visibleQuestions.isEmpty() && content.questions.isNotEmpty()) {
-                        // Cards already in the batch become visible via ProgressChanged.
-                    }
-                }
             }
-            FeedListEvent.Refreshed -> refresh()
-            FeedListEvent.EndReached -> loadMore(retry = false)
-            FeedListEvent.LoadMoreRetried -> loadMore(retry = true)
+            FeedListEvent.Refreshed -> {
+                refresh()
+            }
+            FeedListEvent.EndReached -> {
+                loadMore(retry = false)
+            }
+            FeedListEvent.LoadMoreRetried -> {
+                loadMore(retry = true)
+            }
             FeedListEvent.ShowAllQuestions -> {
                 questionProgressRepository.setHideAnswered(false)
                 refresh()
@@ -90,10 +92,6 @@ internal class FeedListViewModel(
         startFreshBatch(current.selectedCategory, resetCursor = true)
     }
 
-    /**
-     * @param resetCursor pull-to-refresh clears persisted next + recent, then excludes only the
-     *   currently displayed IDs in memory for this one request.
-     */
     private fun startFreshBatch(
         category: Category,
         resetCursor: Boolean,
@@ -115,20 +113,25 @@ internal class FeedListViewModel(
             }
         val excludeIds = if (resetCursor) displayedIds else emptySet()
         loadJob =
-            viewModelScope.launch {
-                val result =
-                    fetchUnseenBatch(
-                        getQuestionListUseCase = getQuestionListUseCase,
-                        progress = questionProgressRepository.current,
-                        category = category,
-                        position = position,
-                        displayedIds = excludeIds,
-                    )
-                coroutineContext.ensureActive()
-                if (owner == questionProgressRepository.current.accountKey) {
-                    applyBatch(category, position, owner, result, replace = true)
+            viewModelScope
+                .launch {
+                    val result =
+                        fetchUnseenBatch(
+                            getQuestionListUseCase = getQuestionListUseCase,
+                            progress = questionProgressRepository.current,
+                            category = category,
+                            position = position,
+                            displayedIds = excludeIds,
+                        )
+                    coroutineContext.ensureActive()
+                    if (owner == questionProgressRepository.current.accountKey) {
+                        applyBatch(category, position, owner, result, replace = true)
+                    }
+                }.also { job ->
+                    job.invokeOnCompletion { error ->
+                        if (error == null) maybeContinueFilteredPaging()
+                    }
                 }
-            }
     }
 
     private fun applyBatch(
@@ -150,7 +153,6 @@ internal class FeedListViewModel(
                         FeedListAction.LoadSuccess(category, page.questions, page.nextPageUrl, page.nextPageUrl != null)
                     },
                 )
-                maybeContinueFilteredPaging()
             }
             is Result.Failure -> {
                 sendAction(
@@ -177,18 +179,23 @@ internal class FeedListViewModel(
         val alreadyListed = state.questions.map { it.id }.toSet()
         sendAction(FeedListAction.LoadMoreStart(category))
         loadMoreJob =
-            viewModelScope.launch {
-                val result =
-                    fetchUnseenBatch(
-                        getQuestionListUseCase = getQuestionListUseCase,
-                        progress = questionProgressRepository.current,
-                        category = category,
-                        position = FeedPosition(nextPageUrl = cursor, lastQuestionIds = position.lastQuestionIds),
-                        displayedIds = alreadyListed,
-                    )
-                coroutineContext.ensureActive()
-                if (owner == questionProgressRepository.current.accountKey) applyLoadMore(request, result)
-            }
+            viewModelScope
+                .launch {
+                    val result =
+                        fetchUnseenBatch(
+                            getQuestionListUseCase = getQuestionListUseCase,
+                            progress = questionProgressRepository.current,
+                            category = category,
+                            position = FeedPosition(nextPageUrl = cursor, lastQuestionIds = position.lastQuestionIds),
+                            displayedIds = alreadyListed,
+                        )
+                    coroutineContext.ensureActive()
+                    if (owner == questionProgressRepository.current.accountKey) applyLoadMore(request, result)
+                }.also { job ->
+                    job.invokeOnCompletion { error ->
+                        if (error == null) maybeContinueFilteredPaging()
+                    }
+                }
     }
 
     private fun applyLoadMore(
@@ -208,7 +215,6 @@ internal class FeedListViewModel(
                         page.nextPageUrl != null,
                     ),
                 )
-                maybeContinueFilteredPaging()
             }
             is Result.Failure -> {
                 sendAction(FeedListAction.LoadMoreFailure(request.category))
@@ -232,11 +238,12 @@ internal class FeedListViewModel(
      */
     private fun maybeContinueFilteredPaging() {
         val state = uiStateFlow.value as? FeedListUiState.Content ?: return
-        if (state.visibleQuestions.isNotEmpty()) return
-        if (!state.canStartLoadMore) return
-        if (state.nextPageUrl == null) return
-        if (state.loadMoreFailed) return
-        loadMore(retry = false)
+        val shouldContinue =
+            state.visibleQuestions.isEmpty() &&
+                state.canStartLoadMore &&
+                state.nextPageUrl != null &&
+                !state.loadMoreFailed
+        if (shouldContinue) loadMore(retry = false)
     }
 
     private data class LoadMoreRequest(

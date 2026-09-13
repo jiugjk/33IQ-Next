@@ -118,7 +118,6 @@ private fun FeedListBody(
             onEvent = onEvent,
         )
 
-
         BatchNotice(uiState = uiState)
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {

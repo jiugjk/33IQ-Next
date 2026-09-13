@@ -6,6 +6,7 @@ import com.jiugjk.iq33.feature.feed.data.datasource.database.AnswerRecordDao
 import com.jiugjk.iq33.feature.feed.data.datasource.database.AnswerRecordEntity
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerRecord
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
+import com.jiugjk.iq33.library.network.SessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -22,9 +23,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Prefs string-sets are migrated once: `answered` → answeredAt set / outcome null;
  * `answerViewed` → viewedExplanation=true with answeredAt left null.
  */
+@Suppress("TooManyFunctions")
 internal class AnswerRecordRepositoryImpl(
     private val dao: AnswerRecordDao,
     private val preferences: SharedPreferences,
+    private val sessionManager: SessionManager,
     private val ioScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
 ) : AnswerRecordRepository {
     private val snapshot = MutableStateFlow<List<AnswerRecord>>(emptyList())
@@ -65,8 +68,7 @@ internal class AnswerRecordRepositoryImpl(
     override fun viewedExplanationIds(accountKey: String?): Set<Long> =
         current(accountKey).filter { it.viewedExplanation }.map { it.questionId }.toSet()
 
-    override fun viewedHintIds(accountKey: String?): Set<Long> =
-        current(accountKey).filter { it.viewedHint }.map { it.questionId }.toSet()
+    override fun viewedHintIds(accountKey: String?): Set<Long> = current(accountKey).filter { it.viewedHint }.map { it.questionId }.toSet()
 
     @Synchronized
     override fun recordAnswer(
@@ -79,7 +81,7 @@ internal class AnswerRecordRepositoryImpl(
         knowledgeDelta: Int?,
         answeredAt: Long,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         ensureMigrated()
         val existing = get(accountKey, questionId)
         val next =
@@ -88,11 +90,7 @@ internal class AnswerRecordRepositoryImpl(
                 categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
                 selectedOption = selectedOption ?: existing?.selectedOption,
                 isCorrect = isCorrect ?: existing?.isCorrect,
-                correctOption =
-                    when {
-                        isCorrect == true -> selectedOption ?: existing?.correctOption
-                        else -> existing?.correctOption
-                    },
+                correctOption = if (isCorrect == true) selectedOption ?: existing?.correctOption else existing?.correctOption,
                 knowledgeDelta = knowledgeDelta ?: existing?.knowledgeDelta,
                 answeredAt = answeredAt,
                 updatedAt = System.currentTimeMillis(),
@@ -108,7 +106,7 @@ internal class AnswerRecordRepositoryImpl(
         categoryId: String,
         correctOption: String?,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         ensureMigrated()
         val existing = get(accountKey, questionId)
         val next =
@@ -130,7 +128,7 @@ internal class AnswerRecordRepositoryImpl(
         title: String,
         categoryId: String,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         ensureMigrated()
         val existing = get(accountKey, questionId)
         val next =
@@ -148,7 +146,7 @@ internal class AnswerRecordRepositoryImpl(
         accountKey: String?,
         questionId: Long,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         ensureMigrated()
         val existing = get(accountKey, questionId) ?: return
         persist(
@@ -166,7 +164,7 @@ internal class AnswerRecordRepositoryImpl(
         accountKey: String?,
         questionId: Long,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         ensureMigrated()
         snapshot.update { list -> list.filterNot { it.accountKey == accountKey && it.questionId == questionId } }
         ioScope.launch { dao.delete(accountKey, questionId) }
@@ -174,7 +172,7 @@ internal class AnswerRecordRepositoryImpl(
 
     @Synchronized
     override fun clearAll(accountKey: String?) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         ensureMigrated()
         snapshot.update { list -> list.filterNot { it.accountKey == accountKey } }
         ioScope.launch { dao.clearAccount(accountKey) }
@@ -188,6 +186,9 @@ internal class AnswerRecordRepositoryImpl(
         ioScope.launch { dao.upsert(record.toEntity()) }
     }
 
+    private fun canWrite(accountKey: String): Boolean = accountKey == sessionManager.sessionFlow.value.accountKey
+
+    @Suppress("CyclomaticComplexMethod")
     private fun ensureMigrated() {
         if (!migrated.compareAndSet(false, true)) return
         if (preferences.getBoolean(MIGRATION_DONE, false)) {
@@ -207,8 +208,8 @@ internal class AnswerRecordRepositoryImpl(
 
         preferences.all.forEach { (key, value) ->
             when {
-                key.startsWith("answered:") && value is Set<*> -> {
-                    val account = key.removePrefix("answered:")
+                key.startsWith(ANSWERED_PREFIX) && value is Set<*> -> {
+                    val account = key.removePrefix(ANSWERED_PREFIX)
                     value.mapNotNull { it as? String }.mapNotNull { it.toLongOrNull() }.forEach { id ->
                         val mapKey = keyOf(account, id)
                         val existing = migratedRecords[mapKey]
@@ -219,8 +220,8 @@ internal class AnswerRecordRepositoryImpl(
                             )
                     }
                 }
-                key.startsWith("answerViewed:") && value is Set<*> -> {
-                    val account = key.removePrefix("answerViewed:")
+                key.startsWith(ANSWER_VIEWED_PREFIX) && value is Set<*> -> {
+                    val account = key.removePrefix(ANSWER_VIEWED_PREFIX)
                     value.mapNotNull { it as? String }.mapNotNull { it.toLongOrNull() }.forEach { id ->
                         val mapKey = keyOf(account, id)
                         val existing = migratedRecords[mapKey]
@@ -246,13 +247,15 @@ internal class AnswerRecordRepositoryImpl(
         preferences.edit {
             putBoolean(MIGRATION_DONE, true)
             preferences.all.keys
-                .filter { it.startsWith("answered:") || it.startsWith("answerViewed:") }
+                .filter { it.startsWith(ANSWERED_PREFIX) || it.startsWith(ANSWER_VIEWED_PREFIX) }
                 .forEach { remove(it) }
         }
     }
 
     private companion object {
         const val MIGRATION_DONE = "answer_records_migrated_v1"
+        const val ANSWERED_PREFIX = "answered:"
+        const val ANSWER_VIEWED_PREFIX = "answerViewed:"
     }
 }
 

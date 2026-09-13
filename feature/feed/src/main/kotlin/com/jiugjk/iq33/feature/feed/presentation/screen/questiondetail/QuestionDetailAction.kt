@@ -18,6 +18,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         override fun reduce(state: QuestionDetailUiState) = QuestionDetailUiState.Loading
     }
 
+    @Suppress("LongParameterList")
     class LoadSuccess(
         private val detail: QuestionDetail,
         private val isBookmarked: Boolean,
@@ -51,7 +52,10 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
                     },
                 hintReveal =
                     if (hintAlreadyViewed) {
-                        RevealState.Revealed(com.jiugjk.iq33.feature.feed.domain.model.HintReveal(""))
+                        RevealState.Revealed(
+                            com.jiugjk.iq33.feature.feed.domain.model
+                                .HintReveal(""),
+                        )
                     } else {
                         RevealState.Idle
                     },

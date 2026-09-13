@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
  * Unified local answer-history store. Writes are intentionally narrow so list bind / opening
  * detail / refresh cannot mark progress by accident.
  */
+@Suppress("ComplexInterface", "TooManyFunctions")
 internal interface AnswerRecordRepository {
     val records: Flow<List<AnswerRecord>>
 
@@ -24,6 +25,7 @@ internal interface AnswerRecordRepository {
     fun viewedHintIds(accountKey: String?): Set<Long>
 
     /** ① Submit answer (correct / wrong / already-answered). */
+    @Suppress("LongParameterList")
     fun recordAnswer(
         accountKey: String?,
         questionId: Long,

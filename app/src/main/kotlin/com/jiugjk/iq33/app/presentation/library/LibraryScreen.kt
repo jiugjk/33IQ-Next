@@ -67,9 +67,10 @@ fun LibraryScreen(
             }
         }
 
-        when (segment) {
-            SEGMENT_HISTORY -> HistoryScreen(onQuestionClick = onQuestionClick)
-            else -> FavouriteScreen(onQuestionClick = onQuestionClick)
+        if (segment == SEGMENT_HISTORY) {
+            HistoryScreen(onQuestionClick = onQuestionClick)
+        } else {
+            FavouriteScreen(onQuestionClick = onQuestionClick)
         }
     }
 }

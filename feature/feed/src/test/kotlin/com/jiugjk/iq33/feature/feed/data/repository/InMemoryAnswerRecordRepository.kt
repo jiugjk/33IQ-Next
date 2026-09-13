@@ -7,7 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
 /** Test double mirroring [AnswerRecordRepositoryImpl] write semantics without Room. */
-internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
+internal class InMemoryAnswerRecordRepository(
+    private val activeAccountKey: (() -> String?)? = null,
+) : AnswerRecordRepository {
     private val snapshot = MutableStateFlow<List<AnswerRecord>>(emptyList())
 
     override val records: Flow<List<AnswerRecord>> = snapshot
@@ -34,8 +36,7 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
     override fun viewedExplanationIds(accountKey: String?): Set<Long> =
         current(accountKey).filter { it.viewedExplanation }.map { it.questionId }.toSet()
 
-    override fun viewedHintIds(accountKey: String?): Set<Long> =
-        current(accountKey).filter { it.viewedHint }.map { it.questionId }.toSet()
+    override fun viewedHintIds(accountKey: String?): Set<Long> = current(accountKey).filter { it.viewedHint }.map { it.questionId }.toSet()
 
     override fun recordAnswer(
         accountKey: String?,
@@ -47,7 +48,7 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
         knowledgeDelta: Int?,
         answeredAt: Long,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         val existing = get(accountKey, questionId)
         upsert(
             (existing ?: AnswerRecord(questionId = questionId, accountKey = accountKey)).copy(
@@ -70,7 +71,7 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
         categoryId: String,
         correctOption: String?,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         val existing = get(accountKey, questionId)
         upsert(
             (existing ?: AnswerRecord(questionId = questionId, accountKey = accountKey)).copy(
@@ -90,7 +91,7 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
         title: String,
         categoryId: String,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         val existing = get(accountKey, questionId)
         upsert(
             (existing ?: AnswerRecord(questionId = questionId, accountKey = accountKey)).copy(
@@ -106,7 +107,7 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
         accountKey: String?,
         questionId: Long,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         val existing = get(accountKey, questionId) ?: return
         upsert(existing.copy(selectedOption = null, isCorrect = null, answeredAt = null, updatedAt = System.currentTimeMillis()))
     }
@@ -115,17 +116,23 @@ internal class InMemoryAnswerRecordRepository : AnswerRecordRepository {
         accountKey: String?,
         questionId: Long,
     ) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         snapshot.update { list -> list.filterNot { it.accountKey == accountKey && it.questionId == questionId } }
     }
 
     override fun clearAll(accountKey: String?) {
-        if (accountKey == null) return
+        if (accountKey == null || !canWrite(accountKey)) return
         snapshot.update { list -> list.filterNot { it.accountKey == accountKey } }
     }
 
     /** Seed migrated-style rows for tests that previously wrote prefs sets. */
     fun seed(record: AnswerRecord) = upsert(record)
+
+    private fun canWrite(accountKey: String?): Boolean {
+        if (accountKey == null) return false
+        val active = activeAccountKey ?: return true
+        return accountKey == active()
+    }
 
     private fun upsert(record: AnswerRecord) {
         snapshot.update { list ->

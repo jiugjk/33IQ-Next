@@ -20,6 +20,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 
+@Suppress("LongParameterList")
 internal class QuestionDetailViewModel(
     private val getQuestionDetailUseCase: GetQuestionDetailUseCase,
     private val isBookmarkedUseCase: IsBookmarkedUseCase,
@@ -27,7 +28,7 @@ internal class QuestionDetailViewModel(
     private val questionAnswerUseCases: QuestionAnswerUseCases,
     private val questionProgressRepository: QuestionProgressRepository,
     private val answerRevealUseCases: AnswerRevealUseCases,
-    private val answerRecords: AnswerRecordRepository,
+    private val answerRecordRepository: AnswerRecordRepository,
 ) : BaseViewModel<QuestionDetailUiState, QuestionDetailAction>(QuestionDetailUiState.Loading) {
     private var loadJob: Job? = null
     private var loadedQuestionId: Long? = null
@@ -138,6 +139,7 @@ internal class QuestionDetailViewModel(
     }
 
     /** The parameterless events, split out so [onEvent] stays within one screen of branching. */
+    @Suppress("CyclomaticComplexMethod")
     private fun onSimpleEvent(
         event: QuestionDetailEvent,
         content: QuestionDetailUiState.Content?,
@@ -272,7 +274,7 @@ internal class QuestionDetailViewModel(
         if (content == null) return
         val questionId = content.detail.id
         val owner = questionProgressRepository.current.accountKey
-        answerRecords.clearAnswerState(owner, questionId)
+        answerRecordRepository.clearAnswerState(owner, questionId)
         sendAction(QuestionDetailAction.AnswerEchoCleared(questionId))
     }
 
@@ -281,7 +283,7 @@ internal class QuestionDetailViewModel(
         detail: QuestionDetail,
         id: Long,
     ): QuestionDetailAction.LoadSuccess {
-        val record = answerRecords.get(questionProgressRepository.current.accountKey, id)
+        val record = answerRecordRepository.get(questionProgressRepository.current.accountKey, id)
         val echoedSubmission =
             when {
                 record?.answeredAt == null && record?.selectedOption == null && record?.isCorrect == null ->
@@ -302,16 +304,8 @@ internal class QuestionDetailViewModel(
                         SubmitAnswerResult.AlreadyAnswered,
                     )
             }
-        val selected =
-            when (detail.questionType) {
-                QuestionType.CHOICE -> record?.selectedOption
-                else -> null
-            }
-        val draft =
-            when (detail.questionType) {
-                QuestionType.OPEN -> record?.selectedOption.orEmpty()
-                else -> ""
-            }
+        val selected = if (detail.questionType == QuestionType.CHOICE) record?.selectedOption else null
+        val draft = if (detail.questionType == QuestionType.OPEN) record?.selectedOption.orEmpty() else ""
         val bookmarked = isBookmarkedUseCase(id)
         return when (bookmarked) {
             is BookmarkResult.Success ->

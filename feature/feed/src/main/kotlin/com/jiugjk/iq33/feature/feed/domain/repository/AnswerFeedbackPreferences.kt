@@ -3,6 +3,7 @@ package com.jiugjk.iq33.feature.feed.domain.repository
 import kotlinx.coroutines.flow.Flow
 
 /** Device preferences for answer feedback. Defaults on for both. */
+@Suppress("ComplexInterface")
 internal interface AnswerFeedbackPreferences {
     val animationsEnabled: Flow<Boolean>
     val hapticsEnabled: Flow<Boolean>

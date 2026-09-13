@@ -13,23 +13,20 @@ import kotlin.coroutines.coroutineContext
 /** How many consecutive page requests one filtered walk may make. */
 internal const val MAX_BATCH_REQUESTS = 5
 
-/** Stop once at least this many visible (unfiltered) questions are collected. */
-internal const val TARGET_VISIBLE_COUNT = 10
-
 /**
- * Walks forward from [position] until it has enough visible questions, or the feed ends.
+ * Walks forward from [position] until it has at least one visible question, or the feed ends.
  *
  * Follows the site's own next-page links, never guesses a page number, stops at a repeated cursor,
  * and gives up after [MAX_BATCH_REQUESTS] requests. Hidden cards stay in the batch so turning the
  * filter off can restore them without another network round-trip.
  */
+@Suppress("LongParameterList")
 internal suspend fun fetchUnseenBatch(
     getQuestionListUseCase: GetQuestionListUseCase,
     progress: QuestionProgress,
     category: Category,
     position: FeedPosition,
     displayedIds: Set<Long>,
-    targetVisible: Int = TARGET_VISIBLE_COUNT,
     maxRequests: Int = MAX_BATCH_REQUESTS,
 ): Result<QuestionPage> {
     var cursor = position.nextPageUrl
@@ -53,7 +50,7 @@ internal suspend fun fetchUnseenBatch(
 
                 val visibleCount =
                     collected.keys.count { id -> !progress.hideAnswered || !progress.isSubmissionBlocked(id) }
-                if (visibleCount >= targetVisible || next == null) {
+                if (visibleCount > 0 || next == null) {
                     return Result.Success(QuestionPage(collected.values.toList(), next))
                 }
                 cursor = next

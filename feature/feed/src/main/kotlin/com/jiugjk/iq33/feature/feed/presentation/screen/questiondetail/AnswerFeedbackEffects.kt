@@ -28,6 +28,17 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 internal const val FEEDBACK_ANIM_MS = 600
+private const val CORRECT_SCALE_PEAK = 1.06f
+private const val CORRECT_SCALE_PEAK_AT_MS = 150
+private const val SHAKE_LARGE = 10f
+private const val SHAKE_MEDIUM = 8f
+private const val SHAKE_SMALL = 4f
+private const val SHAKE_AT_50 = 50
+private const val SHAKE_AT_100 = 100
+private const val SHAKE_AT_150 = 150
+private const val SHAKE_AT_200 = 200
+private const val SHAKE_AT_250 = 250
+private const val SHAKE_AT_300 = 300
 
 internal suspend fun runCorrectFeedback(
     scale: Animatable<Float, *>,
@@ -41,7 +52,7 @@ internal suspend fun runCorrectFeedback(
                     keyframes {
                         durationMillis = FEEDBACK_ANIM_MS
                         1f at 0
-                        1.06f at 150 using FastOutSlowInEasing
+                        CORRECT_SCALE_PEAK at CORRECT_SCALE_PEAK_AT_MS using FastOutSlowInEasing
                         1f at FEEDBACK_ANIM_MS using FastOutSlowInEasing
                     },
             )
@@ -56,21 +67,19 @@ internal suspend fun runCorrectFeedback(
     }
 }
 
-internal suspend fun runWrongFeedback(
-    shakeX: Animatable<Float, *>,
-) {
+internal suspend fun runWrongFeedback(shakeX: Animatable<Float, *>) {
     shakeX.animateTo(
         targetValue = 0f,
         animationSpec =
             keyframes {
                 durationMillis = FEEDBACK_ANIM_MS
                 0f at 0
-                -10f at 50
-                10f at 100
-                -8f at 150
-                8f at 200
-                -4f at 250
-                4f at 300
+                -SHAKE_LARGE at SHAKE_AT_50
+                SHAKE_LARGE at SHAKE_AT_100
+                -SHAKE_MEDIUM at SHAKE_AT_150
+                SHAKE_MEDIUM at SHAKE_AT_200
+                -SHAKE_SMALL at SHAKE_AT_250
+                SHAKE_SMALL at SHAKE_AT_300
                 0f at FEEDBACK_ANIM_MS
             },
     )
@@ -131,6 +140,7 @@ internal fun StreakBanner(
     )
 }
 
+@Suppress("CognitiveComplexMethod")
 @Composable
 internal fun rememberFeedbackAnimation(
     submission: SubmissionState,
@@ -145,27 +155,30 @@ internal fun rememberFeedbackAnimation(
     var lastDoneKey by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(submission, animationsEnabled, hapticsEnabled) {
-        val done = submission as? SubmissionState.Done ?: return@LaunchedEffect
-        val key = "${done.submittedAnswer}:${done.result}"
-        if (key == lastDoneKey) return@LaunchedEffect
-        lastDoneKey = key
-        when (val result = done.result) {
-            is SubmitAnswerResult.Correct -> {
-                view.performAnswerHaptic(correct = true, enabled = hapticsEnabled)
-                showFloat = result.scoreDelta != null
-                if (animationsEnabled) {
-                    runCorrectFeedback(scale, floatY)
+        val done = submission as? SubmissionState.Done
+        if (done != null) {
+            val key = "${done.submittedAnswer}:${done.result}"
+            if (key != lastDoneKey) {
+                lastDoneKey = key
+                when (val result = done.result) {
+                    is SubmitAnswerResult.Correct -> {
+                        view.performAnswerHaptic(correct = true, enabled = hapticsEnabled)
+                        showFloat = result.scoreDelta != null
+                        if (animationsEnabled) {
+                            runCorrectFeedback(scale, floatY)
+                        }
+                        showFloat = false
+                        floatY.snapTo(0f)
+                    }
+                    is SubmitAnswerResult.Wrong -> {
+                        view.performAnswerHaptic(correct = false, enabled = hapticsEnabled)
+                        if (animationsEnabled) {
+                            runWrongFeedback(shakeX)
+                        }
+                    }
+                    else -> { }
                 }
-                showFloat = false
-                floatY.snapTo(0f)
             }
-            is SubmitAnswerResult.Wrong -> {
-                view.performAnswerHaptic(correct = false, enabled = hapticsEnabled)
-                if (animationsEnabled) {
-                    runWrongFeedback(shakeX)
-                }
-            }
-            else -> Unit
         }
     }
 

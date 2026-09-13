@@ -65,14 +65,15 @@ fun HistoryScreen(
                     onDelete = viewModel::onDelete,
                     onFilter = viewModel::onFilter,
                     onQuery = viewModel::onQuery,
-                    onClearRequested = viewModel::onClearRequested,
-                    onClearDismissed = viewModel::onClearDismissed,
-                    onClearConfirmed = viewModel::onClearConfirmed,
+                    onClearRequest = viewModel::onClearRequested,
+                    onClearDismiss = viewModel::onClearDismissed,
+                    onClearConfirm = viewModel::onClearConfirmed,
                 )
         }
     }
 }
 
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 private fun HistoryContent(
     state: HistoryUiState.Content,
@@ -80,9 +81,9 @@ private fun HistoryContent(
     onDelete: (AnswerRecord) -> Unit,
     onFilter: (HistoryFilter) -> Unit,
     onQuery: (String) -> Unit,
-    onClearRequested: () -> Unit,
-    onClearDismissed: () -> Unit,
-    onClearConfirmed: () -> Unit,
+    onClearRequest: () -> Unit,
+    onClearDismiss: () -> Unit,
+    onClearConfirm: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -110,7 +111,7 @@ private fun HistoryContent(
                     label = { Text(filterLabel(filter)) },
                 )
             }
-            TextButton(onClick = onClearRequested) {
+            TextButton(onClick = onClearRequest) {
                 Text(stringResource(R.string.feed_history_clear))
             }
         }
@@ -131,16 +132,16 @@ private fun HistoryContent(
 
     if (state.confirmClear) {
         AlertDialog(
-            onDismissRequest = onClearDismissed,
+            onDismissRequest = onClearDismiss,
             title = { Text(stringResource(R.string.feed_history_clear_title)) },
             text = { Text(stringResource(R.string.feed_history_clear_message)) },
             confirmButton = {
-                TextButton(onClick = onClearConfirmed) {
+                TextButton(onClick = onClearConfirm) {
                     Text(stringResource(R.string.feed_history_clear_confirm))
                 }
             },
             dismissButton = {
-                TextButton(onClick = onClearDismissed) {
+                TextButton(onClick = onClearDismiss) {
                     Text(stringResource(R.string.feed_history_clear_cancel))
                 }
             },

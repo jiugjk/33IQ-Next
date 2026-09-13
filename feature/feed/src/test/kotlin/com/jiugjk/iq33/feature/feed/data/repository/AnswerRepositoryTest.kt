@@ -121,7 +121,9 @@ class AnswerRepositoryTest {
     @Test
     fun `hint reveal records viewedHint only`() =
         runTest {
-            coEvery { remote.revealHint(9) } returns com.jiugjk.iq33.feature.feed.domain.model.HintReveal("tip")
+            coEvery { remote.revealHint(9) } returns
+                com.jiugjk.iq33.feature.feed.domain.model
+                    .HintReveal("tip")
             sut.revealHint(9)
             verify(exactly = 1) { answerRecords.recordHintViewed("uid:1", 9) }
         }

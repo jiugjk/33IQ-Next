@@ -53,16 +53,18 @@ internal class AnswerRepositoryImpl(
                         feedbackPreferences.recordWrong()
                         applyKnowledgeScore(questionId, result.myScore, result.scoreDelta)
                     }
-                    SubmitAnswerResult.AlreadyAnswered ->
+                    SubmitAnswerResult.AlreadyAnswered -> {
                         answerRecords.recordAnswer(
                             accountKey = accountKey,
                             questionId = questionId,
                             selectedOption = answer,
                             isCorrect = null,
                         )
-                    SubmitAnswerResult.AnswerAlreadyViewed ->
+                    }
+                    SubmitAnswerResult.AnswerAlreadyViewed -> {
                         answerRecords.recordExplanationViewed(accountKey, questionId)
-                    SubmitAnswerResult.LimitReached -> Unit
+                    }
+                    SubmitAnswerResult.LimitReached -> { }
                 }
             }
         }.withSideEffectFlag()
@@ -84,7 +86,6 @@ internal class AnswerRepositoryImpl(
         resultOf(TimberLogTags.NETWORK, "Failed to praise question $questionId") {
             remoteDataSource.praiseQuestion(questionId)
         }.withSideEffectFlag()
-
 
     private fun applyKnowledgeScore(
         questionId: Long,
