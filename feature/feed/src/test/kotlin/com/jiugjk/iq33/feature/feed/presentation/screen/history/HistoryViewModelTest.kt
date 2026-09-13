@@ -110,6 +110,56 @@ class HistoryViewModelTest {
             matched(vm) shouldBeEqualTo listOf(202L)
         }
 
+    @Test
+    fun `deleting one row leaves the rest of the history alone`() =
+        runTest {
+            records.seed(record(1, isCorrect = true, title = "第一题"))
+            records.seed(record(2, isCorrect = false, title = "第二题"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onDelete(records.current(ACCOUNT).first { it.questionId == 1L })
+            advanceUntilIdle()
+
+            matched(vm) shouldBeEqualTo listOf(2L)
+            records.current(ACCOUNT).map { it.questionId } shouldBeEqualTo listOf(2L)
+        }
+
+    @Test
+    fun `clear asks first, and dismissing it keeps every record`() =
+        runTest {
+            records.seed(record(1, isCorrect = true, title = "第一题"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onClearRequested()
+            (vm.uiStateFlow.value as HistoryUiState.Content).confirmClear shouldBeEqualTo true
+
+            vm.onClearDismissed()
+            advanceUntilIdle()
+
+            val content = vm.uiStateFlow.value as HistoryUiState.Content
+            content.confirmClear shouldBeEqualTo false
+            content.records.map { it.questionId } shouldBeEqualTo listOf(1L)
+        }
+
+    @Test
+    fun `a confirmed clear empties this account's history and closes the dialog`() =
+        runTest {
+            records.seed(record(1, isCorrect = true, title = "第一题"))
+            records.seed(record(2, isCorrect = false, title = "第二题"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onClearRequested()
+            vm.onClearConfirmed()
+            advanceUntilIdle()
+
+            // No history left at all - the one case that is an empty screen rather than a zero match.
+            vm.uiStateFlow.value shouldBeEqualTo HistoryUiState.Empty
+            records.current(ACCOUNT) shouldBeEqualTo emptyList()
+        }
+
     private fun matched(vm: HistoryViewModel) = (vm.uiStateFlow.value as HistoryUiState.Content).records.map { it.questionId }
 
     private fun createViewModel() = HistoryViewModel(records, progressRepo).also { store.put("history", it) }

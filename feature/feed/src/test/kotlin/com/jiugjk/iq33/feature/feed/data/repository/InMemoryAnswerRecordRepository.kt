@@ -130,7 +130,15 @@ internal class InMemoryAnswerRecordRepository(
     ) {
         if (accountKey == null || !canWrite(accountKey)) return
         val existing = get(accountKey, questionId) ?: return
-        upsert(existing.copy(selectedOption = null, isCorrect = null, answeredAt = null, updatedAt = System.currentTimeMillis()))
+        upsert(
+            existing.copy(
+                selectedOption = null,
+                isCorrect = null,
+                correctOption = null,
+                answeredAt = null,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
     }
 
     override fun delete(

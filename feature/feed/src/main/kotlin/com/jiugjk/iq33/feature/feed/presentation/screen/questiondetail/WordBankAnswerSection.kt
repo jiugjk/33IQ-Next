@@ -101,7 +101,7 @@ private fun WordBankPicker(
             submission = uiState.submission,
             enabled = uiState.canSubmitAnswer(answer),
             onSubmitAnswerClick = { onEvent(QuestionDetailEvent.AnswerSubmitted(it)) },
-            onRedoClick = { onEvent(QuestionDetailEvent.RedoRequested) },
+            onRedoClick = if (uiState.canRedo) ({ onEvent(QuestionDetailEvent.RedoRequested) }) else null,
         )
     }
 }

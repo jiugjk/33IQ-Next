@@ -141,6 +141,7 @@ class WordBankRestoreTest {
             progressRepo,
             mockk(),
             records,
+            mockk(relaxed = true),
         ).also { store.put("detail", it) }
     }
 

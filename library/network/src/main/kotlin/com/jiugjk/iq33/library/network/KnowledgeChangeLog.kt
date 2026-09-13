@@ -62,6 +62,27 @@ class KnowledgeChangeLog(
         revision.value += 1
     }
 
+    /**
+     * Fills in the title of this account's entries for [questionId] that were written without one.
+     *
+     * An entry is appended from the answer-submission path, which is handed whatever label the
+     * caller had - a feed row that never loaded the question detail has none. The screen learns the
+     * real one a moment later and backfills it here, so the settings list names the question instead
+     * of showing a bare number. Entries that already carry a title are left exactly as they are.
+     */
+    fun backfillTitle(
+        accountKey: String?,
+        questionId: Long,
+        title: String,
+    ) {
+        if (accountKey.isNullOrEmpty() || title.isBlank()) return
+        val entries = load(accountKey)
+        if (entries.none { it.questionId == questionId && it.title.isBlank() }) return
+        val patched = entries.map { if (it.questionId == questionId && it.title.isBlank()) it.copy(title = title) else it }
+        preferences.edit { putString(keyFor(accountKey), Json.encodeToString(patched)) }
+        revision.value += 1
+    }
+
     fun clear(accountKey: String? = sessionManager.sessionFlow.value.accountKey) {
         if (accountKey.isNullOrEmpty()) return
         preferences.edit { remove(keyFor(accountKey)) }

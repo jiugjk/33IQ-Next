@@ -35,6 +35,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeInstanceOf
+import org.amshove.kluent.shouldBeNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -167,7 +168,7 @@ class QuestionDetailRestoreTest {
             records.clearAnswerState(ACCOUNT, QUESTION_ID)
             vm.onEvent(QuestionDetailEvent.RedoRequested)
             advanceUntilIdle()
-            coEvery { submit(QUESTION_ID, "A") } returns Result.Success(SubmitAnswerResult.Correct(2, 20))
+            coEvery { submit(QUESTION_ID, "A", any()) } returns Result.Success(SubmitAnswerResult.Correct(2, 20))
             vm.onEvent(QuestionDetailEvent.ChoiceSelected("A"))
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("A"))
             advanceUntilIdle()
@@ -177,14 +178,67 @@ class QuestionDetailRestoreTest {
         }
 
     @Test
+    fun `redo clears the remembered correct option along with the answer`() =
+        runTest {
+            records.seed(record().copy(selectedOption = "A", isCorrect = true, correctOption = "A", answeredAt = 1))
+            val vm = createViewModel()
+            vm.load(QUESTION_ID)
+            advanceUntilIdle()
+            // Restored from history, so the right choice is marked without holding any analysis text.
+            content(vm).revealedCorrectOption shouldBeEqualTo "A"
+            content(vm).canRedo shouldBeEqualTo true
+
+            vm.onEvent(QuestionDetailEvent.RedoRequested)
+            advanceUntilIdle()
+
+            val state = content(vm)
+            state.submission shouldBeEqualTo SubmissionState.Idle
+            state.selectedChoiceId.shouldBeNull()
+            // Both sides of the answer go: leaving either one hands the retry its own answer back.
+            state.knownCorrectOption.shouldBeNull()
+            state.revealedCorrectOption.shouldBeNull()
+            records.get(ACCOUNT, QUESTION_ID)?.correctOption.shouldBeNull()
+        }
+
+    @Test
+    fun `redo is refused once this account has seen the analysis`() =
+        runTest {
+            records.seed(record().copy(selectedOption = "A", isCorrect = true, correctOption = "A", answeredAt = 1))
+            val vm = createViewModel()
+            vm.load(QUESTION_ID)
+            advanceUntilIdle()
+
+            flow.value = QuestionProgress(accountKey = ACCOUNT, viewedAnswerIds = setOf(QUESTION_ID))
+            advanceUntilIdle()
+
+            // The entry point is gone in the UI, and the ViewModel refuses the event regardless.
+            content(vm).canRedo shouldBeEqualTo false
+            vm.onEvent(QuestionDetailEvent.RedoRequested)
+            advanceUntilIdle()
+
+            content(vm).submission shouldBeInstanceOf SubmissionState.Done::class
+            records.get(ACCOUNT, QUESTION_ID)?.selectedOption shouldBeEqualTo "A"
+            records.get(ACCOUNT, QUESTION_ID)?.answeredAt shouldBeEqualTo 1L
+        }
+
+    @Test
     fun `answering fills in the history title and category the search needs`() =
         runTest {
             val vm = createViewModel()
             vm.load(QUESTION_ID)
             advanceUntilIdle()
-            // The answer repository writes the record knowing only the question id, as in production.
-            coEvery { submit(QUESTION_ID, "A") } coAnswers {
-                records.recordAnswer(accountKey = ACCOUNT, questionId = QUESTION_ID, selectedOption = "A", isCorrect = true)
+            // The answer repository writes the record from inside the submission, with whatever title
+            // it was handed - exactly as in production, where no backfill has run yet at that point.
+            val submittedTitles = mutableListOf<String>()
+            coEvery { submit(QUESTION_ID, "A", any()) } coAnswers {
+                submittedTitles += thirdArg<String>()
+                records.recordAnswer(
+                    accountKey = ACCOUNT,
+                    questionId = QUESTION_ID,
+                    title = thirdArg<String>(),
+                    selectedOption = "A",
+                    isCorrect = true,
+                )
                 Result.Success(SubmitAnswerResult.Correct(2, 20))
             }
 
@@ -192,6 +246,9 @@ class QuestionDetailRestoreTest {
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("A"))
             advanceUntilIdle()
 
+            // The first-answer path is the one that used to store a blank title: the 学识 change log is
+            // appended inside the submission, long before the screen reports the question's metadata.
+            submittedTitles shouldBeEqualTo listOf("谁是凶手？")
             val record = requireNotNull(records.get(ACCOUNT, QUESTION_ID))
             record.title shouldBeEqualTo "谁是凶手？"
             record.categoryId shouldBeEqualTo "侦探推理"
@@ -222,7 +279,7 @@ class QuestionDetailRestoreTest {
     private fun createViewModel(): QuestionDetailViewModel {
         coEvery { getDetail(QUESTION_ID) } returns Result.Success(detail())
         coEvery { isBookmarked(QUESTION_ID) } returns BookmarkResult.Success(false)
-        coEvery { submit(any(), any()) } returns Result.Success(SubmitAnswerResult.AlreadyAnswered)
+        coEvery { submit(any(), any(), any()) } returns Result.Success(SubmitAnswerResult.AlreadyAnswered)
         return QuestionDetailViewModel(
             getDetail,
             isBookmarked,
@@ -231,6 +288,7 @@ class QuestionDetailRestoreTest {
             progressRepo,
             AnswerRevealUseCases(quoteAnswer, revealAnswer, recoverAnswer),
             records,
+            mockk(relaxed = true),
         ).also { store.put("detail", it) }
     }
 

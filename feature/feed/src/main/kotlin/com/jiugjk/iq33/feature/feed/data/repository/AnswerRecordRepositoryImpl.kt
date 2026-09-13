@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -36,8 +35,16 @@ import java.util.concurrent.atomic.AtomicLong
  * `observeAll` emission from resurrecting a deleted row or dropping a field that is still in flight.
  * A write that fails drops its overlay entry, so the exposed state falls back to what Room holds.
  *
+ * Nothing here ever blocks the caller's thread. The synchronous reads answer from the snapshot as it
+ * stands, which before the first load is empty - "not known yet", the same thing an absent row has
+ * always meant here. [records] emits again the moment it is, and every read path in the app is
+ * driven off that flow.
+ *
  * Prefs string-sets are migrated once: `answered` → answeredAt set / outcome null;
- * `answerViewed` → viewedExplanation=true with answeredAt left null.
+ * `answerViewed` → viewedExplanation=true with answeredAt left null. The migration runs ahead of
+ * both the command worker and the `observeAll` subscription, on the one coroutine that owns them:
+ * a command applied before it, or an emission from the not-yet-migrated table, would write the
+ * migration's own rows back out of existence.
  */
 @Suppress("TooManyFunctions")
 internal class AnswerRecordRepositoryImpl(
@@ -61,22 +68,32 @@ internal class AnswerRecordRepositoryImpl(
     private val migrated = AtomicBoolean(false)
 
     init {
-        ensureMigrated()
         ioScope.launch {
-            for (command in commands) execute(command)
-        }
-        ioScope.launch {
-            dao.observeAll().collect { entities ->
-                stored.value = entities.associate { RecordKey(it.accountKey, it.questionId) to it.toDomain() }
-                publish()
+            // A migration that fails must not take the worker down with it: the command channel has
+            // no other consumer, so a dead worker would swallow every write for the whole process.
+            // MIGRATION_DONE is latched only after a clean run, so the next start tries again.
+            try {
+                runMigrationAndLoad()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (
+                @Suppress("TooGenericExceptionCaught") error: Exception,
+            ) {
+                Timber.tag(TimberLogTags.DATABASE).w(error, "Answer-record migration failed")
             }
+            launch {
+                dao.observeAll().collect { entities ->
+                    stored.value = entities.associate { RecordKey(it.accountKey, it.questionId) to it.toDomain() }
+                    publish()
+                }
+            }
+            for (command in commands) execute(command)
         }
     }
 
     override val records: Flow<List<AnswerRecord>> = snapshot
 
     override fun current(accountKey: String?): List<AnswerRecord> {
-        ensureMigrated()
         if (accountKey == null) return emptyList()
         return snapshot.value.filter { it.accountKey == accountKey }
     }
@@ -85,7 +102,6 @@ internal class AnswerRecordRepositoryImpl(
         accountKey: String?,
         questionId: Long,
     ): AnswerRecord? {
-        ensureMigrated()
         if (accountKey == null) return null
         return snapshot.value.firstOrNull { it.accountKey == accountKey && it.questionId == questionId }
     }
@@ -189,6 +205,9 @@ internal class AnswerRecordRepositoryImpl(
         existing?.copy(
             selectedOption = null,
             isCorrect = null,
+            // The remembered correct option was only ever inferred from a correct submission, so it
+            // goes with the answer it came from: keeping it would hand the redo its own answer back.
+            correctOption = null,
             answeredAt = null,
             updatedAt = System.currentTimeMillis(),
         )
@@ -202,7 +221,6 @@ internal class AnswerRecordRepositoryImpl(
     @Synchronized
     override fun clearAll(accountKey: String?) {
         if (accountKey == null || !canWrite(accountKey)) return
-        ensureMigrated()
         clearing.update { it + (accountKey to (it[accountKey] ?: 0) + 1) }
         // Optimistic overlay entries for this account are superseded by the clear.
         pending.update { map -> map.filterKeys { it.accountKey != accountKey } }
@@ -223,7 +241,6 @@ internal class AnswerRecordRepositoryImpl(
         transform: (AnswerRecord?) -> AnswerRecord?,
     ) {
         if (accountKey == null || !canWrite(accountKey)) return
-        ensureMigrated()
         val key = RecordKey(accountKey, questionId)
         val seq = sequence.incrementAndGet()
         val optimistic = transform(currentRecord(key))
@@ -308,12 +325,19 @@ internal class AnswerRecordRepositoryImpl(
         questionId: Long,
     ) = existing ?: AnswerRecord(questionId = questionId, accountKey = accountKey)
 
+    /**
+     * Migrates the prefs string-sets once, then publishes what the table holds.
+     *
+     * Runs on [ioScope] before the command worker starts consuming and before `observeAll` is
+     * subscribed, so no write can be applied to - and no emission can be taken from - a table the
+     * migration has not finished writing.
+     */
     @Suppress("CyclomaticComplexMethod")
-    private fun ensureMigrated() {
+    private suspend fun runMigrationAndLoad() {
         if (!migrated.compareAndSet(false, true)) return
         if (preferences.getBoolean(MIGRATION_DONE, false)) {
             // Cold start before Flow emits: pull once.
-            runBlocking { loadStored() }
+            loadStored()
             return
         }
         val now = System.currentTimeMillis()
@@ -356,13 +380,9 @@ internal class AnswerRecordRepositoryImpl(
         }
 
         if (migratedRecords.isNotEmpty()) {
-            runBlocking {
-                dao.upsertAll(migratedRecords.values.map { it.toEntity() })
-                loadStored()
-            }
-        } else {
-            runBlocking { loadStored() }
+            dao.upsertAll(migratedRecords.values.map { it.toEntity() })
         }
+        loadStored()
 
         preferences.edit {
             putBoolean(MIGRATION_DONE, true)

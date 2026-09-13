@@ -78,6 +78,13 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
             }
     }
 
+    /**
+     * Redo: drops everything the previous attempt left behind.
+     *
+     * [QuestionDetailUiState.Content.knownCorrectOption] goes with it - it is the answer remembered
+     * from this account's own history, and leaving it would mark the right choice green on a
+     * question the user just asked to try again.
+     */
     class AnswerEchoCleared(
         private val questionId: Long,
     ) : QuestionDetailAction {
@@ -89,6 +96,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
                     selectedCandidateIndices = emptyList(),
                     answerEcho = "",
                     submission = SubmissionState.Idle,
+                    knownCorrectOption = null,
                     detail = state.detail.copy(isAnswered = false),
                 )
             } else {

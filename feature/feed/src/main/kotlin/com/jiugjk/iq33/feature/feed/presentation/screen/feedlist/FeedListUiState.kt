@@ -50,8 +50,13 @@ internal sealed interface FeedListUiState : BaseState {
          */
         val autoPagingPaused: Boolean = false,
     ) : FeedListUiState {
+        /**
+         * "隐藏已答" hides answered questions and nothing else. Viewing the analysis or leaving a
+         * reveal pending also blocks a submission, but the user never answered those - hiding them
+         * would quietly take questions out of the feed that were only ever looked at.
+         */
         val visibleQuestions: List<QuestionSummary>
-            get() = if (progress.hideAnswered) questions.filterNot { progress.isSubmissionBlocked(it.id) } else questions
+            get() = if (progress.hideAnswered) questions.filterNot { it.id in progress.answeredIds } else questions
 
         /** No page request is in flight, and none is sitting unretried. */
         private val isPagingIdle: Boolean

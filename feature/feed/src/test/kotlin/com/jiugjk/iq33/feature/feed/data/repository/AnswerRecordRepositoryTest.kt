@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
+import org.amshove.kluent.shouldNotBeNull
 import org.junit.jupiter.api.Test
 
 /**
@@ -198,13 +199,96 @@ class AnswerRecordRepositoryTest {
             dao.storedRows() shouldBeEqualTo emptyList()
         }
 
-    private fun TestScope.repository(dao: FakeAnswerRecordDao) =
-        AnswerRecordRepositoryImpl(
-            dao = dao,
-            preferences = FakeSharedPreferences(),
-            sessionManager = sessionManager,
-            ioScope = CoroutineScope(StandardTestDispatcher(testScheduler)),
-        )
+    @Test
+    fun `the prefs answered and viewed sets become records, and are only migrated once`() =
+        runTest {
+            val preferences = legacyPreferences(answered = setOf("1", "2"), viewed = setOf("2", "3"))
+            val dao = FakeAnswerRecordDao()
+
+            val repository = repository(dao, preferences)
+            advanceUntilIdle()
+
+            repository.answeredIds(account) shouldBeEqualTo setOf(1L, 2L)
+            repository.viewedExplanationIds(account) shouldBeEqualTo setOf(2L, 3L)
+            // Explanation-only history stays distinct: seeing the answer is not answering.
+            repository.get(account, 3)?.answeredAt.shouldBeNull()
+            repository.get(account, 2)?.answeredAt.shouldNotBeNull()
+
+            // The old keys are consumed and the run is latched, so a second repository over the same
+            // prefs (a process restart) cannot resurrect rows the user has since deleted.
+            preferences.contains("answered:$account") shouldBeEqualTo false
+            preferences.contains("answerViewed:$account") shouldBeEqualTo false
+            preferences.getBoolean("answer_records_migrated_v1", false) shouldBeEqualTo true
+
+            repository.delete(account, 1)
+            advanceUntilIdle()
+            val restarted = repository(FakeAnswerRecordDao(), preferences)
+            advanceUntilIdle()
+            restarted.answeredIds(account) shouldBeEqualTo emptySet()
+        }
+
+    @Test
+    fun `a write issued before the migration ran is applied on top of the migrated row`() =
+        runTest {
+            val preferences = legacyPreferences(answered = setOf("1"))
+            val dao = FakeAnswerRecordDao()
+
+            val repository = repository(dao, preferences)
+            // Queued while the migration has not started: the worker consumes commands only after it
+            // finished, so this must not be the write the migration then overwrites.
+            repository.recordExplanationViewed(account, 1, explanationText = "because")
+            advanceUntilIdle()
+
+            val stored = requireNotNull(dao.stored(account, 1))
+            stored.answeredAt.shouldNotBeNull()
+            stored.viewedExplanation shouldBeEqualTo true
+            stored.explanationText shouldBeEqualTo "because"
+        }
+
+    @Test
+    fun `redo clears the answer and the correct option it was inferred from`() =
+        runTest {
+            val dao = FakeAnswerRecordDao()
+            val repository = repository(dao)
+
+            repository.recordAnswer(account, 1, selectedOption = "A", isCorrect = true, knowledgeDelta = 3)
+            repository.recordHintViewed(account, 1, hintText = "tip")
+            advanceUntilIdle()
+            repository.get(account, 1)?.correctOption shouldBeEqualTo "A"
+
+            repository.clearAnswerState(account, 1)
+            advanceUntilIdle()
+
+            val record = requireNotNull(repository.get(account, 1))
+            record.selectedOption.shouldBeNull()
+            record.isCorrect.shouldBeNull()
+            record.answeredAt.shouldBeNull()
+            record.correctOption.shouldBeNull()
+            // Paid content and the score already awarded are not part of the attempt being redone.
+            record.hintText shouldBeEqualTo "tip"
+            record.knowledgeDelta shouldBeEqualTo 3
+        }
+
+    private fun TestScope.repository(
+        dao: FakeAnswerRecordDao,
+        preferences: FakeSharedPreferences = FakeSharedPreferences(),
+    ) = AnswerRecordRepositoryImpl(
+        dao = dao,
+        preferences = preferences,
+        sessionManager = sessionManager,
+        ioScope = CoroutineScope(StandardTestDispatcher(testScheduler)),
+    )
+
+    /** The prefs shape this repository replaced: two string-sets of question numbers per account. */
+    private fun legacyPreferences(
+        answered: Set<String> = emptySet(),
+        viewed: Set<String> = emptySet(),
+    ) = FakeSharedPreferences().apply {
+        edit()
+            .putStringSet("answered:$account", answered.toMutableSet())
+            .putStringSet("answerViewed:$account", viewed.toMutableSet())
+            .apply()
+    }
 
     private fun entity(questionId: Long) =
         AnswerRecordEntity(

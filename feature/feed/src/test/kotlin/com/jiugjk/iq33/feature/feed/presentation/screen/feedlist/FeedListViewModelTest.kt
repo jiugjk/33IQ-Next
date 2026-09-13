@@ -202,7 +202,7 @@ class FeedListViewModelTest {
         }
 
     @Test
-    fun `viewed analysis records update the list and are included in the hide filter`() =
+    fun `viewed analysis records update the list but the hide filter only hides answered questions`() =
         runTest {
             coEvery { getList(Category.ALL, null) } returns page(1, null)
             val sut = createViewModel()
@@ -212,9 +212,17 @@ class FeedListViewModelTest {
             advanceUntilIdle()
             content(sut).progress.viewedAnswerIds shouldBeEqualTo setOf(1L)
             content(sut).progress.answeredIds shouldBeEqualTo emptySet()
+
+            // "隐藏已答" says answered, and viewing the analysis is not answering: a question the
+            // user only looked at has to stay in the feed, however blocked its submission now is.
             sut.onEvent(FeedListEvent.HideAnsweredChanged(true))
             advanceUntilIdle()
+            content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(1L)
+
+            progress.markAnswered(1)
+            advanceUntilIdle()
             content(sut).visibleQuestions shouldBeEqualTo emptyList()
+
             sut.onEvent(FeedListEvent.HideAnsweredChanged(false))
             advanceUntilIdle()
             content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(1L)

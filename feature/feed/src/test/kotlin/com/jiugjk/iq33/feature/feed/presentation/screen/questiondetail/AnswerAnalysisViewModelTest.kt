@@ -111,7 +111,7 @@ class AnswerAnalysisViewModelTest {
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("A"))
             vm.onEvent(QuestionDetailEvent.HintQuoteRequested)
             advanceUntilIdle()
-            coVerify(exactly = 0) { submit(any(), any()) }
+            coVerify(exactly = 0) { submit(any(), any(), any()) }
             coVerify(exactly = 0) { hintQuote(any()) }
         }
 
@@ -206,6 +206,7 @@ class AnswerAnalysisViewModelTest {
             progressRepo,
             AnswerRevealUseCases(quote, reveal, recover),
             InMemoryAnswerRecordRepository(),
+            mockk(relaxed = true),
         ).also { store.put("detail", it) }
     }
 }

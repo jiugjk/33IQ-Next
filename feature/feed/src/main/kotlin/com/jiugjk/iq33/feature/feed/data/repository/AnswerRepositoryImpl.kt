@@ -26,6 +26,7 @@ internal class AnswerRepositoryImpl(
     override suspend fun submitAnswer(
         questionId: Long,
         answer: String,
+        title: String,
     ): Result<SubmitAnswerResult> =
         resultOf(TimberLogTags.NETWORK, "Failed to submit answer for $questionId") {
             // Owner *and* session generation are captured before the request. Every side effect below
@@ -39,34 +40,37 @@ internal class AnswerRepositoryImpl(
                         answerRecords.recordAnswer(
                             accountKey = accountKey,
                             questionId = questionId,
+                            title = title,
                             selectedOption = answer,
                             isCorrect = true,
                             knowledgeDelta = result.scoreDelta,
                         )
                         if (isStillCurrent(accountKey, epoch)) feedbackPreferences.recordCorrect(accountKey)
-                        applyKnowledgeScore(questionId, result.myScore, result.scoreDelta, accountKey, epoch)
+                        applyKnowledgeScore(questionId, result.myScore, result.scoreDelta, accountKey, epoch, title)
                     }
                     is SubmitAnswerResult.Wrong -> {
                         answerRecords.recordAnswer(
                             accountKey = accountKey,
                             questionId = questionId,
+                            title = title,
                             selectedOption = answer,
                             isCorrect = false,
                             knowledgeDelta = result.scoreDelta,
                         )
                         if (isStillCurrent(accountKey, epoch)) feedbackPreferences.recordWrong(accountKey)
-                        applyKnowledgeScore(questionId, result.myScore, result.scoreDelta, accountKey, epoch)
+                        applyKnowledgeScore(questionId, result.myScore, result.scoreDelta, accountKey, epoch, title)
                     }
                     SubmitAnswerResult.AlreadyAnswered -> {
                         answerRecords.recordAnswer(
                             accountKey = accountKey,
                             questionId = questionId,
+                            title = title,
                             selectedOption = answer,
                             isCorrect = null,
                         )
                     }
                     SubmitAnswerResult.AnswerAlreadyViewed -> {
-                        answerRecords.recordExplanationViewed(accountKey, questionId)
+                        answerRecords.recordExplanationViewed(accountKey, questionId, title = title)
                     }
                     SubmitAnswerResult.LimitReached -> { }
                 }
@@ -100,9 +104,10 @@ internal class AnswerRepositoryImpl(
         scoreDelta: Int?,
         accountKey: String?,
         epoch: Int,
+        title: String,
     ) {
         if (scoreDelta != null && isStillCurrent(accountKey, epoch)) {
-            knowledgeChangeLog.append(accountKey = accountKey, questionId = questionId, delta = scoreDelta)
+            knowledgeChangeLog.append(accountKey = accountKey, questionId = questionId, delta = scoreDelta, title = title)
         }
         when {
             // The session manager re-validates owner + generation inside the lock that commits the

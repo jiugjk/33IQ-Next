@@ -44,6 +44,28 @@ class KnowledgeChangeLogTest {
         }
 
     @Test
+    fun `a title written later fills in the entries that had none`() =
+        runTest {
+            // What the submit path produces: the log is appended there, and on the very first answer
+            // the screen has not reported the question's title yet.
+            sut.append(accountKey = "uid:1", questionId = 1, delta = 3)
+            sut.append(accountKey = "uid:1", questionId = 2, delta = 2, title = "已有标题")
+            sut.append(accountKey = "uid:2", questionId = 1, delta = 5)
+
+            sut.backfillTitle("uid:1", questionId = 1, title = "谁是凶手？")
+
+            sut.recent
+                .first()
+                .single { it.questionId == 1L }
+                .title shouldBeEqualTo "谁是凶手？"
+            // An entry that already names its question is never rewritten...
+            sut.backfillTitle("uid:1", questionId = 2, title = "别的标题")
+            sut.current("uid:1").single { it.questionId == 2L }.title shouldBeEqualTo "已有标题"
+            // ...and neither is another account's entry for the same question number.
+            sut.current("uid:2").single().title shouldBeEqualTo ""
+        }
+
+    @Test
     fun `a restart reads the same per-account log`() =
         runTest {
             sut.append(accountKey = "uid:1", questionId = 1, delta = 3)

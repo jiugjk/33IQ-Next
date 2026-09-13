@@ -2,6 +2,7 @@ package com.jiugjk.iq33.feature.feed.data
 
 import androidx.room.Room
 import com.jiugjk.iq33.feature.feed.data.datasource.database.AnswerRecordDatabase
+import com.jiugjk.iq33.feature.feed.data.datasource.database.MIGRATION_1_2
 import com.jiugjk.iq33.feature.feed.data.datasource.database.MIGRATION_2_3
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRevealRemoteDataSource
@@ -41,8 +42,10 @@ internal val dataModule =
         single {
             Room
                 .databaseBuilder(get(), AnswerRecordDatabase::class.java, "AnswerRecords.db")
-                .addMigrations(MIGRATION_2_3)
-                .fallbackToDestructiveMigration()
+                // Every version step has a real migration, so there is deliberately no destructive
+                // fallback: this table *is* the answer history, and dropping it is never the right
+                // answer to a schema the app itself shipped.
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
         single { get<AnswerRecordDatabase>().answerRecordDao() }

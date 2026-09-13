@@ -115,8 +115,10 @@ internal suspend fun fetchUnseenBatch(
                 val next = page.nextPageUrl?.takeUnless { walk.hasVisited(it) }
                 page.questions.filterNot { it.id in excluded }.forEach { collected.putIfAbsent(it.id, it) }
 
+                // Same rule the list itself applies - only answered questions are hidden - so paging
+                // does not keep walking for a page the list would have shown.
                 val visibleCount =
-                    collected.keys.count { id -> !progress.hideAnswered || !progress.isSubmissionBlocked(id) }
+                    collected.keys.count { id -> !progress.hideAnswered || id !in progress.answeredIds }
                 if (visibleCount > 0 || next == null) {
                     return Result.Success(QuestionPage(collected.values.toList(), next))
                 }

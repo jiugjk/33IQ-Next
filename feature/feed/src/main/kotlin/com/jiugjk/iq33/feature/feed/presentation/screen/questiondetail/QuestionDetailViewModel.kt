@@ -15,6 +15,7 @@ import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.feature.feed.domain.usecase.GetQuestionDetailUseCase
 import com.jiugjk.iq33.feature.feed.domain.usecase.AnswerRevealUseCases
 import com.jiugjk.iq33.feature.feed.domain.usecase.QuestionAnswerUseCases
+import com.jiugjk.iq33.library.network.KnowledgeChangeLog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -30,6 +31,7 @@ internal class QuestionDetailViewModel(
     private val questionProgressRepository: QuestionProgressRepository,
     private val answerRevealUseCases: AnswerRevealUseCases,
     private val answerRecordRepository: AnswerRecordRepository,
+    private val knowledgeChangeLog: KnowledgeChangeLog,
 ) : BaseViewModel<QuestionDetailUiState, QuestionDetailAction>(QuestionDetailUiState.Loading) {
     private var loadJob: Job? = null
     private var loadedQuestionId: Long? = null
@@ -193,7 +195,9 @@ internal class QuestionDetailViewModel(
             // The reducer is what decides whether the submission really started; if it refused, no
             // request may be sent.
             if (submission.isEligible(questionId) { it.isSubmitting }) {
-                when (val result = questionAnswerUseCases.submitAnswer(questionId, answer)) {
+                // The title travels with the submission: the history row and the 学识 change log are
+                // both written inside it, before rememberQuestionMetadata below could fill one in.
+                when (val result = questionAnswerUseCases.submitAnswer(questionId, answer, content.detail.shortLabel)) {
                     is Result.Success -> {
                         // A live completion carries a fresh token, which is what lets the screen play
                         // feedback exactly once; restored history never has one.
@@ -291,11 +295,19 @@ internal class QuestionDetailViewModel(
         }
     }
 
+    /**
+     * Clears this account's stored answer so the question can be attempted again.
+     *
+     * Refused once the analysis has been viewed: the correct answer is already known, so a redo
+     * there would only turn a revealed answer into a fresh "correct" in the history - and 33IQ
+     * refuses the submission anyway.
+     */
     private fun redo(content: QuestionDetailUiState.Content?) {
         if (content == null) return
         val questionId = content.detail.id
-        val owner = questionProgressRepository.current.accountKey
-        answerRecordRepository.clearAnswerState(owner, questionId)
+        val progress = questionProgressRepository.current
+        if (questionId in progress.viewedAnswerIds) return
+        answerRecordRepository.clearAnswerState(progress.accountKey, questionId)
         sendAction(QuestionDetailAction.AnswerEchoCleared(questionId))
     }
 
@@ -305,6 +317,9 @@ internal class QuestionDetailViewModel(
      * History search has nothing to match without it: the write paths (submit / hint / analysis)
      * only know the question id, so the screen - which does know the title and category - fills it
      * in right after a record is created. It never creates one.
+     *
+     * The 学识 change log is backfilled from the same call: its entry is appended inside the
+     * submission, so on the very first answer it is written before this screen ever reports a title.
      */
     private fun rememberQuestionMetadata(
         questionId: Long,
@@ -312,12 +327,14 @@ internal class QuestionDetailViewModel(
     ) {
         val detail = loaded ?: (uiStateFlow.value as? QuestionDetailUiState.Content)?.detail ?: return
         if (detail.id != questionId) return
+        val owner = questionProgressRepository.current.accountKey
         answerRecordRepository.updateMetadata(
-            accountKey = questionProgressRepository.current.accountKey,
+            accountKey = owner,
             questionId = questionId,
             title = detail.shortLabel,
             categoryId = detail.categoryLabel,
         )
+        knowledgeChangeLog.backfillTitle(owner, questionId, detail.shortLabel)
     }
 
     /** A failed bookmark lookup must not take the loaded question down with it - it is a side note. */
