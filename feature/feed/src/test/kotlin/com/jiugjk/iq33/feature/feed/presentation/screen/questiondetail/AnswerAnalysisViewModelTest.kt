@@ -205,6 +205,7 @@ class AnswerAnalysisViewModelTest {
             QuestionAnswerUseCases(submit, hintQuote, mockk(), mockk()),
             progressRepo,
             AnswerRevealUseCases(quote, reveal, recover),
+            InMemoryAnswerRecordRepository(),
         ).also { store.put("detail", it) }
     }
 }

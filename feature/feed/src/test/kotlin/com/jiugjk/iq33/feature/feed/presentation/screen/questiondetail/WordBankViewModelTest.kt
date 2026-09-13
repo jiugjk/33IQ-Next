@@ -96,6 +96,7 @@ class WordBankViewModelTest {
             QuestionAnswerUseCases(submit, mockk(), mockk(), mockk()),
             progressRepo,
             mockk(),
+            InMemoryAnswerRecordRepository(),
         ).also { store.put("detail", it) }
     }
 }
