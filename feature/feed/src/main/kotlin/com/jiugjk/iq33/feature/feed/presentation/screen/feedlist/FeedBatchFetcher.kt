@@ -54,6 +54,11 @@ internal class FeedWalk(
         visited -= cursor
     }
 
+    /** Visible progress ends the automatic hidden-page walk, but retain cycle detection. */
+    fun recordVisibleCount(count: Int) {
+        if (count > 0) used = 0
+    }
+
     fun reset() {
         visited.clear()
         used = 0
@@ -91,7 +96,7 @@ internal suspend fun fetchUnseenBatch(
     maxRequests: Int = MAX_BATCH_REQUESTS,
 ): Result<QuestionPage> {
     var cursor = position.nextPageUrl
-    val excluded = position.lastQuestionIds + displayedIds
+    val excluded = displayedIds
     val collected = linkedMapOf<Long, QuestionSummary>()
 
     repeat(maxRequests) {
@@ -119,6 +124,7 @@ internal suspend fun fetchUnseenBatch(
                 // does not keep walking for a page the list would have shown.
                 val visibleCount =
                     collected.keys.count { id -> !progress.hideAnswered || id !in progress.answeredIds }
+                walk.recordVisibleCount(visibleCount)
                 if (visibleCount > 0 || next == null) {
                     return Result.Success(QuestionPage(collected.values.toList(), next))
                 }

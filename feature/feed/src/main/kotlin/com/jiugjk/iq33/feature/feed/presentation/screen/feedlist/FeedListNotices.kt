@@ -25,12 +25,12 @@ import com.jiugjk.iq33.feature.feed.R
 @Composable
 internal fun BatchNotice(uiState: FeedListUiState) {
     val content = uiState as? FeedListUiState.Content ?: return
-    if (!content.refreshFailed && !content.noNewContent) return
+    if (!content.refreshFailed) return
 
     Text(
-        text = stringResource(if (content.refreshFailed) R.string.feed_refresh_failed else R.string.feed_no_new_content),
+        text = stringResource(R.string.feed_refresh_failed),
         style = MaterialTheme.typography.bodySmall,
-        color = if (content.refreshFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.error,
         modifier = Modifier.padding(horizontal = Dimen.spaceL, vertical = Dimen.spaceS),
     )
 }
@@ -96,12 +96,6 @@ private fun emptyStateCopy(uiState: FeedListUiState.Content): EmptyStateCopy {
             EmptyStateCopy(
                 R.string.feed_filtered_exhausted_title,
                 R.string.feed_hidden_description,
-                R.string.feed_retry,
-            )
-        uiState.noNewContent ->
-            EmptyStateCopy(
-                R.string.feed_no_new_title,
-                R.string.feed_empty_description,
                 R.string.feed_retry,
             )
         else ->

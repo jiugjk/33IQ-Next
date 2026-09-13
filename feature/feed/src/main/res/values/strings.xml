@@ -40,11 +40,9 @@
     <string name="feed_answer_viewed_label">已看解析</string>
     <string name="feed_answered_and_viewed_label">已答 · 已看解析</string>
     <string name="feed_refresh_failed">刷新失败，已保留当前题目，请下拉重试。</string>
-    <string name="feed_no_new_title">已经刷完了</string>
-    <string name="feed_no_new_content">这个分类暂时没有更多未作答题目了。</string>
     <string name="feed_all_answered_hidden">本页题目都被过滤了</string>
     <string name="feed_hidden_description">正在加载更多时可继续等待；也可查看全部题目或关闭过滤。</string>
-    <string name="feed_next_batch">加载下一批</string>
+    <string name="feed_next_batch">继续加载</string>
     <string name="feed_show_all_questions">查看全部题目</string>
     <string name="feed_filtered_exhausted_title">已经刷完了</string>
     <string name="feed_filtered_loading_more">本页题目都被过滤了，正在加载更多</string>

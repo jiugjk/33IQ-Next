@@ -57,7 +57,6 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
                     isLoadingMore = false,
                     loadMoreFailed = false,
                     refreshFailed = false,
-                    noNewContent = false,
                     autoPagingPaused = false,
                 )
             } else {
@@ -117,17 +116,16 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
             // Stale: the category changed, or a refresh reset paging back past this page.
             if (state.selectedCategory != category || state.page != page - 1) return state
 
-            val (merged, hasNew) = mergeUniqueById(state.questions, newQuestions) { it.id }
+            val (merged, _) = mergeUniqueById(state.questions, newQuestions) { it.id }
 
             return state.copy(
                 questions = merged,
                 page = page,
                 isLoadingMore = false,
                 loadMoreFailed = false,
-                // A duplicate-only reply must not keep an automatic paging loop alive.
-                canLoadMore = hasNew && hasMore,
+                // The fetcher guards cycles; duplicates or hidden pages do not mean the feed ended.
+                canLoadMore = hasMore,
                 nextPageUrl = nextPageUrl,
-                noNewContent = !hasNew,
             )
         }
     }
@@ -142,18 +140,6 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
             } else {
                 state
             }
-    }
-
-    class NoNewContent(
-        private val category: Category,
-        private val nextPageUrl: String?,
-    ) : FeedListAction {
-        override fun reduce(state: FeedListUiState): FeedListUiState {
-            if (state.selectedCategory != category) return state
-            val content =
-                state as? FeedListUiState.Content ?: FeedListUiState.Content(selectedCategory = category, progress = state.progress)
-            return content.copy(isRefreshing = false, noNewContent = true, nextPageUrl = nextPageUrl, canLoadMore = false)
-        }
     }
 
     private companion object {

@@ -36,7 +36,7 @@ class FeedListViewModelTest {
     fun clearModels() = models.clear()
 
     @Test
-    fun `pull refresh resets cursor, excludes the current screen, and cold reopen uses the new position`() =
+    fun `refresh and cold reopen show the first page even with a saved exhausted position`() =
         runTest {
             coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
             coEvery { getList(Category.ALL, NEXT) } returns page(2, THIRD)
@@ -45,20 +45,21 @@ class FeedListViewModelTest {
             sut.onInit()
             advanceUntilIdle()
             content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
-            // Refresh starts from page 1 again but skips the on-screen id, so it walks to NEXT.
+            progress.saveFeedPosition(Category.ALL.id, FeedPosition(null, setOf(1, 2, 3)), "uid:1")
+            // Previously displayed questions must not disappear on refresh or reopen.
             sut.onEvent(FeedListEvent.Refreshed)
             advanceUntilIdle()
-            content(sut).questions.map { it.id } shouldBeEqualTo listOf(2L)
+            content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
             content(sut).batchRevision shouldBeEqualTo 2
 
             val reopened = createViewModel()
             reopened.onInit()
             advanceUntilIdle()
-            content(reopened).questions.map { it.id } shouldBeEqualTo listOf(3L)
+            content(reopened).questions.map { it.id } shouldBeEqualTo listOf(1L)
         }
 
     @Test
-    fun `failed refresh keeps content but clears the persisted cursor`() =
+    fun `failed refresh keeps content and a successful retry reloads the first page`() =
         runTest {
             coEvery { getList(Category.ALL, null) } returnsMany listOf(page(1, NEXT), Result.Failure())
             val sut = createViewModel()
@@ -73,26 +74,27 @@ class FeedListViewModelTest {
             coEvery { getList(Category.ALL, NEXT) } returns page(2, null)
             sut.onEvent(FeedListEvent.Refreshed)
             advanceUntilIdle()
-            content(sut).questions.map { it.id } shouldBeEqualTo listOf(2L)
+            content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
             content(sut).refreshFailed shouldBeEqualTo false
         }
 
     @Test
     fun `duplicate pages are skipped but repeated cursors cannot loop forever`() =
         runTest {
-            progress.saveFeedPosition(Category.ALL.id, FeedPosition(NEXT, setOf(1)), "uid:1")
+            coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
             coEvery { getList(Category.ALL, NEXT) } returns page(1, THIRD)
             coEvery { getList(Category.ALL, THIRD) } returns page(1, NEXT)
             val sut = createViewModel()
             sut.onInit()
             advanceUntilIdle()
-            content(sut).questions shouldBeEqualTo emptyList()
-            content(sut).noNewContent shouldBeEqualTo true
+            sut.onEvent(FeedListEvent.EndReached)
+            advanceUntilIdle()
+            content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
             content(sut).canLoadMore shouldBeEqualTo false
         }
 
     @Test
-    fun `duplicate scan is bounded to five requests and refresh restarts from the first page`() =
+    fun `saved cursor and recent ids are ignored on initial load`() =
         runTest {
             progress.saveFeedPosition(Category.ALL.id, FeedPosition("cursor0", setOf(1)), "uid:1")
             var requests = 0
@@ -103,8 +105,8 @@ class FeedListViewModelTest {
             val sut = createViewModel()
             sut.onInit()
             advanceUntilIdle()
-            requests shouldBeEqualTo 5
-            progress.feedPosition(Category.ALL.id).nextPageUrl shouldBeEqualTo "cursor5"
+            requests shouldBeEqualTo 1
+            content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
             requests = 0
             coEvery { getList(Category.ALL, null) } returns page(2, null)
             sut.onEvent(FeedListEvent.Refreshed)
@@ -142,7 +144,7 @@ class FeedListViewModelTest {
             sut.onEvent(FeedListEvent.EndReached)
             advanceUntilIdle()
             content(sut).loadMoreFailed shouldBeEqualTo true
-            progress.feedPosition(Category.ALL.id).nextPageUrl shouldBeEqualTo NEXT
+            content(sut).nextPageUrl shouldBeEqualTo NEXT
             coEvery { getList(Category.ALL, NEXT) } returns Result.Success(QuestionPage(listOf(question(1), question(2)), null))
             sut.onEvent(FeedListEvent.LoadMoreRetried)
             advanceUntilIdle()
@@ -167,23 +169,27 @@ class FeedListViewModelTest {
         }
 
     @Test
-    fun `a brief detail round trip keeps the batch but an hours old foreground refreshes`() =
+    fun `scrolling continues beyond the automatic hidden page budget`() =
         runTest {
-            coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
-            coEvery { getList(Category.ALL, NEXT) } returns page(2, null)
+            coEvery { getList(Category.ALL, any()) } answers {
+                requestCount++
+                page(requestCount.toLong(), "cursor$requestCount")
+            }
             val sut = createViewModel()
             sut.onInit()
             advanceUntilIdle()
-            sut.onForeground()
-            advanceUntilIdle()
-            content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
-            sut.onForeground(System.currentTimeMillis() + 2 * 60 * 60 * 1000L)
-            advanceUntilIdle()
-            content(sut).questions.map { it.id } shouldBeEqualTo listOf(2L)
+            repeat(MAX_CHAIN_REQUESTS * 2) {
+                sut.onEvent(FeedListEvent.EndReached)
+                advanceUntilIdle()
+            }
+            requestCount shouldBeEqualTo MAX_CHAIN_REQUESTS * 2 + 1
+            content(sut).questions.size shouldBeEqualTo requestCount
+            content(sut).autoPagingPaused shouldBeEqualTo false
+            content(sut).canStartLoadMore shouldBeEqualTo true
         }
 
     @Test
-    fun `account switch discards an in flight batch and loads the new accounts position`() =
+    fun `account switch discards an in flight batch and loads the first page`() =
         runTest {
             coEvery { getList(Category.ALL, null) } returns page(1, NEXT)
             coEvery { getList(Category.ALL, NEXT) } coAnswers { awaitCancellation() }
@@ -198,7 +204,7 @@ class FeedListViewModelTest {
             content(sut).questions.map { it.id } shouldBeEqualTo listOf(3L)
             content(sut).progress.accountKey shouldBeEqualTo "uid:2"
             progress.progress.value = QuestionProgress(accountKey = "uid:1")
-            progress.feedPosition(Category.ALL.id).nextPageUrl shouldBeEqualTo NEXT
+            progress.feedPosition(Category.ALL.id) shouldBeEqualTo FeedPosition()
         }
 
     @Test
@@ -388,6 +394,31 @@ class FeedListViewModelTest {
             advanceUntilIdle()
 
             (requestCount > MAX_CHAIN_REQUESTS) shouldBeEqualTo true
+        }
+
+    @Test
+    fun `duplicate-only pages pause without losing the cursor and can continue`() =
+        runTest {
+            coEvery { getList(Category.ALL, any()) } answers {
+                requestCount++
+                page(1, "cursor$requestCount")
+            }
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+            repeat(MAX_CHAIN_REQUESTS) {
+                sut.onEvent(FeedListEvent.EndReached)
+                advanceUntilIdle()
+            }
+            requestCount shouldBeEqualTo MAX_CHAIN_REQUESTS + 1
+            content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L)
+            content(sut).canContinuePaging shouldBeEqualTo true
+            content(sut).canStartLoadMore shouldBeEqualTo false
+            val cursor = content(sut).nextPageUrl
+            coEvery { getList(Category.ALL, cursor) } returns page(2, null)
+            sut.onEvent(FeedListEvent.ContinuePagingRequested)
+            advanceUntilIdle()
+            content(sut).questions.map { it.id } shouldBeEqualTo listOf(1L, 2L)
         }
 
     private fun createViewModel() = FeedListViewModel(getList, progress).also { models.put("vm${modelCount++}", it) }
