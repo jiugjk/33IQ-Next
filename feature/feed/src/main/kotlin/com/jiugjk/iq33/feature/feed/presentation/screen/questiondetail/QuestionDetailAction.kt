@@ -40,7 +40,12 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
                 // Mark analysis/hint as already handled without inventing paid content.
                 answerReveal =
                     if (explanationAlreadyViewed) {
-                        RevealState.Revealed(com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal("", ""))
+                        RevealState.Revealed(
+                            com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal(
+                                answerText = correctOption.orEmpty(),
+                                explanationText = "",
+                            ),
+                        )
                     } else {
                         RevealState.Idle
                     },
