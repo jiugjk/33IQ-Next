@@ -1,5 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.feedlist
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -35,41 +36,14 @@ internal fun BatchNotice(uiState: FeedListUiState) {
 }
 
 /** Empty because everything loaded is filtered out is a different situation from an empty category. */
-@Suppress("CyclomaticComplexMethod")
 @Composable
 internal fun FeedEmptyState(
     uiState: FeedListUiState.Content,
     onEvent: (FeedListEvent) -> Unit,
 ) {
-    val hidden = uiState.questions.isNotEmpty()
-    val canAdvance = uiState.canLoadMore && !uiState.loadMoreFailed
+    val copy = emptyStateCopy(uiState)
+    val next = nextStep(uiState)
     val filterOn = uiState.progress.hideAnswered
-
-    val title =
-        when {
-            hidden && canAdvance -> R.string.feed_all_answered_hidden
-            hidden && !canAdvance -> R.string.feed_filtered_exhausted_title
-            uiState.noNewContent -> R.string.feed_no_new_title
-            else -> R.string.feed_empty_title
-        }
-    val description =
-        when {
-            hidden && canAdvance -> R.string.feed_filtered_loading_more
-            hidden -> R.string.feed_hidden_description
-            else -> R.string.feed_empty_description
-        }
-    val next =
-        when {
-            uiState.loadMoreFailed -> FeedListEvent.LoadMoreRetried
-            uiState.canLoadMore -> FeedListEvent.EndReached
-            else -> FeedListEvent.Refreshed
-        }
-    val primaryLabel =
-        when {
-            filterOn -> R.string.feed_show_all_questions
-            canAdvance -> R.string.feed_next_batch
-            else -> R.string.feed_retry
-        }
     val primaryAction =
         if (filterOn) {
             { onEvent(FeedListEvent.ShowAllQuestions) }
@@ -80,18 +54,75 @@ internal fun FeedEmptyState(
     Column {
         EmptyState(
             icon = Icons.Outlined.Inbox,
-            title = stringResource(title),
-            description = stringResource(description),
-            actionLabel = stringResource(primaryLabel),
+            title = stringResource(copy.title),
+            description = stringResource(copy.description),
+            actionLabel = stringResource(if (filterOn) R.string.feed_show_all_questions else copy.action),
             action = primaryAction,
         )
-        if (filterOn && canAdvance) {
+        // With the filter on, "show everything" takes the primary slot - so the way forward through
+        // the feed gets its own button instead of disappearing.
+        if (filterOn && (uiState.canAdvanceFeed || uiState.canContinuePaging)) {
             TextButton(
                 onClick = { onEvent(next) },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             ) {
-                Text(stringResource(R.string.feed_next_batch))
+                Text(stringResource(copy.action))
             }
         }
     }
 }
+
+private val FeedListUiState.Content.canAdvanceFeed: Boolean
+    get() = canLoadMore && !loadMoreFailed
+
+/** What this empty screen is about: a paused walk, a filtered-out batch, or an empty category. */
+private fun emptyStateCopy(uiState: FeedListUiState.Content): EmptyStateCopy {
+    val hidden = uiState.questions.isNotEmpty()
+
+    return when {
+        uiState.canContinuePaging ->
+            EmptyStateCopy(
+                R.string.feed_auto_paging_paused_title,
+                R.string.feed_auto_paging_paused_description,
+                R.string.feed_auto_paging_continue,
+            )
+        hidden && uiState.canAdvanceFeed ->
+            EmptyStateCopy(
+                R.string.feed_all_answered_hidden,
+                R.string.feed_filtered_loading_more,
+                R.string.feed_next_batch,
+            )
+        hidden ->
+            EmptyStateCopy(
+                R.string.feed_filtered_exhausted_title,
+                R.string.feed_hidden_description,
+                R.string.feed_retry,
+            )
+        uiState.noNewContent ->
+            EmptyStateCopy(
+                R.string.feed_no_new_title,
+                R.string.feed_empty_description,
+                R.string.feed_retry,
+            )
+        else ->
+            EmptyStateCopy(
+                R.string.feed_empty_title,
+                R.string.feed_empty_description,
+                R.string.feed_retry,
+            )
+    }
+}
+
+private fun nextStep(uiState: FeedListUiState.Content): FeedListEvent =
+    when {
+        uiState.canContinuePaging -> FeedListEvent.ContinuePagingRequested
+        uiState.loadMoreFailed -> FeedListEvent.LoadMoreRetried
+        uiState.canLoadMore -> FeedListEvent.EndReached
+        else -> FeedListEvent.Refreshed
+    }
+
+private data class EmptyStateCopy(
+    @StringRes val title: Int,
+    @StringRes val description: Int,
+    @StringRes val action: Int,
+)

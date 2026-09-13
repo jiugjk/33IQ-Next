@@ -23,6 +23,14 @@ internal class FeedListViewModel(
     private var lastLoadedAt = 0L
     private var accountKey = questionProgressRepository.current.accountKey
 
+    /**
+     * Cursors and request budget of the current continuous automatic load.
+     *
+     * Shared by every batch of one chain, so a page cycle longer than a single batch is detected and
+     * an endless "filtered everything away, fetch the next page" loop is bounded.
+     */
+    private val walk = FeedWalk()
+
     init {
         viewModelScope.launch {
             questionProgressRepository.progress.collect { progress ->
@@ -54,6 +62,12 @@ internal class FeedListViewModel(
             }
             FeedListEvent.LoadMoreRetried -> {
                 loadMore(retry = true)
+            }
+            FeedListEvent.ContinuePagingRequested -> {
+                // The user explicitly asked for more, so the chain gets a fresh budget. The paused
+                // flag is cleared by the load itself, so it is still set while eligibility is checked.
+                walk.reset()
+                loadMore(retry = false, userRequested = true)
             }
             FeedListEvent.ShowAllQuestions -> {
                 questionProgressRepository.setHideAnswered(false)
@@ -96,6 +110,8 @@ internal class FeedListViewModel(
         category: Category,
         resetCursor: Boolean,
     ) {
+        // A refresh, a category switch and an account change all start a new chain.
+        walk.reset()
         val owner = questionProgressRepository.current.accountKey
         val displayedIds =
             (uiStateFlow.value as? FeedListUiState.Content)
@@ -122,6 +138,7 @@ internal class FeedListViewModel(
                             category = category,
                             position = position,
                             displayedIds = excludeIds,
+                            walk = walk,
                         )
                     coroutineContext.ensureActive()
                     if (owner == questionProgressRepository.current.accountKey) {
@@ -166,10 +183,18 @@ internal class FeedListViewModel(
         }
     }
 
-    private fun loadMore(retry: Boolean) {
+    private fun loadMore(
+        retry: Boolean,
+        userRequested: Boolean = false,
+    ) {
         val state = uiStateFlow.value as? FeedListUiState.Content ?: return
         val busy = loadMoreJob?.isActive == true || loadJob?.isActive == true
-        val allowed = if (retry) state.canRetryLoadMore else state.canStartLoadMore
+        val allowed =
+            when {
+                userRequested -> state.canContinuePaging
+                retry -> state.canRetryLoadMore
+                else -> state.canStartLoadMore
+            }
         val cursor = state.nextPageUrl
         if (busy || !allowed || cursor == null) return
         val category = state.selectedCategory
@@ -188,6 +213,7 @@ internal class FeedListViewModel(
                             category = category,
                             position = FeedPosition(nextPageUrl = cursor, lastQuestionIds = position.lastQuestionIds),
                             displayedIds = alreadyListed,
+                            walk = walk,
                         )
                     coroutineContext.ensureActive()
                     if (owner == questionProgressRepository.current.accountKey) applyLoadMore(request, result)
@@ -234,7 +260,11 @@ internal class FeedListViewModel(
 
     /**
      * When the hide-filter leaves the screen empty but more pages exist, keep walking automatically.
-     * Guarded by canStartLoadMore (cursor present, idle, not failed) so a stuck cursor cannot loop.
+     *
+     * Guarded by canStartLoadMore (cursor present, idle, not failed) *and* by the chain budget: a
+     * feed whose next-page links cycle can otherwise keep this going forever without ever producing
+     * a visible question. When the budget is spent the loop stops and hands the decision to the user
+     * instead of silently continuing or silently giving up.
      */
     private fun maybeContinueFilteredPaging() {
         val state = uiStateFlow.value as? FeedListUiState.Content ?: return
@@ -243,7 +273,13 @@ internal class FeedListViewModel(
                 state.canStartLoadMore &&
                 state.nextPageUrl != null &&
                 !state.loadMoreFailed
-        if (shouldContinue) loadMore(retry = false)
+        if (!shouldContinue) return
+
+        if (walk.isExhausted) {
+            sendAction(FeedListAction.AutoPagingPaused(state.selectedCategory))
+        } else {
+            loadMore(retry = false)
+        }
     }
 
     private data class LoadMoreRequest(

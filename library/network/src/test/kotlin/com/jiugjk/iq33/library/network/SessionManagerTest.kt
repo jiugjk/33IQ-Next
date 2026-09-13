@@ -219,4 +219,80 @@ class SessionManagerTest {
 
             sut.sessionFlow.value.isLoggedIn shouldBeEqualTo false
         }
+
+    @Test
+    fun `a JSON null score is skipped so a valid field still decides`() =
+        runTest {
+            // JsonNull's own `content` is the string "null"; accepting it would both display "null"
+            // and stop the search before the field that really carries the number.
+            login()
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","score":null,"myScore":100}"""
+
+            sut.refreshFromServer().score shouldBeEqualTo "100"
+        }
+
+    @Test
+    fun `empty and non-numeric scores are skipped, and zero is a real score`() =
+        runTest {
+            login()
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","score":"","myscore":"0"}"""
+            sut.refreshFromServer().score shouldBeEqualTo "0"
+
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","score":"n/a","userinfo":{"score":"77"}}"""
+            sut.refreshFromServer().score shouldBeEqualTo "77"
+
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","score":42}"""
+            sut.refreshFromServer().score shouldBeEqualTo "42"
+        }
+
+    @Test
+    fun `a reply whose only score field is invalid keeps the cached value instead of overwriting it`() =
+        runTest {
+            login()
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","score":"123"}"""
+            sut.refreshFromServer().score shouldBeEqualTo "123"
+
+            coEvery { htmlClient.getText(any()) } returns """{"status":"success","score":null}"""
+
+            sut.refreshFromServer().score shouldBeEqualTo "123"
+        }
+
+    @Test
+    fun `a score captured under another account or an older session is refused`() =
+        runTest {
+            login()
+            val epoch = sut.sessionEpoch
+            sut.applyServerScore("500", accountKey = "uid:7", epoch = epoch) shouldBeEqualTo true
+            sut.sessionFlow.value.score shouldBeEqualTo "500"
+
+            // Same session, different account: a reply for someone else.
+            sut.applyServerScore("1", accountKey = "uid:8", epoch = epoch) shouldBeEqualTo false
+            sut.applyOptimisticDelta(5, accountKey = "uid:8", epoch = epoch) shouldBeEqualTo false
+
+            // Same account key, but the session generation moved on (logout / login in between).
+            sut.applyServerScore("1", accountKey = "uid:7", epoch = epoch - 1) shouldBeEqualTo false
+            sut.applyOptimisticDelta(5, accountKey = "uid:7", epoch = epoch - 1) shouldBeEqualTo false
+
+            sut.sessionFlow.value.score shouldBeEqualTo "500"
+
+            sut.applyOptimisticDelta(5, accountKey = "uid:7", epoch = epoch) shouldBeEqualTo true
+            sut.sessionFlow.value.score shouldBeEqualTo "505"
+        }
+
+    @Test
+    fun `a logged out session accepts no score at all`() =
+        runTest {
+            login()
+            val epoch = sut.sessionEpoch
+            sut.logout()
+
+            sut.applyServerScore("500", accountKey = "uid:7", epoch = epoch) shouldBeEqualTo false
+            sut.sessionFlow.value.score shouldBeEqualTo null
+        }
+
+    private suspend fun login() {
+        coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"1","uid":"7"}"""
+        coEvery { htmlClient.getText(any()) } returns """{"status":"success","tasks":[{"id":"1"}]}"""
+        sut.login("account", "password")
+    }
 }

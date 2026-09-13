@@ -76,6 +76,15 @@ data class QuestionDetail(
     val shortLabel: String
         get() = title ?: bodyText.take(SHORT_LABEL_MAX_LENGTH)
 
+    /**
+     * One line naming the question's category, for local history rows and their search.
+     *
+     * 33IQ's breadcrumb tail is the question's own category; a question served without one falls
+     * back to its first tag, and only a question with neither ends up blank.
+     */
+    val categoryLabel: String
+        get() = breadcrumb.lastOrNull()?.takeIf { it.isNotBlank() } ?: tags.firstOrNull()?.takeIf { it.isNotBlank() }.orEmpty()
+
     private companion object {
         const val SHORT_LABEL_MAX_LENGTH = 60
     }

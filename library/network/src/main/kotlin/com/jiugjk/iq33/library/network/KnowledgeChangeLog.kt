@@ -4,7 +4,8 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -16,43 +17,71 @@ data class KnowledgeChangeEntry(
     val title: String = "",
     val delta: Int,
     val at: Long,
+    /** Account this delta belongs to; entries are never shown to another account. */
+    val accountKey: String = "",
 )
 
+/**
+ * Per-account 学识 change log.
+ *
+ * Every entry is stored under its own account's key, so a session that expires (or a second account
+ * logging in on the same device) reads an empty log rather than the previous account's history -
+ * without depending on the settings screen's logout button ever being pressed.
+ */
 class KnowledgeChangeLog(
     private val preferences: SharedPreferences,
+    private val sessionManager: SessionManager,
 ) {
-    private val entries = MutableStateFlow(load())
+    private val revision = MutableStateFlow(0L)
 
-    val recent: Flow<List<KnowledgeChangeEntry>> = entries.asStateFlow()
+    init {
+        // The pre-namespace log cannot be attributed to an account, so it is dropped instead of
+        // being shown to whoever logs in next.
+        if (preferences.contains(LEGACY_KEY)) preferences.edit { remove(LEGACY_KEY) }
+    }
 
-    fun current(): List<KnowledgeChangeEntry> = entries.value
+    /** Entries of the account that is logged in right now; empty for guest / unknown sessions. */
+    val recent: Flow<List<KnowledgeChangeEntry>> =
+        combine(sessionManager.sessionFlow, revision) { session, _ ->
+            load(session.accountKey)
+        }.distinctUntilChanged()
+
+    fun current(accountKey: String? = sessionManager.sessionFlow.value.accountKey): List<KnowledgeChangeEntry> = load(accountKey)
 
     fun append(
+        accountKey: String?,
         questionId: Long,
         delta: Int,
         title: String = "",
         at: Long = System.currentTimeMillis(),
     ) {
-        if (delta == 0) return
-        val next =
-            (listOf(KnowledgeChangeEntry(questionId, title, delta, at)) + entries.value)
-                .take(MAX_ENTRIES)
-        preferences.edit { putString(KEY, Json.encodeToString(next)) }
-        entries.value = next
+        if (delta == 0 || accountKey.isNullOrEmpty()) return
+        val entry = KnowledgeChangeEntry(questionId, title, delta, at, accountKey)
+        val next = (listOf(entry) + load(accountKey)).take(MAX_ENTRIES)
+        preferences.edit { putString(keyFor(accountKey), Json.encodeToString(next)) }
+        revision.value += 1
     }
 
-    fun clear() {
-        preferences.edit { remove(KEY) }
-        entries.value = emptyList()
+    fun clear(accountKey: String? = sessionManager.sessionFlow.value.accountKey) {
+        if (accountKey.isNullOrEmpty()) return
+        preferences.edit { remove(keyFor(accountKey)) }
+        revision.value += 1
     }
 
-    private fun load(): List<KnowledgeChangeEntry> {
-        val raw = preferences.getString(KEY, null) ?: return emptyList()
-        return runCatching { Json.decodeFromString<List<KnowledgeChangeEntry>>(raw) }.getOrDefault(emptyList())
+    private fun load(accountKey: String?): List<KnowledgeChangeEntry> {
+        if (accountKey.isNullOrEmpty()) return emptyList()
+        val raw = preferences.getString(keyFor(accountKey), null) ?: return emptyList()
+
+        return runCatching { Json.decodeFromString<List<KnowledgeChangeEntry>>(raw) }
+            .getOrDefault(emptyList())
+            // Defensive: a stored entry that names another account is never surfaced here.
+            .filter { it.accountKey.isEmpty() || it.accountKey == accountKey }
     }
+
+    private fun keyFor(accountKey: String) = "$LEGACY_KEY:$accountKey"
 
     private companion object {
-        const val KEY = "knowledge_delta_log"
+        const val LEGACY_KEY = "knowledge_delta_log"
         const val MAX_ENTRIES = 30
     }
 }

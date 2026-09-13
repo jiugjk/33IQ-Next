@@ -64,12 +64,14 @@ internal class InMemoryAnswerRecordRepository(
         )
     }
 
+    @Suppress("LongParameterList")
     override fun recordExplanationViewed(
         accountKey: String?,
         questionId: Long,
         title: String,
         categoryId: String,
         correctOption: String?,
+        explanationText: String?,
     ) {
         if (accountKey == null || !canWrite(accountKey)) return
         val existing = get(accountKey, questionId)
@@ -79,6 +81,7 @@ internal class InMemoryAnswerRecordRepository(
                 categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
                 viewedExplanation = true,
                 correctOption = correctOption?.takeIf { it.isNotBlank() } ?: existing?.correctOption,
+                explanationText = explanationText?.takeIf { it.isNotBlank() } ?: existing?.explanationText,
                 answeredAt = existing?.answeredAt,
                 updatedAt = System.currentTimeMillis(),
             ),
@@ -90,6 +93,7 @@ internal class InMemoryAnswerRecordRepository(
         questionId: Long,
         title: String,
         categoryId: String,
+        hintText: String?,
     ) {
         if (accountKey == null || !canWrite(accountKey)) return
         val existing = get(accountKey, questionId)
@@ -98,7 +102,24 @@ internal class InMemoryAnswerRecordRepository(
                 title = title.ifBlank { existing?.title.orEmpty() },
                 categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
                 viewedHint = true,
+                hintText = hintText?.takeIf { it.isNotBlank() } ?: existing?.hintText,
                 updatedAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    override fun updateMetadata(
+        accountKey: String?,
+        questionId: Long,
+        title: String,
+        categoryId: String,
+    ) {
+        if (accountKey == null || !canWrite(accountKey)) return
+        val existing = get(accountKey, questionId) ?: return
+        upsert(
+            existing.copy(
+                title = title.ifBlank { existing.title },
+                categoryId = categoryId.ifBlank { existing.categoryId },
             ),
         )
     }

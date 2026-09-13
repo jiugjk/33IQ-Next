@@ -2,6 +2,7 @@ package com.jiugjk.iq33.feature.feed.data
 
 import androidx.room.Room
 import com.jiugjk.iq33.feature.feed.data.datasource.database.AnswerRecordDatabase
+import com.jiugjk.iq33.feature.feed.data.datasource.database.MIGRATION_2_3
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSource
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRevealRemoteDataSource
 import com.jiugjk.iq33.feature.feed.data.datasource.remote.QuestionHtmlParser
@@ -40,11 +41,21 @@ internal val dataModule =
         single {
             Room
                 .databaseBuilder(get(), AnswerRecordDatabase::class.java, "AnswerRecords.db")
+                .addMigrations(MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build()
         }
         single { get<AnswerRecordDatabase>().answerRecordDao() }
-        singleOf(::AnswerRecordRepositoryImpl) { bind<AnswerRecordRepository>() }
+        // Constructor DSL (singleOf) resolves *every* constructor parameter, including the ones that
+        // have Kotlin defaults - it would look for a CoroutineScope binding that the graph does not
+        // have and fail at first resolution. Calling the constructor explicitly keeps the default.
+        single<AnswerRecordRepository> {
+            AnswerRecordRepositoryImpl(
+                dao = get(),
+                preferences = get(),
+                sessionManager = get(),
+            )
+        }
         singleOf(::AnswerFeedbackPreferencesImpl) { bind<AnswerFeedbackPreferences>() }
 
         singleOf(::QuestionProgressRepositoryImpl) { bind<QuestionProgressRepository>() }

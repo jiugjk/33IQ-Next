@@ -57,11 +57,14 @@ private fun AnswerAnalysisPrompt(
     onEvent: (QuestionDetailEvent) -> Unit,
 ) {
     val state = uiState.answerReveal
-    // A request that may already have been charged is only ever followed by a fetch-only recovery.
-    val recovery = uiState.detail.isAnswerRevealPending || state.isRetryBlocked
+    // A request that may already have been charged - and an entitlement whose text this device never
+    // stored - are only ever followed by a fetch-only recovery, never by another quote/pay round.
+    val recovery = uiState.detail.isAnswerRevealPending || state.isRetryBlocked || uiState.isAnswerRevealEntitled
     val busy = state is RevealState.QuoteLoading || state is RevealState.Revealing
     val notice =
         when {
+            uiState.isAnswerRevealEntitled && !uiState.detail.isAnswerRevealPending && !state.isRetryBlocked ->
+                R.string.feed_answer_entitled_notice
             recovery -> R.string.feed_answer_pending_notice
             state is RevealState.Failed -> R.string.feed_answer_flow_failed
             else -> null
@@ -78,7 +81,12 @@ private fun AnswerAnalysisPrompt(
         notice?.let { message ->
             Text(
                 text = stringResource(message),
-                color = MaterialTheme.colorScheme.error,
+                color =
+                    if (message == R.string.feed_answer_entitled_notice) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
                 style = MaterialTheme.typography.bodySmall,
             )
         }

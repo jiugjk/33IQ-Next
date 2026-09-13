@@ -272,6 +272,22 @@ private fun QuestionList(
                 }
             }
         }
+
+        // Automatic paging stopped on its own budget, not on an error: offer to keep going instead
+        // of quietly ending the list.
+        if (uiState.canContinuePaging) {
+            item {
+                TextButton(
+                    onClick = { onEvent(FeedListEvent.ContinuePagingRequested) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = Dimen.spaceM),
+                ) {
+                    Text(
+                        text = stringResource(R.string.feed_auto_paging_continue),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
     }
 }
 

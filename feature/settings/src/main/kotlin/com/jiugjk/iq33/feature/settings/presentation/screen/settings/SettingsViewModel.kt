@@ -82,7 +82,10 @@ internal class SettingsViewModel(
     }
 
     fun onLogoutClick() {
-        knowledgeChangeLog.clear()
+        // Clear this account's log before the session is torn down - afterwards there is no account
+        // key left to name it. Entries are namespaced anyway, so an expired session (which never
+        // reaches this button) also stops showing them.
+        knowledgeChangeLog.clear(sessionManager.sessionFlow.value.accountKey)
         sessionManager.logout()
     }
 }

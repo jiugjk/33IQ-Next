@@ -15,8 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -140,7 +142,15 @@ internal fun StreakBanner(
     )
 }
 
-@Suppress("CognitiveComplexMethod")
+/**
+ * Plays answer feedback for a submission that finished *here*, exactly once.
+ *
+ * Driven by [SubmissionState.Done.completionToken], not by the result's contents: a result restored
+ * from local history carries no token, so re-opening an answered question (or rebuilding the
+ * composition around a surviving view model) never replays haptics, the shake/scale animation or
+ * the 学识 float for a reward that was granted in the past. The handled token is remembered through
+ * `rememberSaveable`, so a configuration change cannot replay it either.
+ */
 @Composable
 internal fun rememberFeedbackAnimation(
     submission: SubmissionState,
@@ -152,32 +162,33 @@ internal fun rememberFeedbackAnimation(
     val shakeX = remember { Animatable(0f) }
     val floatY = remember { Animatable(0f) }
     var showFloat by remember { mutableStateOf(false) }
-    var lastDoneKey by remember { mutableStateOf<String?>(null) }
+    var handledToken by rememberSaveable { mutableLongStateOf(0L) }
+    val token = (submission as? SubmissionState.Done)?.completionToken
 
-    LaunchedEffect(submission, animationsEnabled, hapticsEnabled) {
-        val done = submission as? SubmissionState.Done
-        if (done != null) {
-            val key = "${done.submittedAnswer}:${done.result}"
-            if (key != lastDoneKey) {
-                lastDoneKey = key
-                when (val result = done.result) {
-                    is SubmitAnswerResult.Correct -> {
-                        view.performAnswerHaptic(correct = true, enabled = hapticsEnabled)
-                        showFloat = result.scoreDelta != null
-                        if (animationsEnabled) {
-                            runCorrectFeedback(scale, floatY)
-                        }
-                        showFloat = false
-                        floatY.snapTo(0f)
+    LaunchedEffect(token, animationsEnabled, hapticsEnabled) {
+        val result = (submission as? SubmissionState.Done)?.result
+        val fresh = token != null && token != handledToken && result != null
+
+        if (fresh) {
+            handledToken = requireNotNull(token)
+
+            when (result) {
+                is SubmitAnswerResult.Correct -> {
+                    view.performAnswerHaptic(correct = true, enabled = hapticsEnabled)
+                    showFloat = result.scoreDelta != null
+                    if (animationsEnabled) {
+                        runCorrectFeedback(scale, floatY)
                     }
-                    is SubmitAnswerResult.Wrong -> {
-                        view.performAnswerHaptic(correct = false, enabled = hapticsEnabled)
-                        if (animationsEnabled) {
-                            runWrongFeedback(shakeX)
-                        }
-                    }
-                    else -> { }
+                    showFloat = false
+                    floatY.snapTo(0f)
                 }
+                is SubmitAnswerResult.Wrong -> {
+                    view.performAnswerHaptic(correct = false, enabled = hapticsEnabled)
+                    if (animationsEnabled) {
+                        runWrongFeedback(shakeX)
+                    }
+                }
+                else -> { }
             }
         }
     }

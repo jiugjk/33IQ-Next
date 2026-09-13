@@ -25,6 +25,8 @@
     <string name="feed_answer_recover">恢复获取解析</string>
     <string name="feed_answer_pending_notice">上次请求可能已支付学识或记录查看。恢复只读取解析，不会再次支付；若仍失败，请先在官网核实。</string>
     <string name="feed_answer_flow_failed">未能完成请求。请检查登录、学识余额或服务器限制，也可能是报价已变化；可重新获取报价。</string>
+    <string name="feed_answer_entitled_notice">本机记录显示你已查看过此题解析，但未保存正文。重新读取不会再次扣除学识。</string>
+    <string name="feed_hint_entitled_notice">本机记录显示你已查看过此题提示，但未保存正文。33IQ 每次查看提示都会扣除学识，是否重新购买由你决定。</string>
     <string name="feed_analysis_missing">服务器未提供解析内容</string>
     <string name="feed_right_ratio">正确率 %1$d%%</string>
     <string name="feed_question_image_content_description">题目配图</string>
@@ -48,6 +50,9 @@
     <string name="feed_filtered_loading_more">本页题目都被过滤了，正在加载更多</string>
     <string name="feed_retry">重试</string>
     <string name="feed_load_more_failed">加载更多失败，点击重试</string>
+    <string name="feed_auto_paging_paused_title">已连续翻了很多页</string>
+    <string name="feed_auto_paging_paused_description">这些页里没有可显示的题目（可能是过滤规则或分页循环）。可继续加载，或关闭过滤查看全部题目。</string>
+    <string name="feed_auto_paging_continue">继续加载</string>
     <string name="feed_load_failed_title">加载失败</string>
     <string name="feed_load_failed_description">请检查网络连接后重试</string>
     <string name="feed_empty_title">这个分类暂时没有题目</string>
@@ -98,7 +103,10 @@
 
     <string name="feed_history_empty">还没有答题历史</string>
     <string name="feed_history_empty_description">答过题或看过解析后会出现在这里</string>
-    <string name="feed_history_search">搜索历史</string>
+    <string name="feed_history_search">搜索历史（标题、分类或题号）</string>
+    <string name="feed_history_no_match">没有符合条件的记录</string>
+    <string name="feed_history_no_match_description">可修改关键词或切换筛选条件</string>
+    <string name="feed_history_reset_filters">显示全部记录</string>
     <string name="feed_history_clear">清空历史</string>
     <string name="feed_history_clear_title">清空答题历史？</string>
     <string name="feed_history_clear_message">将删除本机全部答题与看解析记录，不可恢复。</string>

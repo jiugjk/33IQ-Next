@@ -54,6 +54,37 @@ class AnswerRevealRepositoryTest {
         }
 
     @Test
+    fun `content this account already revealed is re-read without another quote or payment`() =
+        runTest {
+            coEvery { remote.quote(1) } returns quote
+            coEvery { remote.pay(1) } returns Unit
+            coEvery { remote.fetch(1) } returns reveal
+            sut.reveal(quote) shouldBeEqualTo Result.Success(reveal)
+            // The stored record is the entitlement: the pending latch is already cleared by now.
+            progress.current.pendingAnswerRevealIds shouldBeEqualTo emptySet()
+            answerRecords.get("uid:1", 1)?.explanationText shouldBeEqualTo "解析"
+
+            sut.recover(1) shouldBeEqualTo Result.Success(reveal)
+
+            // Exactly the one quote and the one payment from the original reveal.
+            coVerify(exactly = 1) { remote.quote(1) }
+            coVerify(exactly = 1) { remote.pay(1) }
+            coVerify(exactly = 2) { remote.fetch(1) }
+        }
+
+    @Test
+    fun `a question never revealed by this account still goes through the quote flow`() =
+        runTest {
+            coEvery { remote.quote(1) } returns quote
+            coEvery { remote.fetch(1) } returns reveal
+
+            (sut.recover(1) as Result.Failure).afterSideEffect shouldBeEqualTo false
+
+            coVerify(exactly = 0) { remote.pay(any()) }
+            coVerify(exactly = 0) { remote.fetch(any()) }
+        }
+
+    @Test
     fun `free permission never calls payment`() =
         runTest {
             val free = AnswerQuote(1, 0, false)

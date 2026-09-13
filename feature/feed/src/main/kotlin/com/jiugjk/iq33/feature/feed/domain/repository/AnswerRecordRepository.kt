@@ -38,12 +38,15 @@ internal interface AnswerRecordRepository {
     )
 
     /** ② Successful explanation reveal (or server seeanswer). */
+    @Suppress("LongParameterList")
     fun recordExplanationViewed(
         accountKey: String?,
         questionId: Long,
         title: String = "",
         categoryId: String = "",
         correctOption: String? = null,
+        /** Paid content, cached so re-entering the question never needs another charged request. */
+        explanationText: String? = null,
     )
 
     /** ③ Successful hint reveal. */
@@ -52,6 +55,21 @@ internal interface AnswerRecordRepository {
         questionId: Long,
         title: String = "",
         categoryId: String = "",
+        /** Paid hint text, cached: 33IQ charges 学识 again for every `showtips` call. */
+        hintText: String? = null,
+    )
+
+    /**
+     * Fills in display metadata (history title / category) for a record that already exists.
+     *
+     * Deliberately does **not** create one: opening a question is not progress, and a metadata-only
+     * record would put every visited question into the history list.
+     */
+    fun updateMetadata(
+        accountKey: String?,
+        questionId: Long,
+        title: String,
+        categoryId: String,
     )
 
     /** Redo: clear answer fields only; keep viewed* and knowledgeDelta. */

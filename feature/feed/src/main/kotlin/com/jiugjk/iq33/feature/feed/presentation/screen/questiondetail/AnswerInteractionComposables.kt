@@ -45,6 +45,17 @@ internal fun HintSection(
             }
         }
 
+        // Entitled = viewed earlier, text not stored on this device. `showtips` charges every time,
+        // so nothing is fetched silently: the price dialog still decides, and the user is told why.
+        if (hintReveal is RevealState.Entitled) {
+            Text(
+                text = stringResource(R.string.feed_hint_entitled_notice),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = Dimen.spaceS),
+            )
+        }
+
         if (hintReveal is RevealState.Failed) {
             Text(
                 text =

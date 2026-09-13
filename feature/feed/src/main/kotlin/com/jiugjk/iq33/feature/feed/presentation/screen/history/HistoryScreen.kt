@@ -65,6 +65,7 @@ fun HistoryScreen(
                     onDelete = viewModel::onDelete,
                     onFilter = viewModel::onFilter,
                     onQuery = viewModel::onQuery,
+                    onResetFilters = viewModel::onResetFilters,
                     onClearRequest = viewModel::onClearRequested,
                     onClearDismiss = viewModel::onClearDismissed,
                     onClearConfirm = viewModel::onClearConfirmed,
@@ -81,6 +82,7 @@ private fun HistoryContent(
     onDelete: (AnswerRecord) -> Unit,
     onFilter: (HistoryFilter) -> Unit,
     onQuery: (String) -> Unit,
+    onResetFilters: () -> Unit,
     onClearRequest: () -> Unit,
     onClearDismiss: () -> Unit,
     onClearConfirm: () -> Unit,
@@ -115,17 +117,23 @@ private fun HistoryContent(
                 Text(stringResource(R.string.feed_history_clear))
             }
         }
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(Dimen.spaceL),
-            verticalArrangement = Arrangement.spacedBy(Dimen.spaceML),
-        ) {
-            items(items = state.records, key = { "${it.accountKey}:${it.questionId}" }) { record ->
-                HistoryItem(
-                    record = record,
-                    onClick = { onQuestionClick(record.questionId) },
-                    onDelete = { onDelete(record) },
-                )
+        // Zero matches keeps the search field and chips above: the condition that hid everything
+        // has to stay editable without leaving the screen.
+        if (state.isZeroMatch) {
+            NoMatchState(onResetFilters = onResetFilters)
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(Dimen.spaceL),
+                verticalArrangement = Arrangement.spacedBy(Dimen.spaceML),
+            ) {
+                items(items = state.records, key = { "${it.accountKey}:${it.questionId}" }) { record ->
+                    HistoryItem(
+                        record = record,
+                        onClick = { onQuestionClick(record.questionId) },
+                        onDelete = { onDelete(record) },
+                    )
+                }
             }
         }
     }
@@ -146,6 +154,28 @@ private fun HistoryContent(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun NoMatchState(onResetFilters: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(Dimen.spaceL),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = stringResource(R.string.feed_history_no_match),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = stringResource(R.string.feed_history_no_match_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Dimen.spaceS),
+        )
+        TextButton(onClick = onResetFilters, modifier = Modifier.padding(top = Dimen.spaceS)) {
+            Text(stringResource(R.string.feed_history_reset_filters))
+        }
     }
 }
 

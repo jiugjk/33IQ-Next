@@ -9,10 +9,13 @@ import com.jiugjk.iq33.library.network.KnowledgeChangeLog
 import com.jiugjk.iq33.library.network.SessionManager
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
+import com.jiugjk.iq33.library.network.IqSession
+import com.jiugjk.iq33.library.network.SessionStatus
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeInstanceOf
@@ -27,7 +30,12 @@ class AnswerRepositoryTest {
         }
     private val answerRecords = mockk<AnswerRecordRepository>(relaxed = true)
     private val feedback = mockk<AnswerFeedbackPreferences>(relaxed = true)
-    private val sessionManager = mockk<SessionManager>(relaxed = true)
+    private val session = MutableStateFlow(IqSession(status = SessionStatus.AUTHENTICATED, score = "100", accountKey = "uid:1"))
+    private val sessionManager =
+        mockk<SessionManager>(relaxed = true) {
+            every { sessionFlow } returns session
+            every { sessionEpoch } returns 7
+        }
     private val knowledgeLog = mockk<KnowledgeChangeLog>(relaxed = true)
     private val sut = AnswerRepositoryImpl(remote, progress, answerRecords, feedback, sessionManager, knowledgeLog)
 
@@ -119,12 +127,78 @@ class AnswerRepositoryTest {
         }
 
     @Test
+    fun `a reply that lands after an account switch updates nothing that belongs to the new account`() =
+        runTest {
+            coEvery { remote.submitAnswer(1, "A") } coAnswers {
+                // The user switches accounts while the answer is in flight: new owner, new generation.
+                every { progress.current } returns QuestionProgress(accountKey = "uid:2")
+                session.value = IqSession(status = SessionStatus.AUTHENTICATED, score = "500", accountKey = "uid:2")
+                every { sessionManager.sessionEpoch } returns 8
+                SubmitAnswerResult.Correct(scoreDelta = 3, myScore = 42)
+            }
+
+            sut.submitAnswer(1, "A")
+
+            // The record is still attributed to the account that asked; the store refuses it.
+            verify(exactly = 1) {
+                answerRecords.recordAnswer(
+                    accountKey = "uid:1",
+                    questionId = 1,
+                    title = any(),
+                    categoryId = any(),
+                    selectedOption = any(),
+                    isCorrect = any(),
+                    knowledgeDelta = any(),
+                    answeredAt = any(),
+                )
+            }
+            // Streak and change log belong to an account too - neither is moved for the new one.
+            verify(exactly = 0) { feedback.recordCorrect(any()) }
+            verify(exactly = 0) { knowledgeLog.append(any(), any(), any(), any(), any()) }
+            // The score write carries the owner and generation it was captured under, so the session
+            // manager refuses it inside the same lock that commits state.
+            verify(exactly = 1) { sessionManager.applyServerScore(42, "uid:1", 7) }
+            verify(exactly = 0) { sessionManager.applyServerScore(any<Int>(), "uid:2", any()) }
+        }
+
+    @Test
+    fun `an uninterrupted answer updates the streak, the log and the score of its own account`() =
+        runTest {
+            coEvery { remote.submitAnswer(1, "A") } returns SubmitAnswerResult.Correct(scoreDelta = 3, myScore = 42)
+
+            sut.submitAnswer(1, "A")
+
+            verify(exactly = 1) { feedback.recordCorrect("uid:1") }
+            verify(exactly = 1) { knowledgeLog.append("uid:1", 1, 3, any(), any()) }
+            verify(exactly = 1) { sessionManager.applyServerScore(42, "uid:1", 7) }
+        }
+
+    @Test
+    fun `a wrong answer resets the streak of its own account only`() =
+        runTest {
+            coEvery { remote.submitAnswer(1, "A") } returns SubmitAnswerResult.Wrong(scoreDelta = -1, myScore = null)
+
+            sut.submitAnswer(1, "A")
+
+            verify(exactly = 1) { feedback.recordWrong("uid:1") }
+            verify(exactly = 1) { sessionManager.applyOptimisticDelta(-1, "uid:1", 7) }
+        }
+
+    @Test
     fun `hint reveal records viewedHint only`() =
         runTest {
             coEvery { remote.revealHint(9) } returns
                 com.jiugjk.iq33.feature.feed.domain.model
                     .HintReveal("tip")
             sut.revealHint(9)
-            verify(exactly = 1) { answerRecords.recordHintViewed("uid:1", 9) }
+            verify(exactly = 1) {
+                answerRecords.recordHintViewed(
+                    accountKey = "uid:1",
+                    questionId = 9,
+                    title = any(),
+                    categoryId = any(),
+                    hintText = "tip",
+                )
+            }
         }
 }

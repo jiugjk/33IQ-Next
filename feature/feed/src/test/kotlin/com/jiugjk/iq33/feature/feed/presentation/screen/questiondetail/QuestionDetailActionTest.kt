@@ -43,7 +43,7 @@ class QuestionDetailActionTest {
 
         val reduced =
             QuestionDetailAction
-                .SubmissionFinished(1, SubmitAnswerResult.Correct(scoreDelta = 2, myScore = 20))
+                .SubmissionFinished(1, SubmitAnswerResult.Correct(scoreDelta = 2, myScore = 20), completionToken = 1)
                 .reduce(submitting) as QuestionDetailUiState.Content
 
         (reduced.submission as SubmissionState.Done).submittedAnswer shouldBeEqualTo "A"
@@ -53,14 +53,18 @@ class QuestionDetailActionTest {
     fun `a submission result that was never requested is ignored`() {
         val state = content()
 
-        QuestionDetailAction.SubmissionFinished(1, SubmitAnswerResult.AlreadyAnswered).reduce(state) shouldBeEqualTo state
+        val finished = QuestionDetailAction.SubmissionFinished(1, SubmitAnswerResult.AlreadyAnswered, completionToken = 1)
+
+        finished.reduce(state) shouldBeEqualTo state
     }
 
     @Test
     fun `a submission result for another question is ignored`() {
         val submitting = QuestionDetailAction.SubmissionStarted(1, "A").reduce(content())
 
-        QuestionDetailAction.SubmissionFinished(99, SubmitAnswerResult.Correct(1, 1)).reduce(submitting) shouldBeEqualTo submitting
+        val finished = QuestionDetailAction.SubmissionFinished(99, SubmitAnswerResult.Correct(1, 1), completionToken = 1)
+
+        finished.reduce(submitting) shouldBeEqualTo submitting
     }
 
     @Test
@@ -119,8 +123,8 @@ class QuestionDetailActionTest {
     @Test
     fun `a limit response is not evidence of an answered question`() {
         val submitting = QuestionDetailAction.SubmissionStarted(1, "A").reduce(content())
-        val reduced =
-            QuestionDetailAction.SubmissionFinished(1, SubmitAnswerResult.LimitReached).reduce(submitting) as QuestionDetailUiState.Content
+        val finished = QuestionDetailAction.SubmissionFinished(1, SubmitAnswerResult.LimitReached, completionToken = 1)
+        val reduced = finished.reduce(submitting) as QuestionDetailUiState.Content
         reduced.detail.isAnswered shouldBeEqualTo false
     }
 
@@ -134,7 +138,8 @@ class QuestionDetailActionTest {
             )
         results.forEach { result ->
             val submitting = QuestionDetailAction.SubmissionStarted(1, "A").reduce(content())
-            val reduced = QuestionDetailAction.SubmissionFinished(1, result).reduce(submitting) as QuestionDetailUiState.Content
+            val finished = QuestionDetailAction.SubmissionFinished(1, result, completionToken = 1)
+            val reduced = finished.reduce(submitting) as QuestionDetailUiState.Content
             reduced.detail.isAnswered shouldBeEqualTo true
         }
     }
@@ -144,7 +149,7 @@ class QuestionDetailActionTest {
         val submitting = QuestionDetailAction.SubmissionStarted(1, "A").reduce(content())
         val reduced =
             QuestionDetailAction
-                .SubmissionFinished(1, SubmitAnswerResult.AnswerAlreadyViewed)
+                .SubmissionFinished(1, SubmitAnswerResult.AnswerAlreadyViewed, completionToken = 1)
                 .reduce(submitting) as QuestionDetailUiState.Content
         reduced.detail.hasViewedAnswer shouldBeEqualTo true
         reduced.detail.isAnswered shouldBeEqualTo false

@@ -16,6 +16,9 @@ internal data class AnswerRecordEntity(
     val correctOption: String? = null,
     val viewedExplanation: Boolean,
     val viewedHint: Boolean,
+    /** Cached paid content - see [com.jiugjk.iq33.feature.feed.domain.model.AnswerRecord.hintText]. */
+    val hintText: String? = null,
+    val explanationText: String? = null,
     val knowledgeDelta: Int?,
     val answeredAt: Long?,
     val updatedAt: Long,

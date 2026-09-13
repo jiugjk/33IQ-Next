@@ -64,10 +64,13 @@ private fun WordBankPicker(
 ) {
     val answer = uiState.wordBankAnswer
     val hasSelection = uiState.selectedCandidateIndices.isNotEmpty()
+    // A restored answer whose tiles could not be identified is still shown, read-only: a "submitted"
+    // state above an empty field is what used to look like the answer had been lost.
+    val displayed = uiState.wordBankDisplayAnswer
 
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
-            value = answer,
+            value = displayed,
             onValueChange = {},
             readOnly = true,
             enabled = uiState.canSelectChoice,
@@ -94,10 +97,11 @@ private fun WordBankPicker(
         CandidateTiles(uiState = uiState, length = length, answer = answer, onEvent = onEvent)
 
         SubmitAnswerSection(
-            selectedChoiceId = answer.takeIf { it.isNotBlank() },
+            selectedChoiceId = displayed.takeIf { it.isNotBlank() },
             submission = uiState.submission,
             enabled = uiState.canSubmitAnswer(answer),
             onSubmitAnswerClick = { onEvent(QuestionDetailEvent.AnswerSubmitted(it)) },
+            onRedoClick = { onEvent(QuestionDetailEvent.RedoRequested) },
         )
     }
 }

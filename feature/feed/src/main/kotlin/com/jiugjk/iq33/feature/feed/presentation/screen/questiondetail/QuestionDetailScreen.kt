@@ -299,12 +299,9 @@ private fun ChoiceAndSubmitSection(
 ) {
     // Choices stay tappable only while a submission could still be sent: once one is in flight the
     // selection is frozen, so the result can never be shown next to a different option.
-    val correctAnswerId =
-        (uiState.answerReveal as? RevealState.Revealed)
-            ?.reveal
-            ?.answerText
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
+    // The green mark comes from revealed content *or* this account's own history, so it no longer
+    // depends on faking a "revealed" analysis state for a record that carries no text.
+    val correctAnswerId = uiState.revealedCorrectOption
 
     ChoiceSection(
         choices = detail.choices,

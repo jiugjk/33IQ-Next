@@ -7,9 +7,9 @@ import com.jiugjk.iq33.feature.feed.domain.model.AnswerRecord
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
+@Suppress("TooManyFunctions")
 internal class HistoryViewModel(
     private val answerRecordRepository: AnswerRecordRepository,
     private val questionProgressRepository: QuestionProgressRepository,
@@ -24,29 +24,7 @@ internal class HistoryViewModel(
                 records
                     .filter { it.accountKey == account }
                     .sortedByDescending { it.updatedAt }
-            }.map { all ->
-                val filtered =
-                    all
-                        .filter { record ->
-                            when (filter) {
-                                HistoryFilter.ALL -> true
-                                HistoryFilter.CORRECT -> record.isCorrect == true
-                                HistoryFilter.WRONG -> record.isCorrect == false
-                                HistoryFilter.VIEWED_ONLY ->
-                                    record.viewedExplanation &&
-                                        record.answeredAt == null &&
-                                        record.isCorrect == null &&
-                                        record.selectedOption == null
-                            }
-                        }.filter { record ->
-                            query.isBlank() ||
-                                record.title.contains(query, ignoreCase = true) ||
-                                record.categoryId.contains(query, ignoreCase = true)
-                        }
-                filtered
-            }.collect { list ->
-                sendAction(HistoryAction.RecordsChanged(list, filter, query))
-            }
+            }.collect(::publish)
         }
     }
 
@@ -57,6 +35,13 @@ internal class HistoryViewModel(
 
     fun onQuery(query: String) {
         this.query = query
+        refreshFromCache()
+    }
+
+    /** Back to "everything", from the zero-match state as well as from the list. */
+    fun onResetFilters() {
+        filter = HistoryFilter.ALL
+        query = ""
         refreshFromCache()
     }
 
@@ -75,26 +60,40 @@ internal class HistoryViewModel(
 
     private fun refreshFromCache() {
         val account = questionProgressRepository.current.accountKey
-        val all = answerRecordRepository.current(account).sortedByDescending { it.updatedAt }
-        val filtered =
-            all
-                .filter { record ->
-                    when (filter) {
-                        HistoryFilter.ALL -> true
-                        HistoryFilter.CORRECT -> record.isCorrect == true
-                        HistoryFilter.WRONG -> record.isCorrect == false
-                        HistoryFilter.VIEWED_ONLY ->
-                            record.viewedExplanation &&
-                                record.answeredAt == null &&
-                                record.isCorrect == null &&
-                                record.selectedOption == null
-                    }
-                }.filter { record ->
-                    query.isBlank() ||
-                        record.title.contains(query, ignoreCase = true) ||
-                        record.categoryId.contains(query, ignoreCase = true)
-                }
-        sendAction(HistoryAction.RecordsChanged(filtered, filter, query))
+        publish(answerRecordRepository.current(account).sortedByDescending { it.updatedAt })
+    }
+
+    /**
+     * Publishes the filtered list *and* whether the account has any history at all.
+     *
+     * The two are deliberately separate: "no records" is an empty screen, while "no match" has to
+     * keep the search field and the filter chips on screen - otherwise a query that matches nothing
+     * takes away the only controls that could undo it.
+     */
+    private fun publish(all: List<AnswerRecord>) {
+        val matching = all.filter { matchesFilter(it) && matchesQuery(it) }
+        sendAction(HistoryAction.RecordsChanged(matching, filter, query, all.isNotEmpty()))
+    }
+
+    private fun matchesFilter(record: AnswerRecord): Boolean =
+        when (filter) {
+            HistoryFilter.ALL -> true
+            HistoryFilter.CORRECT -> record.isCorrect == true
+            HistoryFilter.WRONG -> record.isCorrect == false
+            HistoryFilter.VIEWED_ONLY ->
+                record.viewedExplanation &&
+                    record.answeredAt == null &&
+                    record.isCorrect == null &&
+                    record.selectedOption == null
+        }
+
+    /** Question id is searchable too: a record migrated without a title is still findable by number. */
+    private fun matchesQuery(record: AnswerRecord): Boolean {
+        val term = query.trim()
+        return term.isEmpty() ||
+            record.title.contains(term, ignoreCase = true) ||
+            record.categoryId.contains(term, ignoreCase = true) ||
+            record.questionId.toString().contains(term)
     }
 }
 
@@ -103,9 +102,10 @@ internal sealed interface HistoryAction : BaseAction<HistoryUiState> {
         private val records: List<AnswerRecord>,
         private val filter: HistoryFilter,
         private val query: String,
+        private val hasAnyRecords: Boolean,
     ) : HistoryAction {
         override fun reduce(state: HistoryUiState): HistoryUiState =
-            if (records.isEmpty()) {
+            if (!hasAnyRecords) {
                 HistoryUiState.Empty
             } else {
                 val confirm = (state as? HistoryUiState.Content)?.confirmClear == true

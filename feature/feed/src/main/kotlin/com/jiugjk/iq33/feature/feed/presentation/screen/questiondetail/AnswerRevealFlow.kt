@@ -22,6 +22,8 @@ internal class AnswerRevealFlow(
     private val answerRevealUseCases: AnswerRevealUseCases,
     private val questionProgressRepository: QuestionProgressRepository,
     private val sendAction: (QuestionDetailAction) -> Unit,
+    /** Called after a successful reveal so the history record gets this question's title/category. */
+    private val onRevealed: (Long) -> Unit = {},
 ) {
     private val quoting = SideWorkSlot(scope, currentState)
     private val revealing = SideWorkSlot(scope, currentState)
@@ -79,8 +81,13 @@ internal class AnswerRevealFlow(
         if (owner != questionProgressRepository.current.accountKey) return
 
         when (result) {
-            is Result.Success -> sendAction(AnswerRevealAction.Finished(id, result.value))
-            is Result.Failure -> sendAction(AnswerRevealAction.Failed(id, result.afterSideEffect))
+            is Result.Success -> {
+                sendAction(AnswerRevealAction.Finished(id, result.value))
+                onRevealed(id)
+            }
+            is Result.Failure -> {
+                sendAction(AnswerRevealAction.Failed(id, result.afterSideEffect))
+            }
         }
     }
 

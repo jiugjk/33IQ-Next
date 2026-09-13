@@ -68,8 +68,13 @@ internal class AnswerRevealRepositoryImpl(
     ): Result<AnswerReveal> {
         val owner = progress.current.accountKey ?: return Result.Failure(IllegalStateException(LOGIN_REQUIRED))
 
+        // Entitled = a payment may already have happened (the durable latch), or this account has a
+        // local record of an earlier successful reveal. `fetch` is not a charged endpoint, so re-
+        // reading content already paid for must never be routed back through quote/pay.
+        val entitled = progress.hasPendingReveal(questionId) || answerRecords.get(owner, questionId)?.viewedExplanation == true
+
         return try {
-            if (!progress.hasPendingReveal(questionId)) authorise(questionId, accepted, owner)
+            if (!entitled) authorise(questionId, accepted, owner)
             deliver(questionId, owner)
         } catch (cancelled: CancellationException) {
             // Deliberately keeps the latch: leaving the screen is not proof the server did not charge.
@@ -124,6 +129,7 @@ internal class AnswerRevealRepositoryImpl(
             accountKey = owner,
             questionId = questionId,
             correctOption = reveal.answerText.trim().takeIf { it.isNotEmpty() },
+            explanationText = reveal.explanationText.trim().takeIf { it.isNotEmpty() },
         )
 
         // Clearing the latch is best effort. Content that was already fetched (and possibly paid for)

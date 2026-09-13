@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -109,6 +111,16 @@ class SessionManager(
 
     private val generation = AtomicInteger(0)
     private val lock = Any()
+
+    /**
+     * The session generation a background request started under.
+     *
+     * A caller that produces account-scoped side effects (a submitted answer's 学识, a streak, a log
+     * entry) reads this *before* the request and hands it back to [applyServerScore] /
+     * [applyOptimisticDelta]. A login or logout bumps the generation, so a reply that lands after
+     * the account changed can be dropped instead of being applied to whoever is logged in now.
+     */
+    val sessionEpoch: Int get() = generation.get()
 
     // Jobs of the currently running refreshFromServer calls. Guarded by lock.
     private val inFlightRefreshes = mutableSetOf<Job>()
@@ -215,33 +227,68 @@ class SessionManager(
     /**
      * Unconditional server truth. Replaces any optimistic local score.
      * Pass the raw display string (usually digits from myScore / probe).
+     *
+     * [accountKey] and [epoch] describe the session the value was fetched for; both are re-checked
+     * inside the same lock that commits the state, so a late reply for account A can never move
+     * account B's 学识. Returns whether the value was applied.
      */
-    fun applyServerScore(score: String) {
+    fun applyServerScore(
+        score: String,
+        accountKey: String? = null,
+        epoch: Int? = null,
+    ): Boolean =
         synchronized(lock) {
             val current = _sessionFlow.value
-            if (!current.isLoggedIn) return
+            if (!isStillCurrent(current, accountKey, epoch)) return false
             val session = current.copy(score = score)
             _sessionFlow.value = session
             persist(session)
+            true
         }
-    }
 
-    fun applyServerScore(score: Int) = applyServerScore(score.toString())
+    fun applyServerScore(
+        score: Int,
+        accountKey: String? = null,
+        epoch: Int? = null,
+    ): Boolean = applyServerScore(score.toString(), accountKey, epoch)
 
     /**
      * Optimistic only: adjusts an already-known score by [delta]. Does nothing when score is unknown
      * (keeps skeleton — never invents 0).
      */
-    fun applyOptimisticDelta(delta: Int) {
-        if (delta == 0) return
+    fun applyOptimisticDelta(
+        delta: Int,
+        accountKey: String? = null,
+        epoch: Int? = null,
+    ): Boolean =
         synchronized(lock) {
             val current = _sessionFlow.value
-            if (!current.isLoggedIn) return
-            val base = current.score?.toIntOrNull() ?: return
-            val session = current.copy(score = (base + delta).toString())
-            _sessionFlow.value = session
-            persist(session)
+            val base = current.score?.toIntOrNull()
+
+            if (delta == 0 || base == null || !isStillCurrent(current, accountKey, epoch)) {
+                false
+            } else {
+                val session = current.copy(score = (base + delta).toString())
+                _sessionFlow.value = session
+                persist(session)
+                true
+            }
         }
+
+    /**
+     * Whether a side effect captured under [accountKey] / [epoch] still belongs to the live session.
+     *
+     * A null [accountKey] or [epoch] means the caller could not name an owner (legacy call sites);
+     * those keep the previous "logged in is enough" rule rather than silently widening it.
+     */
+    private fun isStillCurrent(
+        current: IqSession,
+        accountKey: String?,
+        epoch: Int?,
+    ): Boolean {
+        if (!current.isLoggedIn) return false
+        if (epoch != null && epoch != generation.get()) return false
+        return accountKey == null || accountKey == current.accountKey
     }
 
     private suspend fun probeSessionStatus(): ProbeOutcome =
@@ -384,30 +431,41 @@ class SessionManager(
             }
         }
 
+        /**
+         * The probe's own `status`, or null when the field is absent or JSON `null`.
+         *
+         * `JsonNull` is a `JsonPrimitive` whose `content` is the string `"null"`, so reading
+         * `content` as a fallback would turn a null status into a status literally called "null".
+         */
         fun scalarContent(obj: JsonObject?): String? {
             val primitive = obj?.get(STATUS_FIELD) as? JsonPrimitive ?: return null
 
-            return primitive.contentOrNull ?: primitive.content.takeIf { it.isNotEmpty() }
+            return primitive.contentOrNull?.takeIf { it.isNotEmpty() }
         }
 
-        @Suppress("ReturnCount")
+        /**
+         * First candidate field that actually carries a 学识 number.
+         *
+         * JSON `null`, empty strings and anything non-numeric are *skipped*, not accepted: a
+         * `{"score": null, "myScore": 100}` reply has to fall through to `myScore`, and a reply
+         * whose only score field is invalid has to leave the cached value alone (null = unknown)
+         * instead of overwriting it with a placeholder.
+         */
         private fun extractScore(obj: JsonObject): String? {
-            fun fromPrimitive(value: Any?): String? {
-                val primitive = value as? JsonPrimitive ?: return null
-                return primitive.contentOrNull?.takeIf { it.isNotBlank() }
-                    ?: primitive.content.takeIf { it.isNotBlank() }
-            }
-
-            fromPrimitive(obj[SCORE_FIELD])?.let { return it }
-            fromPrimitive(obj[MYSCORE_FIELD])?.let { return it }
-            fromPrimitive(obj[MY_SCORE_FIELD])?.let { return it }
             val userinfo = obj[USERINFO_FIELD] as? JsonObject
-            if (userinfo != null) {
-                fromPrimitive(userinfo[SCORE_FIELD])?.let { return it }
-                fromPrimitive(userinfo[MYSCORE_FIELD])?.let { return it }
-                fromPrimitive(userinfo[MY_SCORE_FIELD])?.let { return it }
-            }
-            return null
+            val candidates =
+                listOf(obj[SCORE_FIELD], obj[MYSCORE_FIELD], obj[MY_SCORE_FIELD]) +
+                    listOf(userinfo?.get(SCORE_FIELD), userinfo?.get(MYSCORE_FIELD), userinfo?.get(MY_SCORE_FIELD))
+
+            return candidates.firstNotNullOfOrNull(::numericScore)
+        }
+
+        private fun numericScore(value: JsonElement?): String? {
+            val primitive = value as? JsonPrimitive ?: return null
+            if (primitive is JsonNull) return null
+            val raw = primitive.contentOrNull?.trim().orEmpty()
+
+            return raw.takeIf { it.toLongOrNull() != null }
         }
 
         private fun classifyArray(payload: JsonArray): SessionStatus =

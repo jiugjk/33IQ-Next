@@ -52,7 +52,14 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
     ) : FeedListAction {
         override fun reduce(state: FeedListUiState): FeedListUiState =
             if (state is FeedListUiState.Content && state.selectedCategory == category) {
-                state.copy(isRefreshing = true, isLoadingMore = false, loadMoreFailed = false, refreshFailed = false, noNewContent = false)
+                state.copy(
+                    isRefreshing = true,
+                    isLoadingMore = false,
+                    loadMoreFailed = false,
+                    refreshFailed = false,
+                    noNewContent = false,
+                    autoPagingPaused = false,
+                )
             } else {
                 state
             }
@@ -80,7 +87,19 @@ internal sealed interface FeedListAction : BaseAction<FeedListUiState> {
     ) : FeedListAction {
         override fun reduce(state: FeedListUiState): FeedListUiState =
             if (state is FeedListUiState.Content && state.selectedCategory == category) {
-                state.copy(isLoadingMore = true, loadMoreFailed = false)
+                state.copy(isLoadingMore = true, loadMoreFailed = false, autoPagingPaused = false)
+            } else {
+                state
+            }
+    }
+
+    /** One continuous automatic walk used up its request budget without finding a visible question. */
+    class AutoPagingPaused(
+        private val category: Category,
+    ) : FeedListAction {
+        override fun reduce(state: FeedListUiState): FeedListUiState =
+            if (state is FeedListUiState.Content && state.selectedCategory == category) {
+                state.copy(autoPagingPaused = true, isLoadingMore = false)
             } else {
                 state
             }

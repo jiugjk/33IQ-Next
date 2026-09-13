@@ -30,6 +30,7 @@ class FeedListViewModelTest {
     private val progress = MemoryProgress()
     private val models = ViewModelStore()
     private var modelCount = 0
+    private var requestCount = 0
 
     @AfterEach
     fun clearModels() = models.clear()
@@ -285,6 +286,100 @@ class FeedListViewModelTest {
             sut.onEvent(FeedListEvent.EndReached)
             advanceUntilIdle()
             content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(1L, 3L)
+        }
+
+    @Test
+    fun `a page cycle longer than one batch ends the automatic walk instead of circling`() =
+        runTest {
+            progress.setHideAnswered(true)
+            // Six questions whose next-page links form a ring: A-B-C-D-E-F-A. All of them are hidden,
+            // so no batch ever produces a visible card. A per-batch cursor set only sees five of the
+            // six hops, which is what let this walk go on forever.
+            val ring = listOf(null, "cursor1", "cursor2", "cursor3", "cursor4", "cursor5")
+            (1..6).forEach { progress.markAnswered(it.toLong()) }
+            ring.indices.forEach { index ->
+                coEvery { getList(Category.ALL, ring[index]) } answers {
+                    requestCount++
+                    page(index.toLong() + 1, ring[(index + 1) % ring.size] ?: "cursor0")
+                }
+            }
+            coEvery { getList(Category.ALL, "cursor0") } answers {
+                requestCount++
+                page(1, "cursor1")
+            }
+
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+
+            // One lap plus the repeated cursor that proves the ring - and then it stops.
+            (requestCount <= ring.size + 1) shouldBeEqualTo true
+            content(sut).questions.map { it.id }.toSet() shouldBeEqualTo setOf(1L, 2L, 3L, 4L, 5L, 6L)
+            content(sut).visibleQuestions shouldBeEqualTo emptyList()
+            content(sut).nextPageUrl shouldBeEqualTo null
+            content(sut).canLoadMore shouldBeEqualTo false
+
+            val settled = requestCount
+            advanceUntilIdle()
+            requestCount shouldBeEqualTo settled
+        }
+
+    @Test
+    fun `an endlessly filtered feed stops on the chain budget and offers to continue`() =
+        runTest {
+            progress.setHideAnswered(true)
+            // Every page has a brand-new cursor, so no cycle is ever detected; only the chain budget
+            // can end this. Each question is already answered, so nothing ever becomes visible.
+            (1..MAX_CHAIN_REQUESTS * 2).forEach { progress.markAnswered(it.toLong()) }
+            coEvery { getList(Category.ALL, any()) } answers {
+                requestCount++
+                page(requestCount.toLong(), "cursor$requestCount")
+            }
+
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+
+            requestCount shouldBeEqualTo MAX_CHAIN_REQUESTS
+            val paused = content(sut)
+            paused.autoPagingPaused shouldBeEqualTo true
+            paused.loadMoreFailed shouldBeEqualTo false
+            paused.canContinuePaging shouldBeEqualTo true
+
+            // It stays stopped until the user says otherwise.
+            advanceUntilIdle()
+            requestCount shouldBeEqualTo MAX_CHAIN_REQUESTS
+
+            coEvery { getList(Category.ALL, any()) } answers {
+                requestCount++
+                Result.Success(QuestionPage(listOf(question(9_999)), null))
+            }
+            sut.onEvent(FeedListEvent.ContinuePagingRequested)
+            advanceUntilIdle()
+
+            (requestCount > MAX_CHAIN_REQUESTS) shouldBeEqualTo true
+            content(sut).visibleQuestions.map { it.id } shouldBeEqualTo listOf(9_999L)
+            content(sut).autoPagingPaused shouldBeEqualTo false
+        }
+
+    @Test
+    fun `a refresh gives the walk a fresh budget`() =
+        runTest {
+            progress.setHideAnswered(true)
+            (1..MAX_CHAIN_REQUESTS * 2).forEach { progress.markAnswered(it.toLong()) }
+            coEvery { getList(Category.ALL, any()) } answers {
+                requestCount++
+                page(requestCount.toLong(), "cursor$requestCount")
+            }
+            val sut = createViewModel()
+            sut.onInit()
+            advanceUntilIdle()
+            content(sut).autoPagingPaused shouldBeEqualTo true
+
+            sut.onEvent(FeedListEvent.Refreshed)
+            advanceUntilIdle()
+
+            (requestCount > MAX_CHAIN_REQUESTS) shouldBeEqualTo true
         }
 
     private fun createViewModel() = FeedListViewModel(getList, progress).also { models.put("vm${modelCount++}", it) }

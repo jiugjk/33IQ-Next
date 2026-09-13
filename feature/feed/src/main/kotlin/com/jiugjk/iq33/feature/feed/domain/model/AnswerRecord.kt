@@ -16,6 +16,13 @@ internal data class AnswerRecord(
     val correctOption: String? = null,
     val viewedExplanation: Boolean = false,
     val viewedHint: Boolean = false,
+    /**
+     * Text of content this account already paid for, cached so re-opening the question shows it
+     * again without another charged request. Null means "entitled but not stored on this device"
+     * (a record written before this cache existed), which is not the same as "never viewed".
+     */
+    val hintText: String? = null,
+    val explanationText: String? = null,
     val knowledgeDelta: Int? = null,
     /** Non-null means this account has a local answered marker (detail may still be unknown). */
     val answeredAt: Long? = null,

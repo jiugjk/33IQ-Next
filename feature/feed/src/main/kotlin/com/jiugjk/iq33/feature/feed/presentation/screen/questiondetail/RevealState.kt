@@ -20,6 +20,15 @@ internal sealed interface RevealState<out Quote, out Reveal> {
         val reveal: Reveal,
     ) : RevealState<Nothing, Reveal>
 
+    /**
+     * This account already obtained (and possibly paid for) the content, but its text is not on this
+     * device - a record written before the local cache existed, or one whose text was never stored.
+     *
+     * Deliberately distinct from [Revealed]: "entitled" is not "loaded". Showing an empty [Revealed]
+     * is what used to leave the screen with no content *and* no way to get it back.
+     */
+    data object Entitled : RevealState<Nothing, Nothing>
+
     data class Failed(
         val afterSideEffect: Boolean = false,
     ) : RevealState<Nothing, Nothing>
@@ -47,6 +56,15 @@ internal sealed interface SubmissionState {
     data class Done(
         val submittedAnswer: String,
         val result: SubmitAnswerResult,
+        /**
+         * Identifies *this* submission's completion, once.
+         *
+         * Non-null only for an answer submitted in this session; a result restored from history
+         * carries null. Feedback (haptics, animation, the 学识 float) is keyed on this token, so
+         * re-entering an answered question - or recomposing with a surviving view model - cannot
+         * replay a reward the user already received.
+         */
+        val completionToken: Long? = null,
     ) : SubmissionState
 
     data object Failed : SubmissionState
