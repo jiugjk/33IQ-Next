@@ -7,6 +7,7 @@ import com.jiugjk.iq33.feature.settings.domain.repository.FeedbackPreferencesRep
 import com.jiugjk.iq33.feature.settings.domain.repository.QuizFilterPreferencesRepository
 import com.jiugjk.iq33.feature.settings.domain.usecase.ObserveThemeModeUseCase
 import com.jiugjk.iq33.feature.settings.domain.usecase.SetThemeModeUseCase
+import com.jiugjk.iq33.library.network.KnowledgeChangeLog
 import com.jiugjk.iq33.library.network.SessionManager
 import kotlinx.coroutines.launch
 
@@ -16,6 +17,7 @@ internal class SettingsViewModel(
     private val setThemeModeUseCase: SetThemeModeUseCase,
     private val feedbackPreferencesRepository: FeedbackPreferencesRepository,
     private val quizFilterPreferencesRepository: QuizFilterPreferencesRepository,
+    private val knowledgeChangeLog: KnowledgeChangeLog,
 ) : BaseViewModel<SettingsUiState, SettingsAction>(SettingsUiState.Content()) {
     init {
         viewModelScope.launch {
@@ -51,6 +53,12 @@ internal class SettingsViewModel(
         viewModelScope.launch {
             sessionManager.refreshFromServer()
         }
+
+        viewModelScope.launch {
+            knowledgeChangeLog.recent.collect { changes ->
+                sendAction(SettingsAction.KnowledgeChangesChanged(changes))
+            }
+        }
     }
 
     fun onThemeModeSelected(themeMode: ThemeMode) {
@@ -69,7 +77,12 @@ internal class SettingsViewModel(
         quizFilterPreferencesRepository.setHideAnswered(hide)
     }
 
+    fun onKnowledgeExpandedChanged(expanded: Boolean) {
+        sendAction(SettingsAction.KnowledgeExpandedChanged(expanded))
+    }
+
     fun onLogoutClick() {
+        knowledgeChangeLog.clear()
         sessionManager.logout()
     }
 }

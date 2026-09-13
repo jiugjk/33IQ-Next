@@ -5,6 +5,7 @@ import com.jiugjk.iq33.feature.feed.data.datasource.remote.AnswerRemoteDataSourc
 import com.jiugjk.iq33.feature.feed.domain.model.QuestionProgress
 import com.jiugjk.iq33.feature.feed.domain.model.SubmitAnswerResult
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
+import com.jiugjk.iq33.library.network.KnowledgeChangeLog
 import com.jiugjk.iq33.library.network.SessionManager
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
@@ -27,7 +28,8 @@ class AnswerRepositoryTest {
     private val answerRecords = mockk<AnswerRecordRepository>(relaxed = true)
     private val feedback = mockk<AnswerFeedbackPreferences>(relaxed = true)
     private val sessionManager = mockk<SessionManager>(relaxed = true)
-    private val sut = AnswerRepositoryImpl(remote, progress, answerRecords, feedback, sessionManager)
+    private val knowledgeLog = mockk<KnowledgeChangeLog>(relaxed = true)
+    private val sut = AnswerRepositoryImpl(remote, progress, answerRecords, feedback, sessionManager, knowledgeLog)
 
     @Test
     fun `correct wrong and repeated answers are persisted`() =

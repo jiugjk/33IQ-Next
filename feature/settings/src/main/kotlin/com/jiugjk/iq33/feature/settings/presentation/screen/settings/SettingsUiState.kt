@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseState
 import com.jiugjk.iq33.feature.settings.domain.model.ThemeMode
 import com.jiugjk.iq33.library.network.IqSession
+import com.jiugjk.iq33.library.network.KnowledgeChangeEntry
 
 @Immutable
 internal sealed interface SettingsUiState : BaseState {
@@ -14,5 +15,7 @@ internal sealed interface SettingsUiState : BaseState {
         val animationsEnabled: Boolean = true,
         val hapticsEnabled: Boolean = true,
         val hideAnswered: Boolean = false,
+        val knowledgeChanges: List<KnowledgeChangeEntry> = emptyList(),
+        val knowledgeExpanded: Boolean = false,
     ) : SettingsUiState
 }

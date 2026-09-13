@@ -12,6 +12,7 @@ import com.jiugjk.iq33.feature.feed.domain.repository.AnswerFeedbackPreferences
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
+import com.jiugjk.iq33.library.network.KnowledgeChangeLog
 import com.jiugjk.iq33.library.network.SessionManager
 
 internal class AnswerRepositoryImpl(
@@ -20,6 +21,7 @@ internal class AnswerRepositoryImpl(
     private val answerRecords: AnswerRecordRepository,
     private val feedbackPreferences: AnswerFeedbackPreferences,
     private val sessionManager: SessionManager,
+    private val knowledgeChangeLog: KnowledgeChangeLog,
 ) : AnswerRepository {
     override suspend fun submitAnswer(
         questionId: Long,
@@ -38,7 +40,7 @@ internal class AnswerRepositoryImpl(
                             knowledgeDelta = result.scoreDelta,
                         )
                         feedbackPreferences.recordCorrect()
-                        applyKnowledgeScore(result.myScore, result.scoreDelta)
+                        applyKnowledgeScore(questionId, result.myScore, result.scoreDelta)
                     }
                     is SubmitAnswerResult.Wrong -> {
                         answerRecords.recordAnswer(
@@ -49,7 +51,7 @@ internal class AnswerRepositoryImpl(
                             knowledgeDelta = result.scoreDelta,
                         )
                         feedbackPreferences.recordWrong()
-                        applyKnowledgeScore(result.myScore, result.scoreDelta)
+                        applyKnowledgeScore(questionId, result.myScore, result.scoreDelta)
                     }
                     SubmitAnswerResult.AlreadyAnswered ->
                         answerRecords.recordAnswer(
@@ -84,7 +86,14 @@ internal class AnswerRepositoryImpl(
         }.withSideEffectFlag()
 
 
-    private fun applyKnowledgeScore(myScore: Int?, scoreDelta: Int?) {
+    private fun applyKnowledgeScore(
+        questionId: Long,
+        myScore: Int?,
+        scoreDelta: Int?,
+    ) {
+        if (scoreDelta != null) {
+            knowledgeChangeLog.append(questionId = questionId, delta = scoreDelta)
+        }
         when {
             myScore != null -> sessionManager.applyServerScore(myScore)
             scoreDelta != null -> sessionManager.applyOptimisticDelta(scoreDelta)

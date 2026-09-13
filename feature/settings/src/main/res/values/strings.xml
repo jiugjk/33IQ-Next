@@ -11,6 +11,11 @@
     <string name="settings_not_logged_in">未登录</string>
     <string name="settings_score">学识：%1$s</string>
     <string name="settings_score_label">学识：</string>
+    <string name="settings_knowledge_expand">最近学识变动</string>
+    <string name="settings_knowledge_empty">暂无本地学识变动记录</string>
+    <string name="settings_knowledge_item">题目 #%1$d · %2$s%3$d</string>
+    <string name="settings_knowledge_collapse_cd">收起学识变动</string>
+    <string name="settings_knowledge_expand_cd">展开学识变动</string>
     <string name="settings_login">登录</string>
     <string name="settings_logout">退出登录</string>
 

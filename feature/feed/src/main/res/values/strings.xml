@@ -65,8 +65,8 @@
     <string name="feed_submission_limit_reached">已达到今日答题上限</string>
     <string name="feed_submission_failed">提交失败，请检查网络或登录状态后重试</string>
 
-    <string name="feed_reveal_hint_button">获取提示</string>
-    <string name="feed_reveal_hint_confirm_title">获取提示</string>
+    <string name="feed_reveal_hint_button">查看提示</string>
+    <string name="feed_reveal_hint_confirm_title">查看提示</string>
     <string name="feed_reveal_hint_confirm_message">普通用户 %1$d 学识 / 会员 %2$d 学识 / 终身会员 %3$d 学识，本次将花费 %4$d 学识，是否继续？</string>
     <string name="feed_reveal_hint_confirm_message_simple">本次将花费 %1$d 学识，是否继续？</string>
 

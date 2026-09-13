@@ -5,6 +5,14 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import java.util.Locale
+import java.util.Date
+import java.text.SimpleDateFormat
+import com.jiugjk.iq33.library.network.KnowledgeChangeEntry
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -76,6 +84,7 @@ fun SettingsScreen(
                     onAnimationsChanged = viewModel::onAnimationsChanged,
                     onHapticsChanged = viewModel::onHapticsChanged,
                     onHideAnsweredChanged = viewModel::onHideAnsweredChanged,
+                    onKnowledgeExpandedChanged = viewModel::onKnowledgeExpandedChanged,
                     onLogoutClick = viewModel::onLogoutClick,
                 )
         }
@@ -91,12 +100,20 @@ private fun SettingsContent(
     onAnimationsChanged: (Boolean) -> Unit,
     onHapticsChanged: (Boolean) -> Unit,
     onHideAnsweredChanged: (Boolean) -> Unit,
+    onKnowledgeExpandedChanged: (Boolean) -> Unit,
     onLogoutClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(vertical = 8.dp),
     ) {
-        AccountCard(session = uiState.session, onNavigateToLogin = onNavigateToLogin, onLogoutClick = onLogoutClick)
+        AccountCard(
+            session = uiState.session,
+            knowledgeChanges = uiState.knowledgeChanges,
+            knowledgeExpanded = uiState.knowledgeExpanded,
+            onKnowledgeExpandedChanged = onKnowledgeExpandedChanged,
+            onNavigateToLogin = onNavigateToLogin,
+            onLogoutClick = onLogoutClick,
+        )
 
         ThemeCard(themeMode = uiState.themeMode, onThemeModeSelect = onThemeModeSelect)
 
@@ -159,6 +176,9 @@ private fun SettingsContent(
 @Composable
 private fun AccountCard(
     session: IqSession,
+    knowledgeChanges: List<KnowledgeChangeEntry>,
+    knowledgeExpanded: Boolean,
+    onKnowledgeExpandedChanged: (Boolean) -> Unit,
     onNavigateToLogin: () -> Unit,
     onLogoutClick: () -> Unit,
 ) {
@@ -168,63 +188,164 @@ private fun AccountCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(Dimen.spaceL),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Default.AccountCircle,
-                contentDescription = null,
-                modifier = Modifier.padding(end = Dimen.spaceM),
-                tint = MaterialTheme.colorScheme.primary,
-            )
+        Column(modifier = Modifier.fillMaxWidth().padding(Dimen.spaceL)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = Dimen.spaceM),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
 
-            Column(modifier = Modifier.weight(1f)) {
-                if (session.isLoggedIn) {
-                    Text(stringResource(R.string.settings_logged_in), style = MaterialTheme.typography.bodyLarge)
-                    val score = session.score
-                    if (score != null) {
-                        Text(
-                            text = stringResource(R.string.settings_score, score),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        // No cached score yet — skeleton, never show 0.
-                        Row(
-                            modifier = Modifier.padding(top = Dimen.spaceS),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_score_label),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Box(
+                Column(modifier = Modifier.weight(1f)) {
+                    if (session.isLoggedIn) {
+                        Text(stringResource(R.string.settings_logged_in), style = MaterialTheme.typography.bodyLarge)
+                        val score = session.score
+                        val canExpand = score != null || knowledgeChanges.isNotEmpty()
+                        if (score != null) {
+                            Row(
                                 modifier =
                                     Modifier
-                                        .padding(start = Dimen.spaceS)
-                                        .width(48.dp)
-                                        .height(14.dp)
-                                        .background(
-                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(4.dp),
+                                        .padding(top = Dimen.spaceS)
+                                        .then(
+                                            if (canExpand) {
+                                                Modifier.clickable { onKnowledgeExpandedChanged(!knowledgeExpanded) }
+                                            } else {
+                                                Modifier
+                                            },
                                         ),
-                            )
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_score, score),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (canExpand) {
+                                    Icon(
+                                        imageVector = if (knowledgeExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription =
+                                            stringResource(
+                                                if (knowledgeExpanded) {
+                                                    R.string.settings_knowledge_collapse_cd
+                                                } else {
+                                                    R.string.settings_knowledge_expand_cd
+                                                },
+                                            ),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .padding(top = Dimen.spaceS)
+                                        .then(
+                                            if (knowledgeChanges.isNotEmpty()) {
+                                                Modifier.clickable { onKnowledgeExpandedChanged(!knowledgeExpanded) }
+                                            } else {
+                                                Modifier
+                                            },
+                                        ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_score_label),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .padding(start = Dimen.spaceS)
+                                            .width(48.dp)
+                                            .height(14.dp)
+                                            .background(
+                                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                                shape = RoundedCornerShape(4.dp),
+                                            ),
+                                )
+                                if (knowledgeChanges.isNotEmpty()) {
+                                    Icon(
+                                        imageVector = if (knowledgeExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = stringResource(R.string.settings_knowledge_expand_cd),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
                         }
+                    } else {
+                        Text(stringResource(R.string.settings_not_logged_in), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+
+                if (session.isLoggedIn) {
+                    TextButton(onClick = onLogoutClick) {
+                        Text(stringResource(R.string.settings_logout))
                     }
                 } else {
-                    Text(stringResource(R.string.settings_not_logged_in), style = MaterialTheme.typography.bodyLarge)
+                    Button(onClick = onNavigateToLogin) {
+                        Text(stringResource(R.string.settings_login))
+                    }
                 }
             }
 
-            if (session.isLoggedIn) {
-                TextButton(onClick = onLogoutClick) {
-                    Text(stringResource(R.string.settings_logout))
-                }
-            } else {
-                Button(onClick = onNavigateToLogin) {
-                    Text(stringResource(R.string.settings_login))
+            AnimatedVisibility(visible = session.isLoggedIn && knowledgeExpanded) {
+                KnowledgeChangesPanel(changes = knowledgeChanges)
+            }
+        }
+    }
+}
+
+@Composable
+private fun KnowledgeChangesPanel(changes: List<KnowledgeChangeEntry>) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceM)) {
+        HorizontalDivider()
+        Text(
+            text = stringResource(R.string.settings_knowledge_expand),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(top = Dimen.spaceM),
+        )
+        if (changes.isEmpty()) {
+            Text(
+                text = stringResource(R.string.settings_knowledge_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Dimen.spaceS),
+            )
+        } else {
+            val formatter = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+            changes.forEach { entry ->
+                val sign = if (entry.delta > 0) "+" else ""
+                val label =
+                    if (entry.title.isNotBlank()) {
+                        entry.title
+                    } else {
+                        stringResource(R.string.settings_knowledge_item, entry.questionId, sign, entry.delta)
+                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = Dimen.spaceS),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text =
+                            if (entry.title.isNotBlank()) {
+                                "${entry.title} · $sign${entry.delta}"
+                            } else {
+                                stringResource(R.string.settings_knowledge_item, entry.questionId, sign, entry.delta)
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = formatter.format(Date(entry.at)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -394,6 +515,7 @@ private fun SettingsScreenPreview() {
         onAnimationsChanged = { },
         onHapticsChanged = { },
         onHideAnsweredChanged = { },
+        onKnowledgeExpandedChanged = { },
         onLogoutClick = { },
     )
 }
