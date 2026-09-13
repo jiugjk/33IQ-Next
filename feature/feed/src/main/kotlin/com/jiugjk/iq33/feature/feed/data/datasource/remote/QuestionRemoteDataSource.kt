@@ -35,7 +35,10 @@ internal class QuestionRemoteDataSource(
         val document = htmlClient.get(url)
 
         return withContext(parsingDispatcher) {
-            QuestionPage(htmlParser.parseQuestionSummaries(document), QuestionListLinks.nextPage(document))
+            val questions = htmlParser.parseQuestionSummaries(document)
+            val advertisedNext = QuestionListLinks.nextPage(document)
+            val next = advertisedNext ?: questions.takeIf { it.isNotEmpty() }?.let { QuestionListLinks.legacyNextPage(document) }
+            QuestionPage(questions, next, isNextPageInferred = advertisedNext == null && next != null)
         }
     }
 
