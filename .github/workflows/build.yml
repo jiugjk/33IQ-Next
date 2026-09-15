@@ -24,7 +24,7 @@ jobs:
   # gh release create from workflow_dispatch also pushes a v* tag, which would otherwise
   # start a second full build. Skip that duplicate if the release is already there.
   gate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.actor == 'jiugjk' && github.repository_owner == 'jiugjk') && fromJSON('["self-hosted", "fast-tmpfs"]') || 'ubuntu-latest' }}
     outputs:
       should_build: ${{ steps.decide.outputs.should_build }}
     steps:
@@ -44,7 +44,7 @@ jobs:
   compile:
     needs: gate
     if: needs.gate.outputs.should_build == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.actor == 'jiugjk' && github.repository_owner == 'jiugjk') && fromJSON('["self-hosted", "fast-tmpfs"]') || 'ubuntu-latest' }}
     # Passed straight through to Gradle, which reads them in app/build.gradle.kts. Secrets that are
     # not configured arrive as empty strings, and the build treats that as "no signing material".
     env:
