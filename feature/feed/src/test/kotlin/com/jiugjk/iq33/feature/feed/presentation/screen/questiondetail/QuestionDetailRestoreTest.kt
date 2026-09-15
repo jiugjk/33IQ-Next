@@ -35,7 +35,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeInstanceOf
-import org.amshove.kluent.shouldBeNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -164,10 +163,15 @@ class QuestionDetailRestoreTest {
 
             // History echo: the screen must not replay haptics, animation or the 学识 float for it.
             (content(vm).submission as SubmissionState.Done).completionToken shouldBeEqualTo null
+        }
 
-            records.clearAnswerState(ACCOUNT, QUESTION_ID)
-            vm.onEvent(QuestionDetailEvent.RedoRequested)
+    @Test
+    fun `a live submission carries a feedback token`() =
+        runTest {
+            val vm = createViewModel()
+            vm.load(QUESTION_ID)
             advanceUntilIdle()
+
             coEvery { submit(QUESTION_ID, "A", any()) } returns Result.Success(SubmitAnswerResult.Correct(2, 20))
             vm.onEvent(QuestionDetailEvent.ChoiceSelected("A"))
             vm.onEvent(QuestionDetailEvent.AnswerSubmitted("A"))
@@ -175,50 +179,6 @@ class QuestionDetailRestoreTest {
 
             val live = content(vm).submission as SubmissionState.Done
             (live.completionToken != null) shouldBeEqualTo true
-        }
-
-    @Test
-    fun `redo clears the remembered correct option along with the answer`() =
-        runTest {
-            records.seed(record().copy(selectedOption = "A", isCorrect = true, correctOption = "A", answeredAt = 1))
-            val vm = createViewModel()
-            vm.load(QUESTION_ID)
-            advanceUntilIdle()
-            // Restored from history, so the right choice is marked without holding any analysis text.
-            content(vm).revealedCorrectOption shouldBeEqualTo "A"
-            content(vm).canRedo shouldBeEqualTo true
-
-            vm.onEvent(QuestionDetailEvent.RedoRequested)
-            advanceUntilIdle()
-
-            val state = content(vm)
-            state.submission shouldBeEqualTo SubmissionState.Idle
-            state.selectedChoiceId.shouldBeNull()
-            // Both sides of the answer go: leaving either one hands the retry its own answer back.
-            state.knownCorrectOption.shouldBeNull()
-            state.revealedCorrectOption.shouldBeNull()
-            records.get(ACCOUNT, QUESTION_ID)?.correctOption.shouldBeNull()
-        }
-
-    @Test
-    fun `redo is refused once this account has seen the analysis`() =
-        runTest {
-            records.seed(record().copy(selectedOption = "A", isCorrect = true, correctOption = "A", answeredAt = 1))
-            val vm = createViewModel()
-            vm.load(QUESTION_ID)
-            advanceUntilIdle()
-
-            flow.value = QuestionProgress(accountKey = ACCOUNT, viewedAnswerIds = setOf(QUESTION_ID))
-            advanceUntilIdle()
-
-            // The entry point is gone in the UI, and the ViewModel refuses the event regardless.
-            content(vm).canRedo shouldBeEqualTo false
-            vm.onEvent(QuestionDetailEvent.RedoRequested)
-            advanceUntilIdle()
-
-            content(vm).submission shouldBeInstanceOf SubmissionState.Done::class
-            records.get(ACCOUNT, QUESTION_ID)?.selectedOption shouldBeEqualTo "A"
-            records.get(ACCOUNT, QUESTION_ID)?.answeredAt shouldBeEqualTo 1L
         }
 
     @Test

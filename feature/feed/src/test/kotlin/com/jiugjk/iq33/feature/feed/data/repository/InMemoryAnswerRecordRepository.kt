@@ -124,23 +124,6 @@ internal class InMemoryAnswerRecordRepository(
         )
     }
 
-    override fun clearAnswerState(
-        accountKey: String?,
-        questionId: Long,
-    ) {
-        if (accountKey == null || !canWrite(accountKey)) return
-        val existing = get(accountKey, questionId) ?: return
-        upsert(
-            existing.copy(
-                selectedOption = null,
-                isCorrect = null,
-                correctOption = null,
-                answeredAt = null,
-                updatedAt = System.currentTimeMillis(),
-            ),
-        )
-    }
-
     override fun delete(
         accountKey: String?,
         questionId: Long,

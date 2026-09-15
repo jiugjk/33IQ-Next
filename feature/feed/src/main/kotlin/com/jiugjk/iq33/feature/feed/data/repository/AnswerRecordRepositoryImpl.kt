@@ -198,21 +198,6 @@ internal class AnswerRecordRepositoryImpl(
         }
     }
 
-    override fun clearAnswerState(
-        accountKey: String?,
-        questionId: Long,
-    ) = mutate(accountKey, questionId) { existing ->
-        existing?.copy(
-            selectedOption = null,
-            isCorrect = null,
-            // The remembered correct option was only ever inferred from a correct submission, so it
-            // goes with the answer it came from: keeping it would hand the redo its own answer back.
-            correctOption = null,
-            answeredAt = null,
-            updatedAt = System.currentTimeMillis(),
-        )
-    }
-
     override fun delete(
         accountKey: String?,
         questionId: Long,

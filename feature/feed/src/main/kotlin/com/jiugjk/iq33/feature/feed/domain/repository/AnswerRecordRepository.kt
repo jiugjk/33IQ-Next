@@ -72,12 +72,6 @@ internal interface AnswerRecordRepository {
         categoryId: String,
     )
 
-    /** Redo: clear answer fields only; keep viewed* and knowledgeDelta. */
-    fun clearAnswerState(
-        accountKey: String?,
-        questionId: Long,
-    )
-
     fun delete(
         accountKey: String?,
         questionId: Long,

@@ -160,7 +160,6 @@ internal class QuestionDetailViewModel(
             QuestionDetailEvent.HintQuoteRequested -> requestHintQuote(content)
             QuestionDetailEvent.HintRevealConfirmed -> confirmHintReveal(content)
             QuestionDetailEvent.PraiseClicked -> praise(content)
-            QuestionDetailEvent.RedoRequested -> redo(content)
             QuestionDetailEvent.HintFlowDismissed -> sendAction(QuestionDetailAction.HintFlowDismissed)
             else -> Unit
         }
@@ -293,22 +292,6 @@ internal class QuestionDetailViewModel(
                 is Result.Failure -> sendAction(QuestionDetailAction.PraiseFailed(questionId))
             }
         }
-    }
-
-    /**
-     * Clears this account's stored answer so the question can be attempted again.
-     *
-     * Refused once the analysis has been viewed: the correct answer is already known, so a redo
-     * there would only turn a revealed answer into a fresh "correct" in the history - and 33IQ
-     * refuses the submission anyway.
-     */
-    private fun redo(content: QuestionDetailUiState.Content?) {
-        if (content == null) return
-        val questionId = content.detail.id
-        val progress = questionProgressRepository.current
-        if (questionId in progress.viewedAnswerIds) return
-        answerRecordRepository.clearAnswerState(progress.accountKey, questionId)
-        sendAction(QuestionDetailAction.AnswerEchoCleared(questionId))
     }
 
     /**
