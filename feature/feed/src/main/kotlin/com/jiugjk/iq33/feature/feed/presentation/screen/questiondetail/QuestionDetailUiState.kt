@@ -58,13 +58,6 @@ internal sealed interface QuestionDetailUiState : BaseState {
                 !detail.isSubmissionBlocked && !answerReveal.isBusy && !answerReveal.isRetryBlocked &&
                     !hintReveal.isBusy && submission !is SubmissionState.Submitting && submission !is SubmissionState.Done
 
-        /**
-         * Redo stays open only while the answer is still unknown to this account: once the analysis
-         * has been viewed there is nothing left to attempt, so the entry point goes away rather than
-         * offering an action the ViewModel would refuse.
-         */
-        val canRedo: Boolean get() = !detail.hasViewedAnswer
-
         val isWordBankReady: Boolean
             get() =
                 detail.questionType == QuestionType.WORD_BANK &&

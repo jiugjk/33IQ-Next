@@ -62,6 +62,51 @@ class PersistentCookieJarTest {
         PersistentCookieJar(preferences).loadForRequest(REQUEST_URL).shouldBeEmpty()
     }
 
+    @Test
+    fun `a session cookie is not mistaken for the credential a renewal needs`() {
+        // No Expires/Max-Age: this is the half that lapses, and the reason the app gets logged out.
+        sut.saveFromResponse(REQUEST_URL, listOf(sessionCookie(name = "sid", value = "session")))
+
+        sut.hasCredential() shouldBeEqualTo false
+        sut.credentialExpiry() shouldBeEqualTo null
+    }
+
+    @Test
+    fun `the remember-me cookie is what a renewal is decided from, whatever it is called`() {
+        sut.saveFromResponse(
+            REQUEST_URL,
+            listOf(sessionCookie(name = "sid", value = "session"), cookie(name = "whatever-33iq-calls-it", value = "token")),
+        )
+
+        sut.hasCredential() shouldBeEqualTo true
+        sut.credentialExpiry() shouldBeEqualTo FAR_FUTURE
+    }
+
+    @Test
+    fun `an expired remember-me cookie is nothing left to renew from`() {
+        sut.saveFromResponse(REQUEST_URL, listOf(cookie(name = "remember", value = "token", expiresAt = PAST_EXPIRY)))
+
+        sut.hasCredential() shouldBeEqualTo false
+    }
+
+    @Test
+    fun `the credential survives a restart, which is what keeps a reopened app logged in`() {
+        sut.saveFromResponse(REQUEST_URL, listOf(cookie(name = "remember", value = "token")))
+
+        PersistentCookieJar(preferences).hasCredential() shouldBeEqualTo true
+    }
+
+    private fun sessionCookie(
+        name: String,
+        value: String,
+    ) = Cookie
+        .Builder()
+        .name(name)
+        .value(value)
+        .domain("www.33iq.com")
+        .path("/")
+        .build()
+
     private fun cookie(
         name: String,
         value: String,

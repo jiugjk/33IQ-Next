@@ -86,24 +86,6 @@ class WordBankRestoreTest {
         }
 
     @Test
-    fun `redo clears the restored word bank answer and re-opens the picker`() =
-        runTest {
-            records.seed(stored("保"))
-            val vm = createViewModel()
-            vm.load(QUESTION_ID)
-            advanceUntilIdle()
-
-            vm.onEvent(QuestionDetailEvent.RedoRequested)
-            advanceUntilIdle()
-
-            val content = content(vm)
-            content.selectedCandidateIndices shouldBeEqualTo emptyList()
-            content.answerEcho shouldBeEqualTo ""
-            content.submission shouldBeEqualTo SubmissionState.Idle
-            content.canSelectChoice shouldBeEqualTo true
-        }
-
-    @Test
     fun `tiles are matched by position and length, never by first occurrence of the text`() {
         matchCandidateIndices(listOf("天", "天", "下"), "天天下") shouldBeEqualTo listOf(0, 1, 2)
         matchCandidateIndices(listOf("天", "天", "下"), "天下") shouldBeEqualTo listOf(0, 2)

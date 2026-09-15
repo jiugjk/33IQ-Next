@@ -11,7 +11,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +26,6 @@ internal fun SubmitAnswerSection(
     submission: SubmissionState,
     enabled: Boolean,
     onSubmitAnswerClick: (String) -> Unit,
-    onRedoClick: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceS)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -41,19 +39,12 @@ internal fun SubmitAnswerSection(
             if (submission is SubmissionState.Submitting) {
                 CircularProgressIndicator(modifier = Modifier.padding(start = Dimen.spaceM).size(20.dp))
             }
-
-            if (submission is SubmissionState.Done && onRedoClick != null) {
-                TextButton(onClick = onRedoClick, modifier = Modifier.padding(start = Dimen.spaceM)) {
-                    Text(stringResource(R.string.feed_redo_question))
-                }
-            }
         }
 
         SubmissionResultText(submission)
     }
 }
 
-@Suppress("LongParameterList")
 @Composable
 internal fun OpenAnswerSection(
     draftAnswer: String,
@@ -61,7 +52,6 @@ internal fun OpenAnswerSection(
     enabled: Boolean,
     onDraftChange: (String) -> Unit,
     onSubmitAnswerClick: (String) -> Unit,
-    onRedoClick: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.padding(top = Dimen.spaceL)) {
         OutlinedTextField(
@@ -78,7 +68,6 @@ internal fun OpenAnswerSection(
             submission = submission,
             enabled = enabled,
             onSubmitAnswerClick = onSubmitAnswerClick,
-            onRedoClick = onRedoClick,
         )
     }
 }

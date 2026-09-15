@@ -83,6 +83,29 @@ class PersistentCookieJar(
         }
     }
 
+    /**
+     * When the longest-lived credential in the jar lapses, or null when there is none left.
+     *
+     * A session cookie carries no Expires/Max-Age, so OkHttp reports it as non-persistent - it is
+     * the short-lived half of the pair, and the half whose expiry is what logs this app out. What
+     * survives it is whatever 33IQ set with an expiry at login (its remember-me token), and that is
+     * what a session can be rebuilt from without keeping the user's password anywhere.
+     *
+     * Matched by shape rather than by cookie name on purpose: the capture this module was written
+     * from never named 33IQ's remember-me cookie, so a name here would be a guess that fails
+     * silently - and goes on failing silently if the site ever renames it.
+     */
+    fun credentialExpiry(): Long? {
+        val now = System.currentTimeMillis()
+
+        return synchronized(lock) {
+            cookies.values.filter { cookie -> cookie.persistent && cookie.expiresAt > now }.maxOfOrNull { it.expiresAt }
+        }
+    }
+
+    /** Whether the jar still holds a credential that outlives this app's process. */
+    fun hasCredential(): Boolean = credentialExpiry() != null
+
     fun clear() {
         synchronized(lock) {
             cookies.clear()

@@ -245,30 +245,6 @@ class AnswerRecordRepositoryTest {
             stored.explanationText shouldBeEqualTo "because"
         }
 
-    @Test
-    fun `redo clears the answer and the correct option it was inferred from`() =
-        runTest {
-            val dao = FakeAnswerRecordDao()
-            val repository = repository(dao)
-
-            repository.recordAnswer(account, 1, selectedOption = "A", isCorrect = true, knowledgeDelta = 3)
-            repository.recordHintViewed(account, 1, hintText = "tip")
-            advanceUntilIdle()
-            repository.get(account, 1)?.correctOption shouldBeEqualTo "A"
-
-            repository.clearAnswerState(account, 1)
-            advanceUntilIdle()
-
-            val record = requireNotNull(repository.get(account, 1))
-            record.selectedOption.shouldBeNull()
-            record.isCorrect.shouldBeNull()
-            record.answeredAt.shouldBeNull()
-            record.correctOption.shouldBeNull()
-            // Paid content and the score already awarded are not part of the attempt being redone.
-            record.hintText shouldBeEqualTo "tip"
-            record.knowledgeDelta shouldBeEqualTo 3
-        }
-
     private fun TestScope.repository(
         dao: FakeAnswerRecordDao,
         preferences: FakeSharedPreferences = FakeSharedPreferences(),

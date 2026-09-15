@@ -47,7 +47,4 @@ internal sealed interface QuestionDetailEvent {
 
     /** Retries a question whose initial load failed. */
     data object RetryRequested : QuestionDetailEvent
-
-    /** Clears local answer echo so the user can try again (knowledge is not rolled back). */
-    data object RedoRequested : QuestionDetailEvent
 }

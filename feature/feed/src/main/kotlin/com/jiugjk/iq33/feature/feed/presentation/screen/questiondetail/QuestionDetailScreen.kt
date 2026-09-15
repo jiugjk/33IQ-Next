@@ -277,7 +277,6 @@ private fun AnswerSections(
             enabled = uiState.canSelectChoice,
             onDraftChange = { text -> onEvent(QuestionDetailEvent.DraftAnswerChanged(text)) },
             onSubmitAnswerClick = { answer -> onEvent(QuestionDetailEvent.AnswerSubmitted(answer)) },
-            onRedoClick = if (uiState.canRedo) ({ onEvent(QuestionDetailEvent.RedoRequested) }) else null,
         )
     }
 
@@ -318,7 +317,6 @@ private fun ChoiceAndSubmitSection(
         submission = uiState.submission,
         enabled = uiState.canSelectChoice,
         onSubmitAnswerClick = { choiceId -> onEvent(QuestionDetailEvent.AnswerSubmitted(choiceId)) },
-        onRedoClick = if (uiState.canRedo) ({ onEvent(QuestionDetailEvent.RedoRequested) }) else null,
     )
 }
 

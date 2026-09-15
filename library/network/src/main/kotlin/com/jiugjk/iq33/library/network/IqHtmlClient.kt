@@ -33,6 +33,20 @@ import kotlin.coroutines.resumeWithException
 class IqLoginRequiredException : IOException("33IQ served its login wall instead of the requested content")
 
 /**
+ * Rebuilds an expired 33IQ session from the remember-me cookie, with no stored password to do it
+ * with.
+ *
+ * Implemented by `SessionManager`, which [IqHtmlClient] holds as a provider rather than as a
+ * reference because the two own each other: the manager sends its probes and its renewal through
+ * the client, and the client asks the manager to re-authenticate whenever one of its own requests
+ * comes back as the login wall.
+ */
+fun interface SessionRecovery {
+    /** Restores the session, reporting whether the request that hit the wall is worth repeating. */
+    suspend fun recoverSession(): Boolean
+}
+
+/**
  * Thin HTTP client around [OkHttpClient] used to fetch and parse 33IQ's server-rendered pages.
  *
  * 33IQ has no public JSON API, so this app works by requesting the same HTML pages a mobile browser
@@ -44,6 +58,7 @@ class IqLoginRequiredException : IOException("33IQ served its login wall instead
  */
 class IqHtmlClient(
     private val okHttpClient: OkHttpClient,
+    private val sessionRecovery: () -> SessionRecovery? = { null },
 ) {
     private val webActionClient by lazy {
         okHttpClient
@@ -54,7 +69,10 @@ class IqHtmlClient(
             .build()
     }
 
-    suspend fun get(url: String): Document {
+    suspend fun get(
+        url: String,
+        allowSessionRecovery: Boolean = true,
+    ): Document {
         val request =
             Request
                 .Builder()
@@ -63,13 +81,15 @@ class IqHtmlClient(
                 .get()
                 .build()
 
-        return execute(request) { response ->
-            val html = decodeGbk(response.body.bytes())
-            val document = Jsoup.parse(html, response.request.url.toString())
+        return withSessionRecovery(allowSessionRecovery) {
+            execute(request) { response ->
+                val html = decodeGbk(response.body.bytes())
+                val document = Jsoup.parse(html, response.request.url.toString())
 
-            if (isLoginWall(document)) throw IqLoginRequiredException()
+                if (isLoginWall(document)) throw IqLoginRequiredException()
 
-            document
+                document
+            }
         }
     }
 
@@ -134,7 +154,10 @@ class IqHtmlClient(
      * right `p` query parameter (confirmed from a captured app session, value differs per
      * endpoint) flips the response to plain JSON.
      */
-    suspend fun getText(url: String): String {
+    suspend fun getText(
+        url: String,
+        allowSessionRecovery: Boolean = true,
+    ): String {
         val request =
             Request
                 .Builder()
@@ -143,14 +166,41 @@ class IqHtmlClient(
                 .get()
                 .build()
 
-        return execute(request) { response ->
-            val text = decodeGbk(response.body.bytes())
+        return withSessionRecovery(allowSessionRecovery) {
+            execute(request) { response ->
+                val text = decodeGbk(response.body.bytes())
 
-            if (isLoginWallText(text)) throw IqLoginRequiredException()
+                if (isLoginWallText(text)) throw IqLoginRequiredException()
 
-            text
+                text
+            }
         }
     }
+
+    /**
+     * Runs [request], and on 33IQ's login wall lets [SessionRecovery] rebuild the session from the
+     * remember-me cookie before sending it once more.
+     *
+     * Only the two GETs above go through here, and only they ever will: a POST that reached the
+     * wall may still have been acted on - the answer, hint and payment endpoints are not idempotent
+     * and [postWebFormForText] goes out of its way to make its body one-shot - so a POST keeps
+     * failing outright rather than being replayed against a freshly restored session.
+     *
+     * [allowSessionRecovery] is how the recovery itself avoids calling itself: `SessionManager`
+     * sends its probe and its renewal with recovery off, so the wall those two run into is an
+     * answer ("the remember-me cookie is dead") rather than the start of another recovery.
+     */
+    private suspend fun <T> withSessionRecovery(
+        allowSessionRecovery: Boolean,
+        request: suspend () -> T,
+    ): T =
+        try {
+            request()
+        } catch (loginWall: IqLoginRequiredException) {
+            if (!allowSessionRecovery || sessionRecovery()?.recoverSession() != true) throw loginWall
+
+            request()
+        }
 
     /**
      * Enqueues the call and cancels it from [CancellableContinuation.invokeOnCancellation], which
