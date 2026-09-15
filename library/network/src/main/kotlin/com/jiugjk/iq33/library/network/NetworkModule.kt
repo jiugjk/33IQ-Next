@@ -44,9 +44,17 @@ val networkModule =
                 .build()
         }
 
-        singleOf(::IqHtmlClient)
+        // The client and the manager own each other: the manager sends its probes and its
+        // remember-me renewal through the client, and the client asks the manager to restore an
+        // expired session when a request comes back as the login wall. Resolving the manager inside
+        // the provider - on the call, not on the build - is what keeps Koin out of that cycle.
+        single {
+            val scope = this
+            IqHtmlClient(get()) { scope.get<SessionManager>() }
+        }
 
-        singleOf(::SessionManager)
+        // Clock is a defaulted constructor argument, not a Koin binding - singleOf would look for one.
+        single { SessionManager(preferences = get(), cookieJar = get(), htmlClient = get()) }
         singleOf(::KnowledgeChangeLog)
 
         // Clock is a defaulted constructor argument, not a Koin binding - singleOf would look for one.

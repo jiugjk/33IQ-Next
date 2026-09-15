@@ -33,6 +33,16 @@ object IqConstants {
     // and (presumably) real task data otherwise - confirmed live for the guest case.
     const val GUEST_PROBE_URL = "$BASE_URL/app/taskall"
 
+    // Where SessionManager sends a request carrying the remember-me cookie so 33IQ can hand back a
+    // fresh session (and, on a site that re-issues it, a fresh remember-me cookie).
+    //
+    // UNCONFIRMED: no capture of this site's remember-me handling was ever taken, so which URL
+    // performs the exchange is a guess. The site root is the choice most likely to work, because a
+    // server-rendered page is what runs the site's own auth middleware, and because the login wall
+    // it serves once the token is dead is exactly the "stop retrying" answer the client needs. If a
+    // capture ever shows a dedicated endpoint, this constant is the only thing that changes.
+    const val SESSION_RENEWAL_URL = "$BASE_URL/"
+
     // Answer-submission / paid-reveal endpoints, confirmed from a follow-up HAR capture of a real
     // logged-in Android app session actually submitting answers, buying hints and viewing answers.
     // All take a single `q_id` (or, for submission, `id`) form field. See AnswerRemoteDataSource.

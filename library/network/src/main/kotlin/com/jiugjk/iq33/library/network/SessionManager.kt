@@ -8,6 +8,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -16,6 +18,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import timber.log.Timber
+import java.time.Clock
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -105,7 +108,8 @@ class SessionManager(
     private val preferences: SharedPreferences,
     private val cookieJar: PersistentCookieJar,
     private val htmlClient: IqHtmlClient,
-) {
+    private val clock: Clock = Clock.systemUTC(),
+) : SessionRecovery {
     private val _sessionFlow = MutableStateFlow(loadPersistedSession())
     val sessionFlow: StateFlow<IqSession> = _sessionFlow.asStateFlow()
 
@@ -124,6 +128,19 @@ class SessionManager(
 
     // Jobs of the currently running refreshFromServer calls. Guarded by lock.
     private val inFlightRefreshes = mutableSetOf<Job>()
+
+    /**
+     * Serializes remember-me renewals, so ten requests that hit the login wall at the same moment
+     * produce one renewal rather than ten.
+     */
+    private val renewalMutex = Mutex()
+
+    // Bookkeeping for that renewal, all guarded by lock. blockedUntil is how a refused token stops
+    // being retried by every screen that refreshes; lastRenewalAt / lastRenewalOutcome are what a
+    // caller that queued behind someone else's renewal reads instead of sending its own.
+    private var renewalBlockedUntil = 0L
+    private var lastRenewalAt = 0L
+    private var lastRenewalOutcome: ProbeOutcome? = null
 
     /** Logs in using 33IQ's AJAX login endpoint (account can be phone / email / nickname). */
     suspend fun login(
@@ -186,8 +203,9 @@ class SessionManager(
     }
 
     /**
-     * Re-verifies the session against 33IQ. A result that cannot be verified leaves the last
-     * verified state untouched rather than downgrading (or upgrading) it on a guess.
+     * Re-verifies the session against 33IQ, renewing it from the remember-me cookie when that is
+     * what the reply calls for. A result that cannot be verified leaves the last verified state
+     * untouched rather than downgrading (or upgrading) it on a guess.
      */
     suspend fun refreshFromServer(): IqSession {
         val startGeneration = generation.get()
@@ -199,7 +217,7 @@ class SessionManager(
 
         val probed =
             try {
-                probeSessionStatus()
+                probeWithRenewal(startGeneration)
             } finally {
                 if (job != null) {
                     synchronized(lock) { inFlightRefreshes -= job }
@@ -207,6 +225,132 @@ class SessionManager(
             }
 
         return commit(startGeneration, probed)
+    }
+
+    /**
+     * Restores the session for a request that ran into 33IQ's login wall mid-use, and reports
+     * whether that request is worth sending again.
+     *
+     * This is the path that stops the app from dropping out from under the user: the session cookie
+     * lapsed while they were reading, and the remember-me cookie - not a stored password, which
+     * this app deliberately does not keep - is what brings it back before their tap has visibly
+     * failed.
+     */
+    override suspend fun recoverSession(): Boolean {
+        val startGeneration = generation.get()
+        val renewed = renewSession(startGeneration, enteredAt = clock.millis()) ?: return false
+
+        commit(startGeneration, renewed)
+
+        return renewed.status == SessionStatus.AUTHENTICATED
+    }
+
+    /**
+     * Probes, and gives the session one chance to come back from - or stay ahead of - the
+     * remember-me cookie.
+     *
+     * GUEST means the session cookie lapsed, which is the state this app used to sit in until the
+     * user typed their password again; the remember-me cookie outlives it, so one renewal is worth
+     * trying before reporting a logout. A session that is still good is renewed rather than
+     * rebuilt: once the remember-me cookie itself is within [RENEWAL_WINDOW_MS] of lapsing, the
+     * same request gives 33IQ the chance to re-issue it, which is what keeps a long-running install
+     * from reaching the GUEST case at all.
+     *
+     * UNKNOWN renews nothing - an unreachable server is not an expired session, and treating it as
+     * one would spend the cooldown on a request that never had a chance.
+     */
+    private suspend fun probeWithRenewal(startGeneration: Int): ProbeOutcome {
+        // Captured before the probe, not after: a renewal that finished while this probe was in
+        // flight was sent with the same cookies this caller would have sent, so its verdict is
+        // fresher than the reply now coming back.
+        val enteredAt = clock.millis()
+        val probed = probeSessionStatus()
+        val needsRenewal =
+            when (probed.status) {
+                SessionStatus.GUEST -> true
+                SessionStatus.AUTHENTICATED -> isCredentialNearExpiry()
+                SessionStatus.UNKNOWN -> false
+            }
+
+        if (!needsRenewal) return probed
+
+        return renewSession(startGeneration, enteredAt) ?: probed
+    }
+
+    /**
+     * Sends one remember-me renewal and re-probes, or joins the renewal already in flight.
+     *
+     * Returns the fresh probe outcome, or null when no renewal was sent at all - no credential
+     * left, a cooldown still running, or the account changed underneath. Null is not a failure to
+     * report: it means the caller's own probe result still stands.
+     *
+     * A renewal whose follow-up probe does not come back authenticated starts [RENEWAL_COOLDOWN_MS]:
+     * a token 33IQ refuses is refused for every screen that refreshes, and retrying it on each one
+     * is how a dead token turns into a burst of pointless traffic.
+     */
+    private suspend fun renewSession(
+        startGeneration: Int,
+        enteredAt: Long,
+    ): ProbeOutcome? = renewalMutex.withLock { sharedRenewal(enteredAt) ?: sendRenewal(startGeneration) }
+
+    /**
+     * The outcome of a renewal that finished after [enteredAt], which is this caller's outcome too.
+     *
+     * A renewal sent after the caller decided it needed one carried the same cookies the caller
+     * would have sent, so its verdict answers for both. This is what turns ten requests that hit
+     * the login wall together into one request to 33IQ.
+     */
+    private fun sharedRenewal(enteredAt: Long): ProbeOutcome? =
+        synchronized(lock) { lastRenewalOutcome?.takeIf { lastRenewalAt >= enteredAt } }
+
+    /** Sends the renewal and re-probes, or returns null when there is no point in sending one. */
+    private suspend fun sendRenewal(startGeneration: Int): ProbeOutcome? {
+        if (!isRenewalWorthSending(startGeneration)) return null
+
+        val failure =
+            runCatching {
+                // Recovery off: this request *is* the recovery, and the login wall it may get back
+                // is its answer rather than a reason to start another one.
+                htmlClient.get(IqConstants.SESSION_RENEWAL_URL, allowSessionRecovery = false)
+            }.exceptionOrNull()
+
+        if (failure is CancellationException) throw failure
+
+        if (failure != null) {
+            Timber.tag(LOG_TAG).w(failure, "Remember-me renewal request failed")
+        }
+
+        // A renewal that never reached 33IQ proves nothing either way, so it stays UNKNOWN rather
+        // than being reported as the logout the caller's own probe already suspected.
+        val outcome = if (failure == null) probeSessionStatus() else ProbeOutcome(SessionStatus.UNKNOWN)
+
+        recordRenewal(outcome)
+
+        return outcome
+    }
+
+    /** No credential left, a cooldown still running, or the account changed: all reasons not to. */
+    private fun isRenewalWorthSending(startGeneration: Int): Boolean =
+        synchronized(lock) {
+            generation.get() == startGeneration && clock.millis() >= renewalBlockedUntil
+        } &&
+            cookieJar.hasCredential()
+
+    private fun recordRenewal(outcome: ProbeOutcome) =
+        synchronized(lock) {
+            lastRenewalAt = clock.millis()
+            lastRenewalOutcome = outcome
+
+            if (outcome.status != SessionStatus.AUTHENTICATED) {
+                renewalBlockedUntil = clock.millis() + RENEWAL_COOLDOWN_MS
+            }
+        }
+
+    /** Whether the remember-me cookie is close enough to lapsing to be worth re-issuing now. */
+    private fun isCredentialNearExpiry(): Boolean {
+        val expiry = cookieJar.credentialExpiry() ?: return false
+
+        return expiry - clock.millis() <= RENEWAL_WINDOW_MS
     }
 
     fun logout() {
@@ -293,8 +437,9 @@ class SessionManager(
 
     private suspend fun probeSessionStatus(): ProbeOutcome =
         runCatching {
-            val url = "${IqConstants.GUEST_PROBE_URL}?lang=zh-cn&p=3&time=${System.currentTimeMillis()}"
-            Classifier.classifyWithScore(htmlClient.getText(url))
+            val url = "${IqConstants.GUEST_PROBE_URL}?lang=zh-cn&p=3&time=${clock.millis()}"
+            // Recovery off: this request is what decides whether a recovery is needed at all.
+            Classifier.classifyWithScore(htmlClient.getText(url, allowSessionRecovery = false))
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
 
@@ -352,6 +497,13 @@ class SessionManager(
 
     private fun invalidateInFlightWork() {
         generation.incrementAndGet()
+
+        // A cooldown belongs to the credential that earned it; the next login brings a new one.
+        synchronized(lock) {
+            renewalBlockedUntil = 0L
+            lastRenewalAt = 0L
+            lastRenewalOutcome = null
+        }
 
         val jobs = synchronized(lock) { inFlightRefreshes.toList().also { inFlightRefreshes.clear() } }
 
@@ -500,6 +652,16 @@ class SessionManager(
         val ERROR_STATUSES = setOf("error", "fail", "failed", "false", "0", "-1")
         val AUTH_EVIDENCE_FIELDS = setOf("uid", "username", "email", "tasks", USERINFO_FIELD, SCORE_FIELD)
         val NON_ACCOUNT_ENVELOPE_KEYS = setOf("message", "msg", "code", "error", "errno")
+
+        /** How long a refused remember-me token is left alone before another renewal is sent. */
+        const val RENEWAL_COOLDOWN_MS = 5L * 60 * 1000
+
+        /**
+         * How far ahead of the remember-me cookie's own expiry a live session starts re-issuing it.
+         * A week covers an install opened at least weekly, which is the case this exists for.
+         */
+        const val RENEWAL_WINDOW_MS = 7L * 24 * 60 * 60 * 1000
+
         const val PREF_KEY_STATUS = "session_status"
         const val PREF_KEY_SCORE = "score"
         const val PREF_KEY_ACCOUNT = "session_account_key"
