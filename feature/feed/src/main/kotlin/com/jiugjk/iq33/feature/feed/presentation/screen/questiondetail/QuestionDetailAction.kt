@@ -1,6 +1,7 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
+import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
@@ -123,88 +124,86 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
 
             val hasStoredSubmission =
                 record.answeredAt != null || record.selectedOption != null || record.isCorrect != null
-            val isCurrentIdle = state.submission is SubmissionState.Idle
 
-            val nextSubmission =
-                if (isCurrentIdle && hasStoredSubmission) {
-                    when {
-                        record.isCorrect == true ->
-                            SubmissionState.Done(
-                                record.selectedOption.orEmpty(),
-                                SubmitAnswerResult.Correct(record.knowledgeDelta, null),
-                            )
-                        record.isCorrect == false ->
-                            SubmissionState.Done(
-                                record.selectedOption.orEmpty(),
-                                SubmitAnswerResult.Wrong(record.knowledgeDelta, null),
-                            )
-                        else ->
-                            SubmissionState.Done(
-                                record.selectedOption.orEmpty(),
-                                SubmitAnswerResult.AlreadyAnswered,
-                            )
-                    }
-                } else {
-                    state.submission
-                }
-
-            val nextSelected =
-                if (state.canSelectChoice && state.detail.questionType == QuestionType.CHOICE && state.selectedChoiceId == null) {
-                    record.selectedOption
-                } else {
-                    state.selectedChoiceId
-                }
-
-            val nextDraft =
-                if (state.canSelectChoice && state.detail.questionType == QuestionType.OPEN && state.draftAnswer.isBlank()) {
-                    record.selectedOption.orEmpty()
-                } else {
-                    state.draftAnswer
-                }
-
-            val isWordBank = state.detail.questionType == QuestionType.WORD_BANK
-            val (nextIndices, nextEcho) =
-                if (state.canSelectChoice && isWordBank && state.selectedCandidateIndices.isEmpty() && state.answerEcho.isBlank()) {
-                    val tiles = matchCandidateIndices(state.detail.answerCandidates, record.selectedOption.orEmpty())
-                    if (tiles != null) tiles to "" else emptyList<Int>() to record.selectedOption.orEmpty()
-                } else {
-                    state.selectedCandidateIndices to state.answerEcho
-                }
-
-            val nextHintReveal =
-                if (state.hintReveal is RevealState.Idle && record.viewedHint) {
-                    if (!record.hintText.isNullOrBlank()) RevealState.Revealed(HintReveal(record.hintText))
-                    else RevealState.Entitled
-                } else {
-                    state.hintReveal
-                }
-
-            val nextAnswerReveal =
-                if (state.answerReveal is RevealState.Idle && record.viewedExplanation) {
-                    if (!record.explanationText.isNullOrBlank() || !record.correctOption.isNullOrBlank()) {
-                        RevealState.Revealed(AnswerReveal(record.correctOption.orEmpty(), record.explanationText.orEmpty()))
-                    } else {
-                        RevealState.Entitled
-                    }
-                } else {
-                    state.answerReveal
-                }
+            val (nextIndices, nextEcho) = deriveWordBankSelection(state)
 
             return state.copy(
-                selectedChoiceId = nextSelected,
-                draftAnswer = nextDraft,
+                selectedChoiceId = deriveSelectedChoice(state),
+                draftAnswer = deriveDraftAnswer(state),
                 selectedCandidateIndices = nextIndices,
                 answerEcho = nextEcho,
-                submission = nextSubmission,
+                submission = deriveSubmission(state, hasStoredSubmission),
                 knownCorrectOption = state.knownCorrectOption ?: record.correctOption?.takeIf { it.isNotBlank() },
-                hintReveal = nextHintReveal,
-                answerReveal = nextAnswerReveal,
+                hintReveal = deriveHintReveal(state.hintReveal),
+                answerReveal = deriveAnswerReveal(state.answerReveal),
                 detail =
                     state.detail.copy(
                         isAnswered = state.detail.isAnswered || hasStoredSubmission,
                         hasViewedAnswer = state.detail.hasViewedAnswer || record.viewedExplanation,
                     ),
             )
+        }
+
+        private fun deriveSubmission(
+            state: QuestionDetailUiState.Content,
+            hasStoredSubmission: Boolean,
+        ): SubmissionState {
+            if (state.submission !is SubmissionState.Idle || !hasStoredSubmission) {
+                return state.submission
+            }
+            val option = record.selectedOption.orEmpty()
+            val result =
+                when {
+                    record.isCorrect == true -> SubmitAnswerResult.Correct(record.knowledgeDelta, null)
+                    record.isCorrect == false -> SubmitAnswerResult.Wrong(record.knowledgeDelta, null)
+                    else -> SubmitAnswerResult.AlreadyAnswered
+                }
+            return SubmissionState.Done(option, result)
+        }
+
+        private fun deriveSelectedChoice(state: QuestionDetailUiState.Content): String? {
+            val shouldRestore =
+                state.canSelectChoice && state.detail.questionType == QuestionType.CHOICE && state.selectedChoiceId == null
+            return if (shouldRestore) record.selectedOption else state.selectedChoiceId
+        }
+
+        private fun deriveDraftAnswer(state: QuestionDetailUiState.Content): String {
+            val shouldRestore =
+                state.canSelectChoice && state.detail.questionType == QuestionType.OPEN && state.draftAnswer.isBlank()
+            return if (shouldRestore) record.selectedOption.orEmpty() else state.draftAnswer
+        }
+
+        private fun deriveWordBankSelection(state: QuestionDetailUiState.Content): Pair<List<Int>, String> {
+            val isWordBank = state.detail.questionType == QuestionType.WORD_BANK
+            val isSelectionEmpty = state.selectedCandidateIndices.isEmpty() && state.answerEcho.isBlank()
+            if (!state.canSelectChoice || !isWordBank || !isSelectionEmpty) {
+                return state.selectedCandidateIndices to state.answerEcho
+            }
+            val tiles = matchCandidateIndices(state.detail.answerCandidates, record.selectedOption.orEmpty())
+            return if (tiles != null) {
+                tiles to ""
+            } else {
+                emptyList<Int>() to record.selectedOption.orEmpty()
+            }
+        }
+
+        private fun deriveHintReveal(current: RevealState<HintQuote, HintReveal>): RevealState<HintQuote, HintReveal> {
+            if (current !is RevealState.Idle || !record.viewedHint) return current
+            return if (!record.hintText.isNullOrBlank()) {
+                RevealState.Revealed(HintReveal(record.hintText))
+            } else {
+                RevealState.Entitled
+            }
+        }
+
+        private fun deriveAnswerReveal(current: RevealState<AnswerQuote, AnswerReveal>): RevealState<AnswerQuote, AnswerReveal> {
+            if (current !is RevealState.Idle || !record.viewedExplanation) return current
+            val hasContent = !record.explanationText.isNullOrBlank() || !record.correctOption.isNullOrBlank()
+            return if (hasContent) {
+                RevealState.Revealed(AnswerReveal(record.correctOption.orEmpty(), record.explanationText.orEmpty()))
+            } else {
+                RevealState.Entitled
+            }
         }
     }
 

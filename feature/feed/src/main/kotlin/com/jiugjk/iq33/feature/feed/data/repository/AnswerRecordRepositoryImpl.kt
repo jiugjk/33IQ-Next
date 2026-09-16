@@ -65,6 +65,8 @@ internal class AnswerRecordRepositoryImpl(
     private val snapshot = MutableStateFlow<List<AnswerRecord>>(emptyList())
     private val indexedSnapshot = MutableStateFlow(RepositorySnapshot())
 
+    override val records: Flow<List<AnswerRecord>> = snapshot
+
     private val commands = Channel<Command>(Channel.UNLIMITED)
     private val sequence = AtomicLong(0)
     private val migrated = AtomicBoolean(false)
@@ -110,7 +112,9 @@ internal class AnswerRecordRepositoryImpl(
                 awaitCancellation()
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
+            } catch (
+                @Suppress("TooGenericExceptionCaught") error: Exception,
+            ) {
                 Timber.tag(TimberLogTags.DATABASE).w(error, "Answer-record database observation failed, retrying...")
                 delay(RETRY_DELAY_MS)
             }
@@ -118,36 +122,25 @@ internal class AnswerRecordRepositoryImpl(
     }
 
     private fun onDatabaseObserved(entities: List<AnswerRecordEntity>) {
-        val observedMap = entities.associate { RecordKey(it.accountKey, it.questionId) to it }
-
-        // Clean up tombstones that Room has acknowledged
-        lastCommittedUpdatedAt.forEach { (key, committedTime) ->
-            if (committedTime == -1L) {
-                if (key !in observedMap) {
-                    lastCommittedUpdatedAt.remove(key)
-                }
-            } else {
-                val observed = observedMap[key]
-                if (observed != null && observed.updatedAt >= committedTime) {
-                    lastCommittedUpdatedAt.remove(key)
-                }
-            }
-        }
+        val observedMap = entities.associateBy { RecordKey(it.accountKey, it.questionId) }
+        cleanupAcknowledgedTombstones(observedMap)
 
         val newStored = HashMap<RecordKey, AnswerRecord>()
-        entities.forEach { entity ->
+        for (entity in entities) {
             val key = RecordKey(entity.accountKey, entity.questionId)
             val committedTime = lastCommittedUpdatedAt[key]
-            if (committedTime == -1L) {
-                // Deleted record that Room's older emission still contains
-                return@forEach
+            when {
+                committedTime == -1L -> {
+                    // Deleted record that Room's older emission still contains: ignore
+                }
+                committedTime != null && entity.updatedAt < committedTime -> {
+                    // Stale entity from before our commit: keep current stored value
+                    stored.value[key]?.let { newStored[key] = it }
+                }
+                else -> {
+                    newStored[key] = entity.toDomain()
+                }
             }
-            if (committedTime != null && entity.updatedAt < committedTime) {
-                // Stale entity from before our commit: keep current stored value
-                stored.value[key]?.let { newStored[key] = it }
-                return@forEach
-            }
-            newStored[key] = entity.toDomain()
         }
 
         // Keep any locally committed rows not yet present in this emission
@@ -161,6 +154,21 @@ internal class AnswerRecordRepositoryImpl(
         publish()
     }
 
+    private fun cleanupAcknowledgedTombstones(observedMap: Map<RecordKey, AnswerRecordEntity>) {
+        lastCommittedUpdatedAt.forEach { (key, committedTime) ->
+            if (committedTime == -1L) {
+                if (key !in observedMap) {
+                    lastCommittedUpdatedAt.remove(key)
+                }
+            } else {
+                val observed = observedMap[key]
+                if (observed != null && observed.updatedAt >= committedTime) {
+                    lastCommittedUpdatedAt.remove(key)
+                }
+            }
+        }
+    }
+
     private suspend fun startConsumingCommands() {
         try {
             for (command in commands) {
@@ -170,8 +178,6 @@ internal class AnswerRecordRepositoryImpl(
             isClosed.set(true)
         }
     }
-
-    override val records: Flow<List<AnswerRecord>> = snapshot
 
     override fun current(accountKey: String?): List<AnswerRecord> {
         if (accountKey == null) return emptyList()
@@ -252,17 +258,18 @@ internal class AnswerRecordRepositoryImpl(
         categoryLabel: String,
         correctOption: String?,
         explanationText: String?,
-    ): Boolean = mutateAndAwait(accountKey, questionId) { existing ->
-        newRecord(existing, accountKey!!, questionId).copy(
-            title = title.ifBlank { existing?.title.orEmpty() },
-            categoryLabel = categoryLabel.ifBlank { existing?.categoryLabel.orEmpty() },
-            viewedExplanation = true,
-            correctOption = correctOption?.takeIf { it.isNotBlank() } ?: existing?.correctOption,
-            explanationText = explanationText?.takeIf { it.isNotBlank() } ?: existing?.explanationText,
-            // Do not invent an answeredAt — explanation-only history stays distinct.
-            updatedAt = System.currentTimeMillis(),
-        )
-    }
+    ): Boolean =
+        mutateAndAwait(accountKey, questionId) { existing ->
+            newRecord(existing, accountKey!!, questionId).copy(
+                title = title.ifBlank { existing?.title.orEmpty() },
+                categoryLabel = categoryLabel.ifBlank { existing?.categoryLabel.orEmpty() },
+                viewedExplanation = true,
+                correctOption = correctOption?.takeIf { it.isNotBlank() } ?: existing?.correctOption,
+                explanationText = explanationText?.takeIf { it.isNotBlank() } ?: existing?.explanationText,
+                // Do not invent an answeredAt — explanation-only history stays distinct.
+                updatedAt = System.currentTimeMillis(),
+            )
+        }
 
     override fun recordHintViewed(
         accountKey: String?,
@@ -286,15 +293,16 @@ internal class AnswerRecordRepositoryImpl(
         title: String,
         categoryLabel: String,
         hintText: String?,
-    ): Boolean = mutateAndAwait(accountKey, questionId) { existing ->
-        newRecord(existing, accountKey!!, questionId).copy(
-            title = title.ifBlank { existing?.title.orEmpty() },
-            categoryLabel = categoryLabel.ifBlank { existing?.categoryLabel.orEmpty() },
-            viewedHint = true,
-            hintText = hintText?.takeIf { it.isNotBlank() } ?: existing?.hintText,
-            updatedAt = System.currentTimeMillis(),
-        )
-    }
+    ): Boolean =
+        mutateAndAwait(accountKey, questionId) { existing ->
+            newRecord(existing, accountKey!!, questionId).copy(
+                title = title.ifBlank { existing?.title.orEmpty() },
+                categoryLabel = categoryLabel.ifBlank { existing?.categoryLabel.orEmpty() },
+                viewedHint = true,
+                hintText = hintText?.takeIf { it.isNotBlank() } ?: existing?.hintText,
+                updatedAt = System.currentTimeMillis(),
+            )
+        }
 
     override fun updateMetadata(
         accountKey: String?,
@@ -369,87 +377,100 @@ internal class AnswerRecordRepositoryImpl(
     ): Boolean {
         if (accountKey == null || !canWrite(accountKey) || isClosed.get()) return false
         val deferred = CompletableDeferred<Boolean>()
-        val (key, seq) = synchronized(this) {
-            val key = RecordKey(accountKey, questionId)
-            val seq = sequence.incrementAndGet()
-            val optimistic = transform(currentRecord(key))
-            pending.update { it + (key to PendingWrite(seq, optimistic)) }
-            publish()
-            val sent = commands.trySend(Command.Mutate(key, seq, transform, deferred)).isSuccess
-            if (!sent) {
-                releasePending(key, seq)
+        val (key, seq) =
+            synchronized(this) {
+                val key = RecordKey(accountKey, questionId)
+                val seq = sequence.incrementAndGet()
+                val optimistic = transform(currentRecord(key))
+                pending.update { it + (key to PendingWrite(seq, optimistic)) }
                 publish()
-                return false
+                val sent = commands.trySend(Command.Mutate(key, seq, transform, deferred)).isSuccess
+                if (!sent) {
+                    releasePending(key, seq)
+                    publish()
+                    return false
+                }
+                key to seq
             }
-            key to seq
-        }
         return try {
             deferred.await()
         } catch (cancelled: CancellationException) {
             releasePending(key, seq)
             publish()
             throw cancelled
-        } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") error: Exception,
+        ) {
+            Timber.tag(TimberLogTags.DATABASE).w(error, "Answer-record mutation await failed")
             false
         }
     }
 
     private suspend fun execute(command: Command) {
         try {
-            when (command) {
-                is Command.Mutate -> {
-                    val success = executeMutation(command)
-                    command.completion?.complete(success)
+            val success =
+                when (command) {
+                    is Command.Mutate -> executeMutation(command)
+                    is Command.ClearAccount -> executeClearAccount(command)
                 }
-                is Command.ClearAccount -> {
-                    var success = false
-                    try {
-                        dao.clearAccount(command.accountKey)
-                        stored.update { map -> map.filterKeys { it.accountKey != command.accountKey } }
-                        lastCommittedUpdatedAt.keys.filter { it.accountKey == command.accountKey }.forEach {
-                            lastCommittedUpdatedAt.remove(it)
-                        }
-                        success = true
-                    } finally {
-                        clearing.update { map ->
-                            val left = (map[command.accountKey] ?: 1) - 1
-                            if (left <= 0) map - command.accountKey else map + (command.accountKey to left)
-                        }
-                    }
-                    command.completion?.complete(success)
-                }
-            }
+            command.completion?.complete(success)
         } catch (cancelled: CancellationException) {
-            when (command) {
-                is Command.Mutate -> {
-                    releasePending(command.key, command.sequence)
-                    command.completion?.complete(false)
-                }
-                is Command.ClearAccount -> {
-                    clearing.update { map ->
-                        val left = (map[command.accountKey] ?: 1) - 1
-                        if (left <= 0) map - command.accountKey else map + (command.accountKey to left)
-                    }
-                    command.completion?.complete(false)
-                }
-            }
+            handleCommandCancellation(command)
             throw cancelled
         } catch (
             @Suppress("TooGenericExceptionCaught") error: Exception,
         ) {
-            // The optimistic overlay is dropped below, so the exposed state falls back to Room's.
-            Timber.tag(TimberLogTags.DATABASE).w(error, "Answer-record write failed: %s", command)
-            when (command) {
-                is Command.Mutate -> {
-                    releasePending(command.key, command.sequence)
-                    command.completion?.complete(false)
-                }
-                is Command.ClearAccount -> {
-                    command.completion?.complete(false)
-                }
-            }
+            handleCommandFailure(command, error)
         } finally {
             publish()
+        }
+    }
+
+    private suspend fun executeClearAccount(command: Command.ClearAccount): Boolean =
+        try {
+            dao.clearAccount(command.accountKey)
+            stored.update { map -> map.filterKeys { it.accountKey != command.accountKey } }
+            lastCommittedUpdatedAt.keys.filter { it.accountKey == command.accountKey }.forEach {
+                lastCommittedUpdatedAt.remove(it)
+            }
+            true
+        } finally {
+            clearing.update { map ->
+                val left = (map[command.accountKey] ?: 1) - 1
+                if (left <= 0) map - command.accountKey else map + (command.accountKey to left)
+            }
+        }
+
+    private fun handleCommandCancellation(command: Command) {
+        when (command) {
+            is Command.Mutate -> {
+                releasePending(command.key, command.sequence)
+                command.completion?.complete(false)
+            }
+            is Command.ClearAccount -> {
+                clearing.update { map ->
+                    val left = (map[command.accountKey] ?: 1) - 1
+                    if (left <= 0) map - command.accountKey else map + (command.accountKey to left)
+                }
+                command.completion?.complete(false)
+            }
+        }
+    }
+
+    private fun handleCommandFailure(
+        command: Command,
+        error: Exception,
+    ) {
+        // The optimistic overlay is dropped below, so the exposed state falls back to Room's.
+        Timber.tag(TimberLogTags.DATABASE).w(error, "Answer-record write failed: %s", command)
+        when (command) {
+            is Command.Mutate -> {
+                releasePending(command.key, command.sequence)
+                command.completion?.complete(false)
+            }
+            is Command.ClearAccount -> {
+                command.completion?.complete(false)
+            }
         }
     }
 
@@ -470,7 +491,6 @@ internal class AnswerRecordRepositoryImpl(
                 lastCommittedUpdatedAt[key] = next.updatedAt
                 stored.update { it + (key to next) }
             }
-            else -> Unit
         }
         releasePending(key, command.sequence)
         return true
@@ -504,27 +524,32 @@ internal class AnswerRecordRepositoryImpl(
         val sortedList = merged.values.sortedByDescending { it.updatedAt }
         val byAccount = sortedList.groupBy { it.accountKey }
 
-        val answeredIds = byAccount.mapValues { (_, records) ->
-            records.filter { it.answeredAt != null || it.isCorrect != null || it.selectedOption != null }
-                .map { it.questionId }
-                .toSet()
-        }
-        val viewedExplanationIds = byAccount.mapValues { (_, records) ->
-            records.filter { it.viewedExplanation }.map { it.questionId }.toSet()
-        }
-        val viewedHintIds = byAccount.mapValues { (_, records) ->
-            records.filter { it.viewedHint }.map { it.questionId }.toSet()
-        }
+        val answeredIds =
+            byAccount.mapValues { (_, records) ->
+                records
+                    .filter { it.answeredAt != null || it.isCorrect != null || it.selectedOption != null }
+                    .map { it.questionId }
+                    .toSet()
+            }
+        val viewedExplanationIds =
+            byAccount.mapValues { (_, records) ->
+                records.filter { it.viewedExplanation }.map { it.questionId }.toSet()
+            }
+        val viewedHintIds =
+            byAccount.mapValues { (_, records) ->
+                records.filter { it.viewedHint }.map { it.questionId }.toSet()
+            }
 
         snapshot.value = sortedList
-        indexedSnapshot.value = RepositorySnapshot(
-            list = sortedList,
-            byKey = merged,
-            byAccount = byAccount,
-            answeredIdsByAccount = answeredIds,
-            viewedExplanationIdsByAccount = viewedExplanationIds,
-            viewedHintIdsByAccount = viewedHintIds,
-        )
+        indexedSnapshot.value =
+            RepositorySnapshot(
+                list = sortedList,
+                byKey = merged,
+                byAccount = byAccount,
+                answeredIdsByAccount = answeredIds,
+                viewedExplanationIdsByAccount = viewedExplanationIds,
+                viewedHintIdsByAccount = viewedHintIds,
+            )
     }
 
     private fun canWrite(accountKey: String): Boolean = accountKey == sessionManager.sessionFlow.value.accountKey
@@ -628,16 +653,18 @@ internal class AnswerRecordRepositoryImpl(
     )
 
     private sealed interface Command {
+        val completion: CompletableDeferred<Boolean>?
+
         data class Mutate(
             val key: RecordKey,
             val sequence: Long,
             val transform: (AnswerRecord?) -> AnswerRecord?,
-            val completion: CompletableDeferred<Boolean>?,
+            override val completion: CompletableDeferred<Boolean>?,
         ) : Command
 
         data class ClearAccount(
             val accountKey: String,
-            val completion: CompletableDeferred<Boolean>?,
+            override val completion: CompletableDeferred<Boolean>?,
         ) : Command
     }
 

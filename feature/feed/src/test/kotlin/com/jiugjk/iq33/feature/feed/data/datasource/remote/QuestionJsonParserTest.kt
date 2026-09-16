@@ -57,10 +57,13 @@ class QuestionJsonParserTest {
             )
 
         detail?.imageUrls shouldBeEqualTo listOf(imageUrl)
-        detail?.bodyBlocks shouldBeEqualTo listOf(
-            com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock.Text("正文"),
-            com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock.Image(imageUrl),
-        )
+        detail?.bodyBlocks shouldBeEqualTo
+            listOf(
+                com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock
+                    .Text("正文"),
+                com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock
+                    .Image(imageUrl),
+            )
     }
 
     @Test

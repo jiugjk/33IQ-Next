@@ -1,5 +1,6 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.imageviewer
 
+import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -46,8 +47,7 @@ internal class ImageSaver(
                 .onFailure { error ->
                     if (error is CancellationException) throw error
                     Timber.tag(SAVE_LOG_TAG).e(error, "Failed to save %s", imageUrl)
-                }
-                .getOrNull()
+                }.getOrNull()
         }
 
     private suspend fun writeToMediaStore(
@@ -78,7 +78,9 @@ internal class ImageSaver(
 
         try {
             copyStreamToUri(context, imageUrl, uri)
-        } catch (error: Throwable) {
+        } catch (
+            @Suppress("TooGenericExceptionCaught") error: Throwable,
+        ) {
             // A half-written or aborted row would sit in the gallery as a broken thumbnail forever.
             resolver.delete(uri, null, null)
             throw error
@@ -97,23 +99,33 @@ internal class ImageSaver(
         imageUrl: String,
         uri: Uri,
     ) {
-        val resolver = context.contentResolver
+        if (copyFromDiskCache(context, imageUrl, uri)) return
+        streamFromNetwork(context.contentResolver, imageUrl, uri)
+    }
+
+    private fun copyFromDiskCache(
+        context: Context,
+        imageUrl: String,
+        uri: Uri,
+    ): Boolean {
         val imageLoader: ImageLoader = SingletonImageLoader.get(context)
+        val snapshot = imageLoader.diskCache?.openSnapshot(imageUrl) ?: return false
 
-        // 1. Try Coil disk cache first
-        val snapshot = imageLoader.diskCache?.openSnapshot(imageUrl)
-        if (snapshot != null) {
-            snapshot.use { snap ->
-                snap.data.toFile().inputStream().use { source ->
-                    resolver.openOutputStream(uri)?.use { sink ->
-                        source.copyTo(sink)
-                    } ?: throw IOException("Could not open $uri for writing")
-                }
+        snapshot.use { snap ->
+            snap.data.toFile().inputStream().use { source ->
+                context.contentResolver.openOutputStream(uri)?.use { sink ->
+                    source.copyTo(sink)
+                } ?: throw IOException("Could not open $uri for writing")
             }
-            return
         }
+        return true
+    }
 
-        // 2. Cache miss: stream from network using a cancellable call without full-memory buffer
+    private suspend fun streamFromNetwork(
+        resolver: ContentResolver,
+        imageUrl: String,
+        uri: Uri,
+    ) {
         val request = Request.Builder().url(imageUrl).build()
         val call = okHttpClient.newCall(request)
 
@@ -123,29 +135,27 @@ internal class ImageSaver(
             }
             call.enqueue(
                 object : Callback {
-                    override fun onFailure(call: Call, e: IOException) {
+                    override fun onFailure(
+                        call: Call,
+                        e: IOException,
+                    ) {
                         if (continuation.isActive) {
                             continuation.resumeWithException(e)
                         }
                     }
 
-                    override fun onResponse(call: Call, response: Response) {
+                    override fun onResponse(
+                        call: Call,
+                        response: Response,
+                    ) {
                         try {
-                            response.use { res ->
-                                if (!res.isSuccessful) {
-                                    throw IOException("HTTP ${res.code} fetching $imageUrl")
-                                }
-                                val body = res.body
-                                body.byteStream().use { source ->
-                                    resolver.openOutputStream(uri)?.use { sink ->
-                                        source.copyTo(sink)
-                                    } ?: throw IOException("Could not open $uri for writing")
-                                }
-                            }
+                            copyResponseToUri(resolver, response, imageUrl, uri)
                             if (continuation.isActive) {
                                 continuation.resume(Unit)
                             }
-                        } catch (e: Throwable) {
+                        } catch (
+                            @Suppress("TooGenericExceptionCaught") e: Throwable,
+                        ) {
                             if (continuation.isActive) {
                                 continuation.resumeWithException(e)
                             }
@@ -153,6 +163,24 @@ internal class ImageSaver(
                     }
                 },
             )
+        }
+    }
+
+    private fun copyResponseToUri(
+        resolver: ContentResolver,
+        response: Response,
+        imageUrl: String,
+        uri: Uri,
+    ) {
+        response.use { res ->
+            if (!res.isSuccessful) {
+                throw IOException("HTTP ${res.code} fetching $imageUrl")
+            }
+            res.body.byteStream().use { source ->
+                resolver.openOutputStream(uri)?.use { sink ->
+                    source.copyTo(sink)
+                } ?: throw IOException("Could not open $uri for writing")
+            }
         }
     }
 

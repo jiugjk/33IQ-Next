@@ -25,9 +25,7 @@ internal interface QuestionProgressRepository {
 }
 
 /** True while a potentially charged reveal for [questionId] has no confirmed outcome yet. */
-internal fun QuestionProgressRepository.hasPendingReveal(questionId: Long): Boolean =
-    questionId in current.pendingAnswerRevealIds
+internal fun QuestionProgressRepository.hasPendingReveal(questionId: Long): Boolean = questionId in current.pendingAnswerRevealIds
 
 /** True while a potentially charged hint reveal for [questionId] has no confirmed outcome yet. */
-internal fun QuestionProgressRepository.hasPendingHintReveal(questionId: Long): Boolean =
-    questionId in current.pendingHintRevealIds
+internal fun QuestionProgressRepository.hasPendingHintReveal(questionId: Long): Boolean = questionId in current.pendingHintRevealIds

@@ -250,13 +250,14 @@ class AnswerRecordRepositoryTest {
         runTest {
             val dao = FakeAnswerRecordDao()
             var emittedOnce = false
-            dao.customObserveFlow = kotlinx.coroutines.flow.flow {
-                emit(emptyList())
-                if (!emittedOnce) {
-                    emittedOnce = true
-                    throw java.io.IOException("database observation error")
+            dao.customObserveFlow =
+                kotlinx.coroutines.flow.flow {
+                    emit(emptyList())
+                    if (!emittedOnce) {
+                        emittedOnce = true
+                        throw java.io.IOException("database observation error")
+                    }
                 }
-            }
 
             val repository = repository(dao)
             advanceUntilIdle()
