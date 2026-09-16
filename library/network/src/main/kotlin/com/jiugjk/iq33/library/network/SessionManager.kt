@@ -629,13 +629,14 @@ class SessionManager(
 
         private fun classifyObject(obj: JsonObject): SessionStatus {
             val status = scalarContent(obj)
+            val payloadKeys = obj.keys - STATUS_FIELD
 
             return when {
                 status == GUEST_STATUS -> SessionStatus.GUEST
-                status != null && status.lowercase() in ERROR_STATUSES -> SessionStatus.UNKNOWN
+                status != null && (status.lowercase() in ERROR_STATUSES || status in HTTP_ERROR_STATUSES) -> SessionStatus.UNKNOWN
                 AUTH_EVIDENCE_FIELDS.any { field -> field in obj } -> SessionStatus.AUTHENTICATED
-                obj.keys.isNotEmpty() && obj.keys.all { it in NON_ACCOUNT_ENVELOPE_KEYS } -> SessionStatus.UNKNOWN
-                obj.keys.any { it != STATUS_FIELD } -> SessionStatus.AUTHENTICATED
+                payloadKeys.isNotEmpty() && payloadKeys.all { it in NON_ACCOUNT_ENVELOPE_KEYS } -> SessionStatus.UNKNOWN
+                payloadKeys.isNotEmpty() -> SessionStatus.AUTHENTICATED
                 else -> SessionStatus.UNKNOWN
             }
         }
@@ -650,6 +651,7 @@ class SessionManager(
         const val USERINFO_FIELD = "userinfo"
         const val GUEST_STATUS = "guest"
         val ERROR_STATUSES = setOf("error", "fail", "failed", "false", "0", "-1")
+        val HTTP_ERROR_STATUSES = setOf("400", "401", "403", "404", "500", "502", "503", "504")
         val AUTH_EVIDENCE_FIELDS = setOf("uid", "username", "email", "tasks", USERINFO_FIELD, SCORE_FIELD)
         val NON_ACCOUNT_ENVELOPE_KEYS = setOf("message", "msg", "code", "error", "errno")
 

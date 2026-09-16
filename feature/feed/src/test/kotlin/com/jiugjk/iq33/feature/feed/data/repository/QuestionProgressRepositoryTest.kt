@@ -34,22 +34,23 @@ class QuestionProgressRepositoryTest {
     }
 
     @Test
-    fun `viewed answer restrictions persist separately and respect account isolation`() {
-        answerRecords.recordExplanationViewed("uid:1", 42)
-        answerRecords.recordAnswer(accountKey = "uid:1", questionId = 43)
-        answerRecords.recordExplanationViewed("uid:1", 43)
-        val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
-        restored.current.viewedAnswerIds shouldBeEqualTo setOf(42L, 43L)
-        restored.current.answeredIds shouldBeEqualTo setOf(43L)
-        restored.current.isSubmissionBlocked(42) shouldBeEqualTo true
-        session.value = IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:2")
-        restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
-        answerRecords.recordExplanationViewed("uid:1", 44)
-        restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
-        session.value = IqSession(SessionStatus.GUEST)
-        answerRecords.recordExplanationViewed(null, 45)
-        restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
-    }
+    fun `viewed answer restrictions persist separately and respect account isolation`() =
+        runTest {
+            answerRecords.recordExplanationViewed("uid:1", 42)
+            answerRecords.recordAnswer(accountKey = "uid:1", questionId = 43)
+            answerRecords.recordExplanationViewed("uid:1", 43)
+            val restored = QuestionProgressRepositoryImpl(preferences, manager, answerRecords)
+            restored.current.viewedAnswerIds shouldBeEqualTo setOf(42L, 43L)
+            restored.current.answeredIds shouldBeEqualTo setOf(43L)
+            restored.current.isSubmissionBlocked(42) shouldBeEqualTo true
+            session.value = IqSession(SessionStatus.AUTHENTICATED, accountKey = "uid:2")
+            restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
+            answerRecords.recordExplanationViewed("uid:1", 44)
+            restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
+            session.value = IqSession(SessionStatus.GUEST)
+            answerRecords.recordExplanationViewed(null, 45)
+            restored.current.viewedAnswerIds shouldBeEqualTo emptySet()
+        }
 
     @Test
     fun `explanation-only migration shape keeps answeredAt null`() {

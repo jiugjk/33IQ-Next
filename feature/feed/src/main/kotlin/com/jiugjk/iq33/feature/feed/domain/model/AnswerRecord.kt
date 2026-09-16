@@ -9,7 +9,7 @@ internal data class AnswerRecord(
     val questionId: Long,
     val accountKey: String,
     val title: String = "",
-    val categoryId: String = "",
+    val categoryLabel: String = "",
     val selectedOption: String? = null,
     val isCorrect: Boolean? = null,
     /** Known correct choice id/letter once revealed or answered correctly. */

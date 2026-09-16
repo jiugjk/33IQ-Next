@@ -175,6 +175,24 @@ class SessionManagerTest {
         }
 
     @Test
+    fun `an error envelope with status and message is not evidence of a session`() =
+        runTest {
+            coEvery { htmlClient.getText(any(), any()) } returns """{"status":"503","message":"maintenance"}"""
+
+            sut.refreshFromServer().isLoggedIn shouldBeEqualTo false
+            sut.refreshFromServer().status shouldBeEqualTo SessionStatus.UNKNOWN
+        }
+
+    @Test
+    fun `an error envelope with code and error is not evidence of a session`() =
+        runTest {
+            coEvery { htmlClient.getText(any(), any()) } returns """{"status":"500","code":"500","error":"internal error"}"""
+
+            sut.refreshFromServer().isLoggedIn shouldBeEqualTo false
+            sut.refreshFromServer().status shouldBeEqualTo SessionStatus.UNKNOWN
+        }
+
+    @Test
     fun `an HTTP error envelope is not evidence of a session`() =
         runTest {
             coEvery { htmlClient.getText(any(), any()) } returns """{"code":500,"message":"temporarily unavailable"}"""

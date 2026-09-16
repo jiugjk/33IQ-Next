@@ -6,7 +6,9 @@ internal data class QuestionProgress(
     val answeredIds: Set<Long> = emptySet(),
     val hideAnswered: Boolean = false,
     val viewedAnswerIds: Set<Long> = emptySet(),
+    val viewedHintIds: Set<Long> = emptySet(),
     val pendingAnswerRevealIds: Set<Long> = emptySet(),
+    val pendingHintRevealIds: Set<Long> = emptySet(),
 ) {
     fun isSubmissionBlocked(id: Long): Boolean = restrictionsFor(id).hasAny
 

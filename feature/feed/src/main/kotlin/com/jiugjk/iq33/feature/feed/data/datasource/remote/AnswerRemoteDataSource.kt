@@ -124,8 +124,6 @@ internal class AnswerRemoteDataSource(
         throw when (error) {
             is IqResponseException ->
                 IqResponseException(error.endpoint, error.reason, error.status, afterSideEffect = true, cause = error)
-            is IOException ->
-                IqResponseException(SHOW_TIPS, IqResponseException.Reason.MALFORMED, afterSideEffect = true, cause = error)
             else ->
                 IqResponseException(SHOW_TIPS, IqResponseException.Reason.MALFORMED, afterSideEffect = true, cause = error)
         }

@@ -12,6 +12,7 @@ import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
 import com.jiugjk.iq33.library.network.IqSession
 import com.jiugjk.iq33.library.network.SessionStatus
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -27,8 +28,13 @@ class AnswerRepositoryTest {
     private val progress =
         mockk<QuestionProgressRepository>(relaxed = true) {
             every { current } returns QuestionProgress(accountKey = "uid:1")
+            every { setHintRevealPending(any(), any(), any()) } returns true
         }
-    private val answerRecords = mockk<AnswerRecordRepository>(relaxed = true)
+    private val answerRecords =
+        mockk<AnswerRecordRepository>(relaxed = true) {
+            coEvery { recordExplanationViewedAwait(any(), any(), any(), any(), any(), any()) } returns true
+            coEvery { recordHintViewedAwait(any(), any(), any(), any(), any()) } returns true
+        }
     private val feedback = mockk<AnswerFeedbackPreferences>(relaxed = true)
     private val session = MutableStateFlow(IqSession(status = SessionStatus.AUTHENTICATED, score = "100", accountKey = "uid:1"))
     private val sessionManager =
@@ -53,7 +59,7 @@ class AnswerRepositoryTest {
                         accountKey = "uid:1",
                         questionId = id,
                         title = any(),
-                        categoryId = any(),
+                        categoryLabel = any(),
                         selectedOption = any(),
                         isCorrect = any(),
                         knowledgeDelta = any(),
@@ -74,7 +80,7 @@ class AnswerRepositoryTest {
                     accountKey = any(),
                     questionId = any(),
                     title = any(),
-                    categoryId = any(),
+                    categoryLabel = any(),
                     selectedOption = any(),
                     isCorrect = any(),
                     knowledgeDelta = any(),
@@ -95,7 +101,7 @@ class AnswerRepositoryTest {
                     accountKey = any(),
                     questionId = any(),
                     title = any(),
-                    categoryId = any(),
+                    categoryLabel = any(),
                     selectedOption = any(),
                     isCorrect = any(),
                     knowledgeDelta = any(),
@@ -117,7 +123,7 @@ class AnswerRepositoryTest {
                     accountKey = "uid:1",
                     questionId = 1,
                     title = any(),
-                    categoryId = any(),
+                    categoryLabel = any(),
                     selectedOption = any(),
                     isCorrect = any(),
                     knowledgeDelta = any(),
@@ -145,7 +151,7 @@ class AnswerRepositoryTest {
                     accountKey = "uid:1",
                     questionId = 1,
                     title = any(),
-                    categoryId = any(),
+                    categoryLabel = any(),
                     selectedOption = any(),
                     isCorrect = any(),
                     knowledgeDelta = any(),
@@ -191,12 +197,12 @@ class AnswerRepositoryTest {
                 com.jiugjk.iq33.feature.feed.domain.model
                     .HintReveal("tip")
             sut.revealHint(9)
-            verify(exactly = 1) {
-                answerRecords.recordHintViewed(
+            coVerify(exactly = 1) {
+                answerRecords.recordHintViewedAwait(
                     accountKey = "uid:1",
                     questionId = 9,
                     title = any(),
-                    categoryId = any(),
+                    categoryLabel = any(),
                     hintText = "tip",
                 )
             }

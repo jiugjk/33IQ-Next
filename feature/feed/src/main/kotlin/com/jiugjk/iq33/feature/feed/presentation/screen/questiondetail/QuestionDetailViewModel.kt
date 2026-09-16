@@ -74,8 +74,20 @@ internal class QuestionDetailViewModel(
                                 id in progress.answeredIds,
                                 id in progress.viewedAnswerIds,
                                 id in progress.pendingAnswerRevealIds,
+                                id in progress.pendingHintRevealIds,
                             ),
                         )
+                    }
+                }
+            }
+        }
+        viewModelScope.launch {
+            answerRecordRepository.records.collect {
+                val currentAccount = accountKey ?: questionProgressRepository.current.accountKey
+                loadedQuestionId?.let { id ->
+                    val record = answerRecordRepository.get(currentAccount, id)
+                    if (record != null) {
+                        sendAction(QuestionDetailAction.HistoricalRecordArrived(id, record))
                     }
                 }
             }
@@ -315,7 +327,7 @@ internal class QuestionDetailViewModel(
             accountKey = owner,
             questionId = questionId,
             title = detail.shortLabel,
-            categoryId = detail.categoryLabel,
+            categoryLabel = detail.categoryLabel,
         )
         knowledgeChangeLog.backfillTitle(owner, questionId, detail.shortLabel)
     }
@@ -357,6 +369,7 @@ internal class QuestionDetailViewModel(
         // Backfills history rows written before the screen knew (or stored) the question's metadata.
         if (record != null) rememberQuestionMetadata(id, detail)
         val bookmarked = isBookmarkedUseCase(id)
+        val isHintPending = id in questionProgressRepository.current.pendingHintRevealIds
         return QuestionDetailAction.LoadSuccess(
             detail = detail,
             isBookmarked = (bookmarked as? BookmarkResult.Success)?.value == true,
@@ -368,6 +381,7 @@ internal class QuestionDetailViewModel(
             submission = echoedSubmission,
             explanationAlreadyViewed = record?.viewedExplanation == true,
             hintAlreadyViewed = record?.viewedHint == true,
+            isHintRevealPending = isHintPending,
             correctOption = record?.correctOption,
             explanationText = record?.explanationText,
             hintText = record?.hintText,

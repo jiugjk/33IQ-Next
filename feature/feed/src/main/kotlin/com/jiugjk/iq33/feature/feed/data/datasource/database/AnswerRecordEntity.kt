@@ -1,5 +1,6 @@
 package com.jiugjk.iq33.feature.feed.data.datasource.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 
 @Entity(
@@ -10,7 +11,8 @@ internal data class AnswerRecordEntity(
     val accountKey: String,
     val questionId: Long,
     val title: String,
-    val categoryId: String,
+    @ColumnInfo(name = "categoryId")
+    val categoryLabel: String,
     val selectedOption: String?,
     val isCorrect: Boolean?,
     val correctOption: String? = null,

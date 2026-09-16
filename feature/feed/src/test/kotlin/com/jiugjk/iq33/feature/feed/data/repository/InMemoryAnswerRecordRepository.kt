@@ -42,7 +42,7 @@ internal class InMemoryAnswerRecordRepository(
         accountKey: String?,
         questionId: Long,
         title: String,
-        categoryId: String,
+        categoryLabel: String,
         selectedOption: String?,
         isCorrect: Boolean?,
         knowledgeDelta: Int?,
@@ -53,7 +53,7 @@ internal class InMemoryAnswerRecordRepository(
         upsert(
             (existing ?: AnswerRecord(questionId = questionId, accountKey = accountKey)).copy(
                 title = title.ifBlank { existing?.title.orEmpty() },
-                categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
+                categoryLabel = categoryLabel.ifBlank { existing?.categoryLabel.orEmpty() },
                 selectedOption = selectedOption ?: existing?.selectedOption,
                 isCorrect = isCorrect ?: existing?.isCorrect,
                 correctOption = if (isCorrect == true) selectedOption ?: existing?.correctOption else existing?.correctOption,
@@ -69,7 +69,7 @@ internal class InMemoryAnswerRecordRepository(
         accountKey: String?,
         questionId: Long,
         title: String,
-        categoryId: String,
+        categoryLabel: String,
         correctOption: String?,
         explanationText: String?,
     ) {
@@ -78,7 +78,7 @@ internal class InMemoryAnswerRecordRepository(
         upsert(
             (existing ?: AnswerRecord(questionId = questionId, accountKey = accountKey)).copy(
                 title = title.ifBlank { existing?.title.orEmpty() },
-                categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
+                categoryLabel = categoryLabel.ifBlank { existing?.categoryLabel.orEmpty() },
                 viewedExplanation = true,
                 correctOption = correctOption?.takeIf { it.isNotBlank() } ?: existing?.correctOption,
                 explanationText = explanationText?.takeIf { it.isNotBlank() } ?: existing?.explanationText,
@@ -88,11 +88,24 @@ internal class InMemoryAnswerRecordRepository(
         )
     }
 
+    @Suppress("LongParameterList")
+    override suspend fun recordExplanationViewedAwait(
+        accountKey: String?,
+        questionId: Long,
+        title: String,
+        categoryLabel: String,
+        correctOption: String?,
+        explanationText: String?,
+    ): Boolean {
+        recordExplanationViewed(accountKey, questionId, title, categoryLabel, correctOption, explanationText)
+        return accountKey != null && canWrite(accountKey)
+    }
+
     override fun recordHintViewed(
         accountKey: String?,
         questionId: Long,
         title: String,
-        categoryId: String,
+        categoryLabel: String,
         hintText: String?,
     ) {
         if (accountKey == null || !canWrite(accountKey)) return
@@ -100,7 +113,7 @@ internal class InMemoryAnswerRecordRepository(
         upsert(
             (existing ?: AnswerRecord(questionId = questionId, accountKey = accountKey)).copy(
                 title = title.ifBlank { existing?.title.orEmpty() },
-                categoryId = categoryId.ifBlank { existing?.categoryId.orEmpty() },
+                categoryLabel = categoryLabel.ifBlank { existing?.categoryLabel.orEmpty() },
                 viewedHint = true,
                 hintText = hintText?.takeIf { it.isNotBlank() } ?: existing?.hintText,
                 updatedAt = System.currentTimeMillis(),
@@ -108,18 +121,29 @@ internal class InMemoryAnswerRecordRepository(
         )
     }
 
+    override suspend fun recordHintViewedAwait(
+        accountKey: String?,
+        questionId: Long,
+        title: String,
+        categoryLabel: String,
+        hintText: String?,
+    ): Boolean {
+        recordHintViewed(accountKey, questionId, title, categoryLabel, hintText)
+        return accountKey != null && canWrite(accountKey)
+    }
+
     override fun updateMetadata(
         accountKey: String?,
         questionId: Long,
         title: String,
-        categoryId: String,
+        categoryLabel: String,
     ) {
         if (accountKey == null || !canWrite(accountKey)) return
         val existing = get(accountKey, questionId) ?: return
         upsert(
             existing.copy(
                 title = title.ifBlank { existing.title },
-                categoryId = categoryId.ifBlank { existing.categoryId },
+                categoryLabel = categoryLabel.ifBlank { existing.categoryLabel },
             ),
         )
     }

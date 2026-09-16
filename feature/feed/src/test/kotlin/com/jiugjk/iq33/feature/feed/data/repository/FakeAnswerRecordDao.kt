@@ -26,9 +26,13 @@ internal class FakeAnswerRecordDao(
     /** Entities matching this fail their write, as a database error would. */
     var failWrite: (AnswerRecordEntity) -> Boolean = { false }
 
+    var failClear: Boolean = false
+
+    var customObserveFlow: Flow<List<AnswerRecordEntity>>? = null
+
     val writeLog = mutableListOf<String>()
 
-    override fun observeAll(): Flow<List<AnswerRecordEntity>> = emissions
+    override fun observeAll(): Flow<List<AnswerRecordEntity>> = customObserveFlow ?: emissions
 
     override suspend fun getAll(): List<AnswerRecordEntity> = rows.values.toList()
 
@@ -61,6 +65,7 @@ internal class FakeAnswerRecordDao(
 
     override suspend fun clearAccount(accountKey: String) {
         beforeWrite?.invoke("clear:$accountKey")
+        if (failClear) throw IOException("clear failed for $accountKey")
         writeLog += "clear:$accountKey"
         rows.keys.filter { it.first == accountKey }.forEach(rows::remove)
         publish()

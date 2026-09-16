@@ -211,9 +211,9 @@ private fun HistoryItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = Dimen.spaceS),
                     )
-                    if (record.categoryId.isNotBlank()) {
+                    if (record.categoryLabel.isNotBlank()) {
                         Text(
-                            text = record.categoryId,
+                            text = record.categoryLabel,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = Dimen.spaceS),

@@ -38,6 +38,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         private val submission: SubmissionState = SubmissionState.Idle,
         private val explanationAlreadyViewed: Boolean = false,
         private val hintAlreadyViewed: Boolean = false,
+        private val isHintRevealPending: Boolean = false,
         private val correctOption: String? = null,
         private val explanationText: String? = null,
         private val hintText: String? = null,
@@ -72,6 +73,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
 
         private fun restoredHintReveal(): RevealState<Nothing, HintReveal> =
             when {
+                isHintRevealPending -> RevealState.Failed(afterSideEffect = true)
                 !hintAlreadyViewed -> RevealState.Idle
                 !hintText.isNullOrBlank() -> RevealState.Revealed(HintReveal(hintText))
                 else -> RevealState.Entitled
@@ -87,9 +89,16 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         private val isAnswered: Boolean,
         private val hasViewedAnswer: Boolean = false,
         private val isAnswerRevealPending: Boolean = false,
+        private val isHintRevealPending: Boolean = false,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
             if (state is QuestionDetailUiState.Content && state.detail.id == questionId) {
+                val nextHintReveal =
+                    if (isHintRevealPending && state.hintReveal is RevealState.Idle) {
+                        RevealState.Failed(afterSideEffect = true)
+                    } else {
+                        state.hintReveal
+                    }
                 state.copy(
                     detail =
                         state.detail.copy(
@@ -97,10 +106,106 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
                             hasViewedAnswer = hasViewedAnswer,
                             isAnswerRevealPending = isAnswerRevealPending,
                         ),
+                    hintReveal = nextHintReveal,
                 )
             } else {
                 state
             }
+    }
+
+    class HistoricalRecordArrived(
+        private val questionId: Long,
+        private val record: com.jiugjk.iq33.feature.feed.domain.model.AnswerRecord,
+    ) : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState {
+            if (state !is QuestionDetailUiState.Content || state.detail.id != questionId) return state
+            if (state.isSubmitting) return state
+
+            val hasStoredSubmission =
+                record.answeredAt != null || record.selectedOption != null || record.isCorrect != null
+            val isCurrentIdle = state.submission is SubmissionState.Idle
+
+            val nextSubmission =
+                if (isCurrentIdle && hasStoredSubmission) {
+                    when {
+                        record.isCorrect == true ->
+                            SubmissionState.Done(
+                                record.selectedOption.orEmpty(),
+                                SubmitAnswerResult.Correct(record.knowledgeDelta, null),
+                            )
+                        record.isCorrect == false ->
+                            SubmissionState.Done(
+                                record.selectedOption.orEmpty(),
+                                SubmitAnswerResult.Wrong(record.knowledgeDelta, null),
+                            )
+                        else ->
+                            SubmissionState.Done(
+                                record.selectedOption.orEmpty(),
+                                SubmitAnswerResult.AlreadyAnswered,
+                            )
+                    }
+                } else {
+                    state.submission
+                }
+
+            val nextSelected =
+                if (state.canSelectChoice && state.detail.questionType == QuestionType.CHOICE && state.selectedChoiceId == null) {
+                    record.selectedOption
+                } else {
+                    state.selectedChoiceId
+                }
+
+            val nextDraft =
+                if (state.canSelectChoice && state.detail.questionType == QuestionType.OPEN && state.draftAnswer.isBlank()) {
+                    record.selectedOption.orEmpty()
+                } else {
+                    state.draftAnswer
+                }
+
+            val isWordBank = state.detail.questionType == QuestionType.WORD_BANK
+            val (nextIndices, nextEcho) =
+                if (state.canSelectChoice && isWordBank && state.selectedCandidateIndices.isEmpty() && state.answerEcho.isBlank()) {
+                    val tiles = matchCandidateIndices(state.detail.answerCandidates, record.selectedOption.orEmpty())
+                    if (tiles != null) tiles to "" else emptyList<Int>() to record.selectedOption.orEmpty()
+                } else {
+                    state.selectedCandidateIndices to state.answerEcho
+                }
+
+            val nextHintReveal =
+                if (state.hintReveal is RevealState.Idle && record.viewedHint) {
+                    if (!record.hintText.isNullOrBlank()) RevealState.Revealed(HintReveal(record.hintText))
+                    else RevealState.Entitled
+                } else {
+                    state.hintReveal
+                }
+
+            val nextAnswerReveal =
+                if (state.answerReveal is RevealState.Idle && record.viewedExplanation) {
+                    if (!record.explanationText.isNullOrBlank() || !record.correctOption.isNullOrBlank()) {
+                        RevealState.Revealed(AnswerReveal(record.correctOption.orEmpty(), record.explanationText.orEmpty()))
+                    } else {
+                        RevealState.Entitled
+                    }
+                } else {
+                    state.answerReveal
+                }
+
+            return state.copy(
+                selectedChoiceId = nextSelected,
+                draftAnswer = nextDraft,
+                selectedCandidateIndices = nextIndices,
+                answerEcho = nextEcho,
+                submission = nextSubmission,
+                knownCorrectOption = state.knownCorrectOption ?: record.correctOption?.takeIf { it.isNotBlank() },
+                hintReveal = nextHintReveal,
+                answerReveal = nextAnswerReveal,
+                detail =
+                    state.detail.copy(
+                        isAnswered = state.detail.isAnswered || hasStoredSubmission,
+                        hasViewedAnswer = state.detail.hasViewedAnswer || record.viewedExplanation,
+                    ),
+            )
+        }
     }
 
     class ChoiceSelected(

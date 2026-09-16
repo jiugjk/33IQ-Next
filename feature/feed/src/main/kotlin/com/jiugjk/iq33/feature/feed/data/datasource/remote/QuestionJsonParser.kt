@@ -64,7 +64,18 @@ internal class QuestionJsonParser {
         val bodyHtml = question.stringOrNull("qc_context").orEmpty()
         val parsedBody = parseHtmlContent(bodyHtml, IqConstants.BASE_URL)
         val imageUrls = questionImageUrls(question, parsedBody)
-
+        val renderedImages = parsedBody.blocks.filterIsInstance<QuestionContentBlock.Image>().map { it.url }.toSet()
+        val bodyBlocks =
+            if (parsedBody.blocks.isNotEmpty()) {
+                buildList {
+                    addAll(parsedBody.blocks)
+                    imageUrls.filterNot { it in renderedImages }.forEach { url ->
+                        add(QuestionContentBlock.Image(url))
+                    }
+                }
+            } else {
+                fallbackBlocks(parsedBody.plainText, imageUrls)
+            }
         return QuestionDetail(
             id = id,
             // 33IQ has no real title concept: `qc_title` is an empty string on ordinary questions
@@ -74,7 +85,7 @@ internal class QuestionJsonParser {
             title = question.stringOrNull("qc_title")?.takeIf { it.isNotBlank() },
             bodyText = parsedBody.plainText,
             imageUrls = imageUrls,
-            bodyBlocks = parsedBody.blocks.ifEmpty { fallbackBlocks(parsedBody.plainText, imageUrls) },
+            bodyBlocks = bodyBlocks,
             tags = tags,
             breadcrumb = emptyList(), // No breadcrumb field has been confirmed on the JSON payload.
             author = question.stringOrNull("username"),

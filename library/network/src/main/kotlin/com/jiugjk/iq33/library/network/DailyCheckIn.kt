@@ -99,7 +99,7 @@ class DailyCheckIn(
         }
 
     private fun classify(body: String): CheckInStepResult {
-        val status = statusOf(body) ?: return CheckInStepResult.Success
+        val status = statusOf(body) ?: return CheckInStepResult.Failed("Unrecognized response")
 
         return when {
             status.lowercase() in NOT_LOGGED_IN_STATUSES -> CheckInStepResult.NotLoggedIn

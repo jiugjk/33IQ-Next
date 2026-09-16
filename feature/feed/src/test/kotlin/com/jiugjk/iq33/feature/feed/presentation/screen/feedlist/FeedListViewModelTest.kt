@@ -525,6 +525,17 @@ class FeedListViewModelTest {
             return true
         }
 
+        override fun setHintRevealPending(
+            questionId: Long,
+            pending: Boolean,
+            accountKey: String?,
+        ): Boolean {
+            if (current.accountKey != accountKey) return false
+            val ids = current.pendingHintRevealIds
+            progress.value = current.copy(pendingHintRevealIds = if (pending) ids + questionId else ids - questionId)
+            return true
+        }
+
         override fun setHideAnswered(hide: Boolean) {
             progress.value = current.copy(hideAnswered = hide)
         }

@@ -55,6 +55,22 @@ internal class QuestionProgressRepositoryImpl(
         return saved
     }
 
+    @Synchronized
+    override fun setHintRevealPending(
+        questionId: Long,
+        pending: Boolean,
+        accountKey: String?,
+    ): Boolean {
+        if (accountKey == null || current.accountKey != accountKey) return false
+        val key = "hintPending:$accountKey"
+        val old = preferences.getStringSet(key, emptySet()).orEmpty()
+        val ids = if (pending) old + questionId.toString() else old - questionId.toString()
+        val saved = preferences.edit().putStringSet(key, ids).commit()
+        if (!saved) preferences.edit().putStringSet(key, old).apply()
+        revision.update { it + 1 }
+        return saved
+    }
+
     override fun setHideAnswered(hide: Boolean) {
         preferences.edit { putBoolean(HIDE_ANSWERED, hide) }
         revision.update { it + 1 }
@@ -66,7 +82,9 @@ internal class QuestionProgressRepositoryImpl(
             answeredIds = answerRecords.answeredIds(accountKey),
             hideAnswered = preferences.getBoolean(HIDE_ANSWERED, false),
             viewedAnswerIds = answerRecords.viewedExplanationIds(accountKey),
+            viewedHintIds = answerRecords.viewedHintIds(accountKey),
             pendingAnswerRevealIds = if (accountKey == null) emptySet() else readIds("answerPending:$accountKey"),
+            pendingHintRevealIds = if (accountKey == null) emptySet() else readIds("hintPending:$accountKey"),
         )
 
     private fun readIds(key: String): Set<Long> =

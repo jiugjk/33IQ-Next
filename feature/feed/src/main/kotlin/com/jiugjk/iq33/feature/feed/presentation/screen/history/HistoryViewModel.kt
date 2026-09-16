@@ -92,7 +92,7 @@ internal class HistoryViewModel(
         val term = query.trim()
         return term.isEmpty() ||
             record.title.contains(term, ignoreCase = true) ||
-            record.categoryId.contains(term, ignoreCase = true) ||
+            record.categoryLabel.contains(term, ignoreCase = true) ||
             record.questionId.toString().contains(term)
     }
 }
