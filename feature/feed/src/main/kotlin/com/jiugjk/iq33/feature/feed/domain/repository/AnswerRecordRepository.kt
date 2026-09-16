@@ -30,7 +30,7 @@ internal interface AnswerRecordRepository {
         accountKey: String?,
         questionId: Long,
         title: String = "",
-        categoryId: String = "",
+        categoryLabel: String = "",
         selectedOption: String? = null,
         isCorrect: Boolean? = null,
         knowledgeDelta: Int? = null,
@@ -43,21 +43,41 @@ internal interface AnswerRecordRepository {
         accountKey: String?,
         questionId: Long,
         title: String = "",
-        categoryId: String = "",
+        categoryLabel: String = "",
         correctOption: String? = null,
         /** Paid content, cached so re-entering the question never needs another charged request. */
         explanationText: String? = null,
     )
+
+    /** ②-b Awaiting persistence variant for deliver / recovery flows. Returns true when durably saved. */
+    @Suppress("LongParameterList")
+    suspend fun recordExplanationViewedAwait(
+        accountKey: String?,
+        questionId: Long,
+        title: String = "",
+        categoryLabel: String = "",
+        correctOption: String? = null,
+        explanationText: String? = null,
+    ): Boolean
 
     /** ③ Successful hint reveal. */
     fun recordHintViewed(
         accountKey: String?,
         questionId: Long,
         title: String = "",
-        categoryId: String = "",
+        categoryLabel: String = "",
         /** Paid hint text, cached: 33IQ charges 学识 again for every `showtips` call. */
         hintText: String? = null,
     )
+
+    /** ③-b Awaiting persistence variant for hint purchase flow. Returns true when durably saved. */
+    suspend fun recordHintViewedAwait(
+        accountKey: String?,
+        questionId: Long,
+        title: String = "",
+        categoryLabel: String = "",
+        hintText: String? = null,
+    ): Boolean
 
     /**
      * Fills in display metadata (history title / category) for a record that already exists.
@@ -69,7 +89,7 @@ internal interface AnswerRecordRepository {
         accountKey: String?,
         questionId: Long,
         title: String,
-        categoryId: String,
+        categoryLabel: String,
     )
 
     fun delete(

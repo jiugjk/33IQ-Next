@@ -94,8 +94,8 @@ class HistoryViewModelTest {
     @Test
     fun `search matches title, category and question number`() =
         runTest {
-            records.seed(record(101, isCorrect = true, title = "谁是凶手", categoryId = "侦探推理"))
-            records.seed(record(202, isCorrect = false, title = "", categoryId = ""))
+            records.seed(record(101, isCorrect = true, title = "谁是凶手", categoryLabel = "侦探推理"))
+            records.seed(record(202, isCorrect = false, title = "", categoryLabel = ""))
             val vm = createViewModel()
             advanceUntilIdle()
 
@@ -168,12 +168,12 @@ class HistoryViewModelTest {
         questionId: Long,
         isCorrect: Boolean?,
         title: String = "",
-        categoryId: String = "",
+        categoryLabel: String = "",
     ) = AnswerRecord(
         questionId = questionId,
         accountKey = ACCOUNT,
         title = title,
-        categoryId = categoryId,
+        categoryLabel = categoryLabel,
         selectedOption = "A",
         isCorrect = isCorrect,
         answeredAt = 1,

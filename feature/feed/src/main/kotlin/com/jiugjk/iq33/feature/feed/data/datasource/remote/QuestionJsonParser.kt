@@ -26,44 +26,17 @@ internal class QuestionJsonParser {
         id: Long,
     ): QuestionDetail? {
         val question = Json.parseToJsonElement(rawJson).asFirstObjectOrNull() ?: return null
-
         if (!question.hasQuestionShape()) return null
 
-        val tags =
-            (
-                question.stringList("tag_micro") +
-                    question.jsonArrayOrEmpty("topicTag").mapNotNull { entry ->
-                        (entry as? JsonObject)?.stringOrNull("gtt_name")
-                    }
-            ).distinct()
-
-        val choices =
-            CHOICE_LETTERS.mapNotNull { letter ->
-                question
-                    .stringOrNull("qc_choose_$letter")
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { text -> Choice(id = letter.uppercase(), text = text) }
-            }
-
-        // #589144 confirms a third interaction type: ischoose=0 still has a server-provided word bank.
-        // qc_wronganswer is NOT the word bank; it can omit the correct tile and include different decoys.
-        val questionType =
-            when {
-                question.stringOrNull("ischoose") == "1" -> QuestionType.CHOICE
-                question.stringOrNull("is_select_answer") == "1" -> QuestionType.WORD_BANK
-                else -> QuestionType.OPEN
-            }
-        val candidates = question.jsonArrayOrEmpty("select_answer")
-        val candidateTexts = candidates.mapNotNull { (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.contentOrNull }
-        val validCandidates =
-            candidateTexts
-                .takeIf { values ->
-                    values.size == candidates.size && values.all { it.isNotBlank() }
-                }.orEmpty()
+        val tags = parseTags(question)
+        val choices = parseChoices(question)
+        val questionType = parseQuestionType(question)
+        val validCandidates = parseWordBankCandidates(question)
 
         val bodyHtml = question.stringOrNull("qc_context").orEmpty()
         val parsedBody = parseHtmlContent(bodyHtml, IqConstants.BASE_URL)
         val imageUrls = questionImageUrls(question, parsedBody)
+        val bodyBlocks = buildBodyBlocks(parsedBody, imageUrls)
 
         return QuestionDetail(
             id = id,
@@ -74,7 +47,7 @@ internal class QuestionJsonParser {
             title = question.stringOrNull("qc_title")?.takeIf { it.isNotBlank() },
             bodyText = parsedBody.plainText,
             imageUrls = imageUrls,
-            bodyBlocks = parsedBody.blocks.ifEmpty { fallbackBlocks(parsedBody.plainText, imageUrls) },
+            bodyBlocks = bodyBlocks,
             tags = tags,
             breadcrumb = emptyList(), // No breadcrumb field has been confirmed on the JSON payload.
             author = question.stringOrNull("username"),
@@ -93,6 +66,59 @@ internal class QuestionJsonParser {
             // address serve raw JSON, which is not what a share link should open.
             sourceUrl = IqConstants.questionPageUrl(id),
         )
+    }
+
+    private fun parseTags(question: JsonObject): List<String> =
+        (
+            question.stringList("tag_micro") +
+                question.jsonArrayOrEmpty("topicTag").mapNotNull { entry ->
+                    (entry as? JsonObject)?.stringOrNull("gtt_name")
+                }
+        ).distinct()
+
+    private fun parseChoices(question: JsonObject): List<Choice> =
+        CHOICE_LETTERS.mapNotNull { letter ->
+            question
+                .stringOrNull("qc_choose_$letter")
+                ?.takeIf { it.isNotBlank() }
+                ?.let { text -> Choice(id = letter.uppercase(), text = text) }
+        }
+
+    private fun parseQuestionType(question: JsonObject): QuestionType =
+        when {
+            question.stringOrNull("ischoose") == "1" -> QuestionType.CHOICE
+            question.stringOrNull("is_select_answer") == "1" -> QuestionType.WORD_BANK
+            else -> QuestionType.OPEN
+        }
+
+    private fun parseWordBankCandidates(question: JsonObject): List<String> {
+        val candidates = question.jsonArrayOrEmpty("select_answer")
+        val candidateTexts = candidates.mapNotNull { (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.contentOrNull }
+        return candidateTexts
+            .takeIf { values ->
+                values.size == candidates.size && values.all { it.isNotBlank() }
+            }.orEmpty()
+    }
+
+    private fun buildBodyBlocks(
+        parsedBody: ParsedHtmlContent,
+        imageUrls: List<String>,
+    ): List<QuestionContentBlock> {
+        val renderedImages =
+            parsedBody.blocks
+                .filterIsInstance<QuestionContentBlock.Image>()
+                .map { it.url }
+                .toSet()
+        return if (parsedBody.blocks.isNotEmpty()) {
+            buildList {
+                addAll(parsedBody.blocks)
+                imageUrls.filterNot { it in renderedImages }.forEach { url ->
+                    add(QuestionContentBlock.Image(url))
+                }
+            }
+        } else {
+            fallbackBlocks(parsedBody.plainText, imageUrls)
+        }
     }
 
     /**

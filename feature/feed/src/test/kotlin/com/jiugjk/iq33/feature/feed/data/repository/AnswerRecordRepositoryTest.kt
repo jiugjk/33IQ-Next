@@ -153,7 +153,7 @@ class AnswerRecordRepositoryTest {
         runTest {
             val rows = linkedMapOf<Pair<String, Long>, AnswerRecordEntity>()
             val first = repository(FakeAnswerRecordDao(rows))
-            first.recordAnswer(account, 1, title = "T", categoryId = "C", selectedOption = "A", isCorrect = true)
+            first.recordAnswer(account, 1, title = "T", categoryLabel = "C", selectedOption = "A", isCorrect = true)
             first.recordHintViewed(account, 1, hintText = "tip")
             advanceUntilIdle()
 
@@ -174,17 +174,17 @@ class AnswerRecordRepositoryTest {
             val dao = FakeAnswerRecordDao()
             val repository = repository(dao)
 
-            repository.updateMetadata(account, 7, title = "no record yet", categoryId = "逻辑思维")
+            repository.updateMetadata(account, 7, title = "no record yet", categoryLabel = "逻辑思维")
             advanceUntilIdle()
             repository.get(account, 7).shouldBeNull()
 
             repository.recordAnswer(account, 7, selectedOption = "A", isCorrect = true)
-            repository.updateMetadata(account, 7, title = "第七题", categoryId = "逻辑思维")
+            repository.updateMetadata(account, 7, title = "第七题", categoryLabel = "逻辑思维")
             advanceUntilIdle()
 
             val stored = requireNotNull(dao.stored(account, 7))
             stored.title shouldBeEqualTo "第七题"
-            stored.categoryId shouldBeEqualTo "逻辑思维"
+            stored.categoryLabel shouldBeEqualTo "逻辑思维"
         }
 
     @Test
@@ -245,6 +245,57 @@ class AnswerRecordRepositoryTest {
             stored.explanationText shouldBeEqualTo "because"
         }
 
+    @Test
+    fun `database observation error does not terminate write worker`() =
+        runTest {
+            val dao = FakeAnswerRecordDao()
+            var emittedOnce = false
+            dao.customObserveFlow =
+                kotlinx.coroutines.flow.flow {
+                    emit(emptyList())
+                    if (!emittedOnce) {
+                        emittedOnce = true
+                        throw java.io.IOException("database observation error")
+                    }
+                }
+
+            val repository = repository(dao)
+            advanceUntilIdle()
+
+            // Writer should still be active and accept writes
+            repository.recordAnswer(account, 1, selectedOption = "A", isCorrect = true)
+            advanceUntilIdle()
+
+            repository.get(account, 1)?.selectedOption shouldBeEqualTo "A"
+            dao.stored(account, 1)?.selectedOption shouldBeEqualTo "A"
+        }
+
+    @Test
+    fun `failed clearAll releases blocking count and allows subsequent write and clear`() =
+        runTest {
+            val dao = FakeAnswerRecordDao()
+            val repository = repository(dao)
+
+            dao.failClear = true
+            repository.clearAll(account)
+            advanceUntilIdle()
+
+            // Should not remain permanently hidden: subsequent write is visible
+            dao.failClear = false
+            repository.recordAnswer(account, 2, selectedOption = "B", isCorrect = true)
+            advanceUntilIdle()
+
+            repository.get(account, 2)?.selectedOption shouldBeEqualTo "B"
+            repository.current(account).map { it.questionId } shouldBeEqualTo listOf(2L)
+
+            // Second clear succeeds
+            repository.clearAll(account)
+            advanceUntilIdle()
+
+            repository.current(account) shouldBeEqualTo emptyList()
+            dao.storedRows() shouldBeEqualTo emptyList()
+        }
+
     private fun TestScope.repository(
         dao: FakeAnswerRecordDao,
         preferences: FakeSharedPreferences = FakeSharedPreferences(),
@@ -271,7 +322,7 @@ class AnswerRecordRepositoryTest {
             accountKey = account,
             questionId = questionId,
             title = "",
-            categoryId = "",
+            categoryLabel = "",
             selectedOption = null,
             isCorrect = null,
             viewedExplanation = false,

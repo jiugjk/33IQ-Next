@@ -116,6 +116,40 @@ class DailyCheckInTest {
             sut.runIfDue() shouldBeInstanceOf DailyCheckInResult.Ran::class
         }
 
+    @Test
+    fun `maintenance HTML response is not marked done`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns "<html><body>503 Service Unavailable</body></html>"
+
+            val result = sut.runIfDue() as DailyCheckInResult.Ran
+
+            result.signIn shouldBeInstanceOf CheckInStepResult.Failed::class
+            sut.runIfDue() shouldBeInstanceOf DailyCheckInResult.Ran::class
+        }
+
+    @Test
+    fun `empty and corrupted JSON responses are not marked done`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns ""
+            (sut.runIfDue() as DailyCheckInResult.Ran).signIn shouldBeInstanceOf CheckInStepResult.Failed::class
+            sut.runIfDue() shouldBeInstanceOf DailyCheckInResult.Ran::class
+
+            coEvery { htmlClient.postFormForText(any(), any()) } returns "{not valid json}"
+            (sut.runIfDue() as DailyCheckInResult.Ran).signIn shouldBeInstanceOf CheckInStepResult.Failed::class
+            sut.runIfDue() shouldBeInstanceOf DailyCheckInResult.Ran::class
+        }
+
+    @Test
+    fun `response without status is not marked done`() =
+        runTest {
+            coEvery { htmlClient.postFormForText(any(), any()) } returns """{"message":"success but no status"}"""
+
+            val result = sut.runIfDue() as DailyCheckInResult.Ran
+
+            result.signIn shouldBeInstanceOf CheckInStepResult.Failed::class
+            sut.runIfDue() shouldBeInstanceOf DailyCheckInResult.Ran::class
+        }
+
     private fun stubSuccess() {
         coEvery { htmlClient.postFormForText(any(), any()) } returns """{"status":"success"}"""
     }

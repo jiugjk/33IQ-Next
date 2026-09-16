@@ -211,7 +211,7 @@ class QuestionDetailRestoreTest {
             submittedTitles shouldBeEqualTo listOf("谁是凶手？")
             val record = requireNotNull(records.get(ACCOUNT, QUESTION_ID))
             record.title shouldBeEqualTo "谁是凶手？"
-            record.categoryId shouldBeEqualTo "侦探推理"
+            record.categoryLabel shouldBeEqualTo "侦探推理"
         }
 
     @Test
@@ -229,7 +229,7 @@ class QuestionDetailRestoreTest {
 
             val record = requireNotNull(records.get(ACCOUNT, QUESTION_ID))
             record.title shouldBeEqualTo "谁是凶手？"
-            record.categoryId shouldBeEqualTo "侦探推理"
+            record.categoryLabel shouldBeEqualTo "侦探推理"
         }
 
     private fun content(vm: QuestionDetailViewModel) = vm.uiStateFlow.value as QuestionDetailUiState.Content

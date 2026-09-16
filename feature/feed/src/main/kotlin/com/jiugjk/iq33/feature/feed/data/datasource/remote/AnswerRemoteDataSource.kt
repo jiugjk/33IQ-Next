@@ -9,7 +9,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -121,13 +120,10 @@ internal class AnswerRemoteDataSource(
 
         if (error is CancellationException) throw error
 
-        throw when (error) {
-            is IqResponseException ->
-                IqResponseException(error.endpoint, error.reason, error.status, afterSideEffect = true, cause = error)
-            is IOException ->
-                IqResponseException(SHOW_TIPS, IqResponseException.Reason.MALFORMED, afterSideEffect = true, cause = error)
-            else ->
-                IqResponseException(SHOW_TIPS, IqResponseException.Reason.MALFORMED, afterSideEffect = true, cause = error)
+        throw if (error is IqResponseException) {
+            IqResponseException(error.endpoint, error.reason, error.status, afterSideEffect = true, cause = error)
+        } else {
+            IqResponseException(SHOW_TIPS, IqResponseException.Reason.MALFORMED, afterSideEffect = true, cause = error)
         }
     }
 

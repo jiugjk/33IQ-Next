@@ -10,6 +10,7 @@ import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRevealRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.AnswerRecordRepository
 import com.jiugjk.iq33.feature.feed.domain.repository.QuestionProgressRepository
+import com.jiugjk.iq33.feature.feed.domain.repository.hasPendingReveal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -125,17 +126,29 @@ internal class AnswerRevealRepositoryImpl(
         ensureOwner(owner)
         val reveal = remote.fetch(questionId)
         ensureOwner(owner)
-        answerRecords.recordExplanationViewed(
-            accountKey = owner,
-            questionId = questionId,
-            correctOption = reveal.answerText.trim().takeIf { it.isNotEmpty() },
-            explanationText = reveal.explanationText.trim().takeIf { it.isNotEmpty() },
-        )
+        val persisted =
+            answerRecords.recordExplanationViewedAwait(
+                accountKey = owner,
+                questionId = questionId,
+                correctOption = reveal.answerText.trim().takeIf { it.isNotEmpty() },
+                explanationText = reveal.explanationText.trim().takeIf { it.isNotEmpty() },
+            )
 
-        // Clearing the latch is best effort. Content that was already fetched (and possibly paid for)
-        // must still be shown; a stale latch only ever offers another fetch-only recovery.
-        if (!progress.setAnswerRevealPending(questionId, false, owner)) {
-            Timber.tag(TimberLogTags.NETWORK).w("Analysis delivered for %d but the pending latch could not be cleared", questionId)
+        // Only clear the pending latch after the explanation record is durably stored in Room.
+        // If Room persistence failed, keeping the pending latch ensures the user can still safely
+        // recover the content after process restart without being prompted to pay again.
+        if (persisted) {
+            if (!progress.setAnswerRevealPending(questionId, false, owner)) {
+                Timber.tag(TimberLogTags.NETWORK).w(
+                    "Analysis delivered for %d but the pending latch could not be cleared",
+                    questionId,
+                )
+            }
+        } else {
+            Timber.tag(TimberLogTags.NETWORK).w(
+                "Analysis delivered for %d but Room write failed; keeping pending latch",
+                questionId,
+            )
         }
 
         return Result.Success(reveal)

@@ -1,6 +1,7 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.questiondetail
 
 import com.jiugjk.iq33.feature.base.presentation.viewmodel.BaseAction
+import com.jiugjk.iq33.feature.feed.domain.model.AnswerQuote
 import com.jiugjk.iq33.feature.feed.domain.model.AnswerReveal
 import com.jiugjk.iq33.feature.feed.domain.model.HintQuote
 import com.jiugjk.iq33.feature.feed.domain.model.HintReveal
@@ -38,6 +39,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         private val submission: SubmissionState = SubmissionState.Idle,
         private val explanationAlreadyViewed: Boolean = false,
         private val hintAlreadyViewed: Boolean = false,
+        private val isHintRevealPending: Boolean = false,
         private val correctOption: String? = null,
         private val explanationText: String? = null,
         private val hintText: String? = null,
@@ -72,6 +74,7 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
 
         private fun restoredHintReveal(): RevealState<Nothing, HintReveal> =
             when {
+                isHintRevealPending -> RevealState.Failed(afterSideEffect = true)
                 !hintAlreadyViewed -> RevealState.Idle
                 !hintText.isNullOrBlank() -> RevealState.Revealed(HintReveal(hintText))
                 else -> RevealState.Entitled
@@ -87,9 +90,16 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
         private val isAnswered: Boolean,
         private val hasViewedAnswer: Boolean = false,
         private val isAnswerRevealPending: Boolean = false,
+        private val isHintRevealPending: Boolean = false,
     ) : QuestionDetailAction {
         override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState =
             if (state is QuestionDetailUiState.Content && state.detail.id == questionId) {
+                val nextHintReveal =
+                    if (isHintRevealPending && state.hintReveal is RevealState.Idle) {
+                        RevealState.Failed(afterSideEffect = true)
+                    } else {
+                        state.hintReveal
+                    }
                 state.copy(
                     detail =
                         state.detail.copy(
@@ -97,10 +107,104 @@ internal sealed interface QuestionDetailAction : BaseAction<QuestionDetailUiStat
                             hasViewedAnswer = hasViewedAnswer,
                             isAnswerRevealPending = isAnswerRevealPending,
                         ),
+                    hintReveal = nextHintReveal,
                 )
             } else {
                 state
             }
+    }
+
+    class HistoricalRecordArrived(
+        private val questionId: Long,
+        private val record: com.jiugjk.iq33.feature.feed.domain.model.AnswerRecord,
+    ) : QuestionDetailAction {
+        override fun reduce(state: QuestionDetailUiState): QuestionDetailUiState {
+            if (state !is QuestionDetailUiState.Content || state.detail.id != questionId) return state
+            if (state.isSubmitting) return state
+
+            val hasStoredSubmission =
+                record.answeredAt != null || record.selectedOption != null || record.isCorrect != null
+
+            val (nextIndices, nextEcho) = deriveWordBankSelection(state)
+
+            return state.copy(
+                selectedChoiceId = deriveSelectedChoice(state),
+                draftAnswer = deriveDraftAnswer(state),
+                selectedCandidateIndices = nextIndices,
+                answerEcho = nextEcho,
+                submission = deriveSubmission(state, hasStoredSubmission),
+                knownCorrectOption = state.knownCorrectOption ?: record.correctOption?.takeIf { it.isNotBlank() },
+                hintReveal = deriveHintReveal(state.hintReveal),
+                answerReveal = deriveAnswerReveal(state.answerReveal),
+                detail =
+                    state.detail.copy(
+                        isAnswered = state.detail.isAnswered || hasStoredSubmission,
+                        hasViewedAnswer = state.detail.hasViewedAnswer || record.viewedExplanation,
+                    ),
+            )
+        }
+
+        private fun deriveSubmission(
+            state: QuestionDetailUiState.Content,
+            hasStoredSubmission: Boolean,
+        ): SubmissionState {
+            if (state.submission !is SubmissionState.Idle || !hasStoredSubmission) {
+                return state.submission
+            }
+            val option = record.selectedOption.orEmpty()
+            val result =
+                when {
+                    record.isCorrect == true -> SubmitAnswerResult.Correct(record.knowledgeDelta, null)
+                    record.isCorrect == false -> SubmitAnswerResult.Wrong(record.knowledgeDelta, null)
+                    else -> SubmitAnswerResult.AlreadyAnswered
+                }
+            return SubmissionState.Done(option, result)
+        }
+
+        private fun deriveSelectedChoice(state: QuestionDetailUiState.Content): String? {
+            val shouldRestore =
+                state.canSelectChoice && state.detail.questionType == QuestionType.CHOICE && state.selectedChoiceId == null
+            return if (shouldRestore) record.selectedOption else state.selectedChoiceId
+        }
+
+        private fun deriveDraftAnswer(state: QuestionDetailUiState.Content): String {
+            val shouldRestore =
+                state.canSelectChoice && state.detail.questionType == QuestionType.OPEN && state.draftAnswer.isBlank()
+            return if (shouldRestore) record.selectedOption.orEmpty() else state.draftAnswer
+        }
+
+        private fun deriveWordBankSelection(state: QuestionDetailUiState.Content): Pair<List<Int>, String> {
+            val isWordBank = state.detail.questionType == QuestionType.WORD_BANK
+            val isSelectionEmpty = state.selectedCandidateIndices.isEmpty() && state.answerEcho.isBlank()
+            if (!state.canSelectChoice || !isWordBank || !isSelectionEmpty) {
+                return state.selectedCandidateIndices to state.answerEcho
+            }
+            val tiles = matchCandidateIndices(state.detail.answerCandidates, record.selectedOption.orEmpty())
+            return if (tiles != null) {
+                tiles to ""
+            } else {
+                emptyList<Int>() to record.selectedOption.orEmpty()
+            }
+        }
+
+        private fun deriveHintReveal(current: RevealState<HintQuote, HintReveal>): RevealState<HintQuote, HintReveal> {
+            if (current !is RevealState.Idle || !record.viewedHint) return current
+            return if (!record.hintText.isNullOrBlank()) {
+                RevealState.Revealed(HintReveal(record.hintText))
+            } else {
+                RevealState.Entitled
+            }
+        }
+
+        private fun deriveAnswerReveal(current: RevealState<AnswerQuote, AnswerReveal>): RevealState<AnswerQuote, AnswerReveal> {
+            if (current !is RevealState.Idle || !record.viewedExplanation) return current
+            val hasContent = !record.explanationText.isNullOrBlank() || !record.correctOption.isNullOrBlank()
+            return if (hasContent) {
+                RevealState.Revealed(AnswerReveal(record.correctOption.orEmpty(), record.explanationText.orEmpty()))
+            } else {
+                RevealState.Entitled
+            }
+        }
     }
 
     class ChoiceSelected(

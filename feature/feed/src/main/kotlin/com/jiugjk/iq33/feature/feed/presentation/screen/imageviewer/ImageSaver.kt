@@ -1,28 +1,34 @@
 package com.jiugjk.iq33.feature.feed.presentation.screen.imageviewer
 
+import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import timber.log.Timber
-import java.io.ByteArrayInputStream
 import java.io.IOException
-import java.io.InputStream
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Saves a question image into the device's picture gallery.
  *
- * The bytes come from Coil's own disk cache when the image is already there - which it is, because
- * the only way to reach this is to have been looking at the picture - and are re-fetched through
- * Coil otherwise. Going through Coil rather than a raw HTTP call means the request carries the same
- * headers the rest of the app uses; 33IQ's CDN is not guaranteed to serve an unadorned request.
+ * The bytes come from Coil's own disk cache when the image is already there - which it usually is,
+ * because the user is viewing the picture - and are re-fetched through the shared OkHttpClient
+ * otherwise. Streaming the response directly to MediaStore avoids large in-memory allocations.
  */
 internal class ImageSaver(
     private val ioDispatcher: CoroutineDispatcher,
@@ -38,8 +44,10 @@ internal class ImageSaver(
     ): String? =
         withContext(ioDispatcher) {
             runCatching { writeToMediaStore(context, imageUrl) }
-                .onFailure { error -> Timber.tag(SAVE_LOG_TAG).e(error, "Failed to save %s", imageUrl) }
-                .getOrNull()
+                .onFailure { error ->
+                    if (error is CancellationException) throw error
+                    Timber.tag(SAVE_LOG_TAG).e(error, "Failed to save %s", imageUrl)
+                }.getOrNull()
         }
 
     private suspend fun writeToMediaStore(
@@ -68,15 +76,15 @@ internal class ImageSaver(
             resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
                 ?: throw IOException("MediaStore refused an entry for $displayName")
 
-        runCatching {
-            openImageStream(context, imageUrl).use { source ->
-                resolver.openOutputStream(uri)?.use { sink -> source.copyTo(sink) }
-                    ?: throw IOException("Could not open $uri for writing")
-            }
-        }.onFailure {
-            // A half-written row would sit in the gallery as a broken thumbnail forever.
+        try {
+            copyStreamToUri(context, imageUrl, uri)
+        } catch (
+            @Suppress("TooGenericExceptionCaught") error: Throwable,
+        ) {
+            // A half-written or aborted row would sit in the gallery as a broken thumbnail forever.
             resolver.delete(uri, null, null)
-        }.getOrThrow()
+            throw error
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
@@ -85,24 +93,94 @@ internal class ImageSaver(
         return displayName
     }
 
-    /** Reads the image through Coil, so a cache hit costs no network at all. */
-    private suspend fun openImageStream(
+    /** Streams the image directly from Coil cache or OkHttp to MediaStore. */
+    private suspend fun copyStreamToUri(
         context: Context,
         imageUrl: String,
-    ): InputStream {
+        uri: Uri,
+    ) {
+        if (copyFromDiskCache(context, imageUrl, uri)) return
+        streamFromNetwork(context.contentResolver, imageUrl, uri)
+    }
+
+    private fun copyFromDiskCache(
+        context: Context,
+        imageUrl: String,
+        uri: Uri,
+    ): Boolean {
         val imageLoader: ImageLoader = SingletonImageLoader.get(context)
+        val snapshot = imageLoader.diskCache?.openSnapshot(imageUrl) ?: return false
 
-        imageLoader.diskCache
-            ?.openSnapshot(imageUrl)
-            ?.use { snapshot -> return snapshot.data.toFile().inputStream() }
+        snapshot.use { snap ->
+            snap.data.toFile().inputStream().use { source ->
+                context.contentResolver.openOutputStream(uri)?.use { sink ->
+                    source.copyTo(sink)
+                } ?: throw IOException("Could not open $uri for writing")
+            }
+        }
+        return true
+    }
 
+    private suspend fun streamFromNetwork(
+        resolver: ContentResolver,
+        imageUrl: String,
+        uri: Uri,
+    ) {
         val request = Request.Builder().url(imageUrl).build()
-        val response = okHttpClient.newCall(request).execute()
+        val call = okHttpClient.newCall(request)
 
-        response.use { body ->
-            if (!body.isSuccessful) throw IOException("HTTP ${body.code} fetching $imageUrl")
+        suspendCancellableCoroutine { continuation ->
+            continuation.invokeOnCancellation {
+                call.cancel()
+            }
+            call.enqueue(
+                object : Callback {
+                    override fun onFailure(
+                        call: Call,
+                        e: IOException,
+                    ) {
+                        if (continuation.isActive) {
+                            continuation.resumeWithException(e)
+                        }
+                    }
 
-            return ByteArrayInputStream(body.body.bytes())
+                    override fun onResponse(
+                        call: Call,
+                        response: Response,
+                    ) {
+                        try {
+                            copyResponseToUri(resolver, response, imageUrl, uri)
+                            if (continuation.isActive) {
+                                continuation.resume(Unit)
+                            }
+                        } catch (
+                            @Suppress("TooGenericExceptionCaught") e: Throwable,
+                        ) {
+                            if (continuation.isActive) {
+                                continuation.resumeWithException(e)
+                            }
+                        }
+                    }
+                },
+            )
+        }
+    }
+
+    private fun copyResponseToUri(
+        resolver: ContentResolver,
+        response: Response,
+        imageUrl: String,
+        uri: Uri,
+    ) {
+        response.use { res ->
+            if (!res.isSuccessful) {
+                throw IOException("HTTP ${res.code} fetching $imageUrl")
+            }
+            res.body.byteStream().use { source ->
+                resolver.openOutputStream(uri)?.use { sink ->
+                    source.copyTo(sink)
+                } ?: throw IOException("Could not open $uri for writing")
+            }
         }
     }
 

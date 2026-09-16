@@ -85,11 +85,15 @@ internal class AnswerRepositoryImpl(
     override suspend fun revealHint(questionId: Long): Result<HintReveal> =
         resultOf(TimberLogTags.NETWORK, "Failed to reveal hint for $questionId") {
             val accountKey = progressRepository.current.accountKey
-            remoteDataSource.revealHint(questionId).also { reveal ->
-                // `showtips` is the call that spends 学识, so the text is cached locally: re-opening
-                // the question must never need a second charged request to show it again.
-                answerRecords.recordHintViewed(accountKey, questionId, hintText = reveal.tips)
+            check(progressRepository.setHintRevealPending(questionId, true, accountKey)) {
+                "Cannot persist hint pending latch"
             }
+            val reveal = remoteDataSource.revealHint(questionId)
+            val persisted = answerRecords.recordHintViewedAwait(accountKey, questionId, hintText = reveal.tips)
+            if (persisted) {
+                progressRepository.setHintRevealPending(questionId, false, accountKey)
+            }
+            reveal
         }.withSideEffectFlag()
 
     override suspend fun praiseQuestion(questionId: Long): Result<Int> =

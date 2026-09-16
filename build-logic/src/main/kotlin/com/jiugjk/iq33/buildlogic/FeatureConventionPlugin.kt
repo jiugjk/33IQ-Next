@@ -90,9 +90,9 @@ class FeatureConventionPlugin : Plugin<Project> {
 
                 implementation(libs.viewmodel.ktx)
 
-                // Room is NOT applied here: only :feature:favourite has a database, and applying the
-                // KSP processor to every feature module costs an annotation-processing round in each
-                // of them for nothing. Modules that need Room apply the room convention plugin.
+                // Room is NOT applied here: applying the KSP processor to every feature module costs an
+                // annotation-processing round in each of them for nothing. Modules that need Room
+                // apply the room convention plugin.
 
                 // Test dependencies
                 testImplementation(project(":library:test-utils"))

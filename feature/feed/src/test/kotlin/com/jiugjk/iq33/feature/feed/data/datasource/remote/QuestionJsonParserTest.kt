@@ -49,13 +49,21 @@ class QuestionJsonParserTest {
 
     @Test
     fun `a question whose body embeds no image falls back to the payload's own pic field`() {
+        val imageUrl = "https://a.33iq.com/upload/26/09/03/images/1788.jpg"
         val detail =
             sut.parseQuestionDetail(
-                payload(title = "", context = "正文", pic = "https://a.33iq.com/upload/26/09/03/images/1788.jpg"),
+                payload(title = "", context = "正文", pic = imageUrl),
                 id = 7,
             )
 
-        detail?.imageUrls shouldBeEqualTo listOf("https://a.33iq.com/upload/26/09/03/images/1788.jpg")
+        detail?.imageUrls shouldBeEqualTo listOf(imageUrl)
+        detail?.bodyBlocks shouldBeEqualTo
+            listOf(
+                com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock
+                    .Text("正文"),
+                com.jiugjk.iq33.feature.feed.domain.model.QuestionContentBlock
+                    .Image(imageUrl),
+            )
     }
 
     @Test

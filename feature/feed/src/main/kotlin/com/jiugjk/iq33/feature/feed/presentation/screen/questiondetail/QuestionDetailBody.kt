@@ -68,11 +68,19 @@ internal fun QuestionBody(
     var viewerIndex by remember(imageUrls) { mutableStateOf<Int?>(null) }
     val gallery = imageUrls.ifEmpty { bodyBlocks.filterIsInstance<QuestionContentBlock.Image>().map { it.url }.distinct() }
 
+    val renderedImages = remember(bodyBlocks) { bodyBlocks.filterIsInstance<QuestionContentBlock.Image>().map { it.url }.toSet() }
     val blocks =
-        bodyBlocks.ifEmpty {
-            buildList {
-                if (bodyText.isNotBlank()) add(QuestionContentBlock.Text(bodyText))
-                imageUrls.forEach { add(QuestionContentBlock.Image(it)) }
+        remember(bodyBlocks, bodyText, imageUrls) {
+            if (bodyBlocks.isNotEmpty()) {
+                buildList {
+                    addAll(bodyBlocks)
+                    imageUrls.filterNot { it in renderedImages }.forEach { add(QuestionContentBlock.Image(it)) }
+                }
+            } else {
+                buildList {
+                    if (bodyText.isNotBlank()) add(QuestionContentBlock.Text(bodyText))
+                    imageUrls.forEach { add(QuestionContentBlock.Image(it)) }
+                }
             }
         }
 
