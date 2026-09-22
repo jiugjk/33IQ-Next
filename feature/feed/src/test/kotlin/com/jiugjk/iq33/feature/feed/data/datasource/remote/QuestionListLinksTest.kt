@@ -122,6 +122,18 @@ class QuestionListLinksTest {
         ).forEach { url -> legacy(url) shouldBeEqualTo null }
     }
 
+    @Test
+    fun `the app flag is added to requests but never leaks into cursors`() {
+        QuestionListLinks.withAppParam("https://www.33iq.com/question/") shouldBeEqualTo "https://www.33iq.com/question/?p=1"
+        QuestionListLinks.withAppParam("https://www.33iq.com/question/?page=2") shouldBeEqualTo
+            "https://www.33iq.com/question/?page=2&p=1"
+        QuestionListLinks.withAppParam("https://www.33iq.com/question/?p=3") shouldBeEqualTo "https://www.33iq.com/question/?p=1"
+        legacy("https://www.33iq.com/question/?page=2&p=1") shouldBeEqualTo "https://www.33iq.com/question/?page=3"
+        QuestionListLinks.nextPage(
+            Jsoup.parse("<a rel='next' href='/tag/logic/2.html?p=1'>Next</a>", "https://www.33iq.com/tag/logic.html?p=1"),
+        ) shouldBeEqualTo "https://www.33iq.com/tag/logic/2.html"
+    }
+
     private fun legacy(url: String) = QuestionListLinks.legacyNextPage(Jsoup.parse("", url))
 
     private fun next(html: String) = QuestionListLinks.nextPage(Jsoup.parse(html, "https://www.33iq.com/question/"))

@@ -29,6 +29,12 @@ object IqConstants {
     // the full question payload (choices, tags, stats, ...). See QuestionJsonParser.
     const val QUESTION_DETAIL_APP_P_PARAM = "3"
 
+    // Confirmed live (2026-09): 33IQ now puts a Geetest "安全验证" captcha page in front of its
+    // server-rendered list pages (/question/, /tag/<name>.html, /tag/<name>/<n>.html) - unless the
+    // request carries the app's non-empty `p` flag, which is how the official app keeps working. With
+    // `p=1` the same URLs still serve the ordinary list HTML. See QuestionListLinks.withAppParam.
+    const val QUESTION_LIST_APP_P_PARAM = "1"
+
     // The app's own "am I logged in" signal: this endpoint replies {"status":"guest"} for guests
     // and (presumably) real task data otherwise - confirmed live for the guest case.
     const val GUEST_PROBE_URL = "$BASE_URL/app/taskall"

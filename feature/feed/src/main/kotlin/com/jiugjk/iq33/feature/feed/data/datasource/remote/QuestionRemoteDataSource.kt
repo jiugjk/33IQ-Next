@@ -32,7 +32,7 @@ internal class QuestionRemoteDataSource(
     ): QuestionPage {
         require(nextPageUrl == null || QuestionListLinks.isSafeListUrl(nextPageUrl)) { "Invalid question list cursor" }
         val url = nextPageUrl ?: buildListUrl(category)
-        val document = htmlClient.get(url)
+        val document = htmlClient.get(QuestionListLinks.withAppParam(url))
 
         return withContext(parsingDispatcher) {
             val questions = htmlParser.parseQuestionSummaries(document)
