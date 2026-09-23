@@ -23,7 +23,7 @@ class QuestionRemoteDataSourceTest {
         runTest {
             coEvery { htmlClient.get(any()) } answers {
                 val url = firstArg<String>()
-                val page = url.substringAfter("page=", "1").toInt()
+                val page = url.substringAfter("page=", "1").substringBefore('&').toInt()
                 Jsoup.parse(listHtml(page.takeIf { it <= 4 }?.toLong()), url)
             }
             var cursor: String? = null
@@ -38,14 +38,14 @@ class QuestionRemoteDataSourceTest {
             end.questions shouldBeEqualTo emptyList()
             end.nextPageUrl shouldBeEqualTo null
             end.isNextPageInferred shouldBeEqualTo false
-            coVerify(exactly = 1) { htmlClient.get(LIST_URL) }
+            coVerify(exactly = 1) { htmlClient.get("$LIST_URL?p=1") }
         }
 
     @Test
     fun `an advertised cursor takes precedence over legacy page numbers`() =
         runTest {
-            coEvery { htmlClient.get(LIST_URL) } returns
-                Jsoup.parse(listHtml(1) + "<a rel='next' href='?offset=20'>Next</a>", LIST_URL)
+            coEvery { htmlClient.get(REQUEST_URL) } returns
+                Jsoup.parse(listHtml(1) + "<a rel='next' href='?offset=20'>Next</a>", REQUEST_URL)
             val page = sut.fetchQuestionList(Category.ALL, null)
             page.nextPageUrl shouldBeEqualTo "$LIST_URL?offset=20"
             page.isNextPageInferred shouldBeEqualTo false
@@ -58,8 +58,8 @@ class QuestionRemoteDataSourceTest {
                 "<div class='pagination'><ul>" +
                     "<li class='active'><a href='#'>1</a></li>" +
                     "<li><a href='/24h/2.html'>2</a></li></ul></div>"
-            coEvery { htmlClient.get(LIST_URL) } returns Jsoup.parse(listHtml(1) + nav, LIST_URL)
-            coEvery { htmlClient.get("$LIST_URL?page=2") } returns Jsoup.parse(listHtml(2), "$LIST_URL?page=2")
+            coEvery { htmlClient.get(REQUEST_URL) } returns Jsoup.parse(listHtml(1) + nav, REQUEST_URL)
+            coEvery { htmlClient.get("$LIST_URL?page=2&p=1") } returns Jsoup.parse(listHtml(2), "$LIST_URL?page=2&p=1")
             val first = sut.fetchQuestionList(Category.ALL, null)
             first.nextPageUrl shouldBeEqualTo "$LIST_URL?page=2"
             first.isNextPageInferred shouldBeEqualTo true
@@ -72,7 +72,7 @@ class QuestionRemoteDataSourceTest {
     @Test
     fun `an empty page ends paging even if navigation is present`() =
         runTest {
-            coEvery { htmlClient.get(LIST_URL) } returns
+            coEvery { htmlClient.get(REQUEST_URL) } returns
                 Jsoup.parse("<title>题目</title><div class='pagination'><span class='disabled'>下一页</span></div>", LIST_URL)
             val page = sut.fetchQuestionList(Category.ALL, null)
             page.questions shouldBeEqualTo emptyList()
@@ -89,14 +89,25 @@ class QuestionRemoteDataSourceTest {
             next.startsWith("https://www.33iq.com/tag/") shouldBeEqualTo true
             next.endsWith(".html?page=2") shouldBeEqualTo true
             sut.fetchQuestionList(category, next).nextPageUrl shouldBeEqualTo next.replace("page=2", "page=3")
-            coVerify(exactly = 1) { htmlClient.get(next) }
+            coVerify(exactly = 1) { htmlClient.get("$next&p=1") }
         }
 
     @Test
     fun `a security challenge remains a failure not an empty or continuing page`() =
         runTest {
-            coEvery { htmlClient.get(LIST_URL) } returns Jsoup.parse("<title>安全验证</title>", LIST_URL)
+            coEvery { htmlClient.get(REQUEST_URL) } returns Jsoup.parse("<title>安全验证</title>", LIST_URL)
             runCatching { sut.fetchQuestionList(Category.ALL, null) }.exceptionOrNull() shouldBeInstanceOf UnexpectedPageException::class
+        }
+
+    @Test
+    fun `list pages are requested with the app flag that skips the captcha wall`() =
+        runTest {
+            val category = Category.DEFAULT_CATEGORIES.first { it.id == "math" }
+            coEvery { htmlClient.get(any()) } answers { Jsoup.parse(listHtml(1), firstArg<String>()) }
+            val first = sut.fetchQuestionList(category, null)
+            coVerify { htmlClient.get(match { it.startsWith("https://www.33iq.com/tag/") && it.endsWith(".html?p=1") }) }
+            // The flag is transport-only: cursors stay the public list URL.
+            requireNotNull(first.nextPageUrl).contains("p=1") shouldBeEqualTo false
         }
 
     // Synthetic list fixture: deliberately no pagination controls, as on the reported page.
@@ -111,5 +122,6 @@ class QuestionRemoteDataSourceTest {
 
     private companion object {
         const val LIST_URL = "https://www.33iq.com/question/"
+        const val REQUEST_URL = "$LIST_URL?p=1"
     }
 }

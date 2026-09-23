@@ -1,6 +1,7 @@
 package com.jiugjk.iq33.feature.feed.data.datasource.remote
 
 import com.jiugjk.iq33.library.network.IqConstants
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 
@@ -9,9 +10,23 @@ internal object QuestionListLinks {
     private val NEXT_LABELS = setOf("下一页", "下一页 »", "下页", "next", ">", ">>", "›", "»")
     private val DETAIL_PATH = Regex("/question/\\d+\\.html")
     private const val HTTPS_PORT = 443
+    private const val APP_PARAM = "p"
+
+    /**
+     * The URL actually requested for a list page: [url] plus the app's `p` flag, without which 33IQ
+     * answers with its captcha wall (see IqConstants.QUESTION_LIST_APP_P_PARAM). The flag is a
+     * transport detail only - cursors handed out by this object never carry it.
+     */
+    fun withAppParam(url: String): String =
+        url
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.setQueryParameter(APP_PARAM, IqConstants.QUESTION_LIST_APP_P_PARAM)
+            ?.build()
+            ?.toString() ?: url
 
     fun nextPage(document: Document): String? {
-        val current = document.location().toHttpUrlOrNull() ?: return null
+        val current = currentListUrl(document) ?: return null
         val candidates = document.select("a[rel=next], link[rel=next], .pagination a[href], .pager a[href], .page a[href]")
         val explicit =
             candidates.filter { link ->
@@ -34,6 +49,7 @@ internal object QuestionListLinks {
                 current
                     .resolve(link.attr("href"))
                     ?.newBuilder()
+                    ?.removeAllQueryParameters(APP_PARAM)
                     ?.fragment(null)
                     ?.build()
                     ?.toString()
@@ -55,7 +71,7 @@ internal object QuestionListLinks {
      */
     @Suppress("ReturnCount") // Fail closed at each URL/page-number validation boundary.
     fun legacyNextPage(document: Document): String? {
-        val current = document.location().toHttpUrlOrNull() ?: return null
+        val current = currentListUrl(document) ?: return null
         if (!isSafeListUrl(current.toString()) || current.queryParameterNames.any { it != "page" }) return null
         val values = current.queryParameterValues("page")
         val page = if (values.isEmpty()) 1 else values.singleOrNull()?.toIntOrNull() ?: return null
@@ -68,6 +84,15 @@ internal object QuestionListLinks {
             .build()
             .toString()
     }
+
+    /** The page's own URL minus the transport-only `p` flag [withAppParam] added to the request. */
+    private fun currentListUrl(document: Document): HttpUrl? =
+        document
+            .location()
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.removeAllQueryParameters(APP_PARAM)
+            ?.build()
 
     fun isSafeListUrl(value: String): Boolean {
         val url = value.toHttpUrlOrNull() ?: return false
