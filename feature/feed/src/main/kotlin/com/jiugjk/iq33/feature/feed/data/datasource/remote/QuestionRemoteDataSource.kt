@@ -48,7 +48,7 @@ internal class QuestionRemoteDataSource(
     ): List<QuestionSummary> {
         val encodedKeyword = URLEncoder.encode(keyword, IqConstants.PAGE_CHARSET)
         val pageParam = if (page > 1) "&page=$page" else ""
-        val document = htmlClient.get("${IqConstants.SEARCH_URL}?k=$encodedKeyword&type=question$pageParam")
+        val document = htmlClient.get("${IqConstants.SEARCH_URL}?k=$encodedKeyword&type=question&p=1$pageParam")
 
         return withContext(parsingDispatcher) { htmlParser.parseQuestionSummaries(document) }
     }
