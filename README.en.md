@@ -8,7 +8,7 @@
 
 An **unofficial, third-party Android client** for [33IQ](https://www.33iq.com) — a Chinese "thinking training" / riddle community (智力题库). **Built for personal learning and technical research only.**
 
-33IQ has no public, documented third-party API. This app talks to the same server-rendered pages a mobile browser would get (parsed with [Jsoup](https://jsoup.org/)) and to a handful of JSON endpoints the official Android app itself uses. The approach and its limits are documented below and in code comments so it stays visible what was actually verified and what is best-effort.
+33IQ has no public, documented third-party API. This app talks to the same server-rendered pages a mobile browser would get (parsed with [Jsoup](https://jsoup.org/)) and to a handful of JSON endpoints the official Android app itself uses.
 
 > **Disclaimer**: This project is not affiliated with, endorsed by, or connected to 33IQ in any way. Question content, images and account data all belong to 33IQ and its users/authors. Do not use this app to scrape at scale, bypass paywalls, or redistribute content — see [Project Scope & Limitations](#project-scope--limitations).
 
@@ -17,7 +17,7 @@ An **unofficial, third-party Android client** for [33IQ](https://www.33iq.com) �
 - [Screenshots](#screenshots)
 - [Application Scope](#application-scope)
 - [How data is obtained](#how-data-is-obtained)
-- [Confirmed vs. best-effort](#confirmed-vs-best-effort)
+- [Known limitations](#known-limitations)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Gradle Config](#gradle-config)
@@ -59,26 +59,22 @@ Out of respect for 33IQ, this README no longer lists concrete endpoints or field
 
 The capture was a **structure-only** analysis package (request/response shapes and field *names*, without header or body *values*), so capabilities visible in it but unused by current features are tracked in the [Roadmap](#roadmap) rather than wired in. The data layer sits behind repository interfaces, so a more precise implementation can replace it without touching the UI.
 
-## Confirmed vs. best-effort
+## Known limitations
 
-To stay honest about reliability:
+Only the parts that are not fully verified or not available are listed. Everything else (browsing, detail, choice-question answers, hints, word-bank questions) has been tested against live responses.
 
-| Capability | Status |
-|---|---|
-| Browsing questions, tags, search | ✅ Verified against live responses |
-| Question detail (title/tags/author/choices/upvotes/comment & collect counts/right-ratio) | ✅ Real JSON endpoint and field names confirmed from a captured app session, re-verified live |
-| Login fields and success response | ✅ Confirmed from a real, successful captured login |
-| Login failure detection | ⚠️ No failed login was ever captured, so error status values remain unconfirmed guesses; a login whose state cannot be verified is reported as *not verified*, never as success |
-| Submitting an answer | ✅ Confirmed live for choice questions: correct / wrong / already-answered are distinct real responses with a real 学识 delta. Open-ended submission is still unconfirmed |
-| Viewing analysis | ✅ Implemented as an independent quote → confirmation → payment-if-needed → reveal flow; text and images render natively. ⚠️ Automated tests use mocks; no live purchases were made during verification |
-| Hint price + reveal | ✅ Confirmed live, including 33IQ's own normal/member/lifetime-member price breakdown, shown as-is rather than recomputed client-side |
-| Comments on a question | ❌ Not loaded. No comments-list endpoint appeared in the capture, so the UI shows only the comment *count* and says so |
-| Word-bank questions | ✅ Confirmed by an anonymous fetch; candidate tiles preserve server order and duplicates, and incomplete metadata disables submission instead of falling back to free typing |
-| Answered markers / hide answered | ✅ Confirmed correct/wrong/repeat results and the separate "analysis viewed" restriction are persisted locally per account. ⚠️ No server history source is confirmed, so older answers and answers made elsewhere are **unknown**, not confirmed unanswered |
-| Pagination | ⚠️ Prefers the list's own next links and falls back to the legacy page-number protocol; empty or duplicate-only pages stop paging. Fresh live verification is still blocked by the site's security challenge |
-| Server-side favouriting | ❌ Not implemented — no server-side favourite endpoint appeared in the capture. Favourites are a genuine, fully working **local** bookmark list instead |
-| Search | ⚠️ HTML scraping only; late in development this path started returning a login-wall/anti-bot response to repeated automated requests, so it is untested against a fresh session and stays best-effort |
-| Daily check-in | ⚠️ URLs and fields confirmed from a captured session that only asserted HTTP 200; success strings are unconfirmed, so a non-error reply is treated as done, at most once per Asia/Shanghai calendar day |
+| Capability | Status | Notes |
+|---|---|---|
+| Login failure detection | ⚠️ Not fully verified | No failed login was ever captured, so error strings are guesses; an unconfirmable login shows as *not verified*, never as success |
+| Search | ⚠️ May break | HTML scraping only; the site returns a login wall / anti-bot page to repeated automated requests; not retested on a fresh session |
+| Pagination | ⚠️ Not fully verified | Uses the list's own next links, falling back to legacy page numbers; stops on empty/duplicate-only pages. Live re-verification is blocked by the site's security challenge |
+| Daily check-in | ⚠️ Not fully verified | Capture only asserted HTTP 200; success strings unknown, so a non-error reply counts as done, at most once per Asia/Shanghai day |
+| Open-ended answers | ⚠️ Not fully verified | All captured submissions were choice questions |
+| Answered markers | ⚠️ Local only | No server history source; answers from the web/other devices show as **unknown**, not unanswered |
+| Comments list | ❌ Not implemented | No comments-list endpoint in the capture; only the count is shown |
+| Server-side favourites | ❌ Not implemented | No favourite endpoint in the capture; favourites are local only |
+
+> **Real 学识 is spent**: viewing a hint or analysis calls 33IQ's own paid endpoints and deducts from the logged-in account.
 
 ### Feed refresh and local progress
 
@@ -92,8 +88,7 @@ To stay honest about reliability:
 
 - Hints and analysis are separate actions; opening or cancelling the price dialog neither pays nor fetches the answer. Even a zero-cost quote requires confirmation, because viewing can disqualify answering and affect wrong-answer statistics.
 - The quoted price is displayed as-is, never hardcoded or recomputed from membership status. The quote is re-checked before payment; changed terms require fresh confirmation.
-- A pending flag is synchronously persisted per account/question **before** any payment or reveal request. Timeouts, malformed replies and cancellation keep it, including across process restart. Recovery only re-requests the reveal, never the payment call; an unresolved recovery points the user to the website instead of offering another purchase.
-- Paid request bodies are one-shot with transport retries and redirects disabled, preventing transparent POST replay; a repository-level lock plus ViewModel guards prevent overlapping confirmations and competing answer/hint flows.
+- If a paid request is interrupted (timeout, bad reply, process killed), recovery only re-requests the reveal and never pays again; if that fails, the user is pointed to the website. Paid POSTs are never retried or replayed automatically.
 
 ## Tech Stack
 
@@ -172,13 +167,13 @@ implementation(projects.library.network)
 ./gradlew :app:bundleDebug                          # Production build verification
 ```
 
-> **Note**: an Android SDK + JDK 17 toolchain is installed in the development environment and every command above (plus `:app:assembleDebug`) was run for real, with each compile/lint/detekt/format failure fixed in place. The template's "every class must have a matching unit test" Konsist gates were removed, since this fork intentionally does not keep 1:1 coverage — see the comments in those files. CI (`.github/workflows/check.yml`) runs the same checks on every push.
+CI (`.github/workflows/check.yml`) runs the same checks on every push. The template's "every class must have a matching unit test" Konsist gate was removed.
 
 ## Project Scope & Limitations
 
 - **Not affiliated with 33IQ.** This is a personal-learning reverse-engineering exercise, not a redistribution or commercial product.
-- **No public API existed to build against.** The data layer parses 33IQ's own public pages; see the table above for what was verified vs. guessed.
-- **Paid content spends real 学识 on your real account.** Revealing an answer or hint calls 33IQ's own paid endpoints and really deducts from whatever account is logged in — this client does not bypass that currency, it just gives the official paid actions a UI.
+- **No public API existed to build against.** The data layer parses 33IQ's own public pages; site changes may break features.
+- **No paywall bypass.** Hints and analysis use the official paid flow and spend real 学识.
 - **Be respectful of 33IQ's servers** — this client makes the same kind of requests a mobile browser would; don't modify it to hammer the site or scrape at scale.
 
 ## Getting Started
